@@ -55,76 +55,7 @@ if (cmd === "init") {
   console.log("Project initialized by Aitri ⚒️");
   process.exit(0);
 }
-  const guided = process.argv.includes("--guided");
-  const feature = (await ask("Feature name (kebab-case, e.g. user-login): "))
-    .replace(/\s+/g, "-")
-    .trim();
-
-  if (!feature) {
-    console.log("Feature name is required.");
-    process.exit(1);
-  }
-  if (guided) {
-    const context = await ask("Context (problem in 1-3 lines): ");
-    const actors = await ask("Actors (comma-separated): ");
-    const rule = await ask("One functional rule (e.g. 'Users can ...'): ");
-    const security = await ask("One security note/control: ");
-    const ac = await ask("One acceptance criterion (Given/When/Then): ");
-    const oos = await ask("One out-of-scope bullet: ");
-
-    const cliDir = path.dirname(new URL(import.meta.url).pathname);
-    const templatePath = path.resolve(cliDir, "..", "core", "templates", "af_spec.md");
-    if (!fs.existsSync(templatePath)) {
-      console.log(`Template not found at: ${templatePath}`);
-      process.exit(1);
-    }
-
-    const template = fs.readFileSync(templatePath, "utf8");
-    const outDir = path.join(process.cwd(), "specs", "drafts");
-    const outFile = path.join(outDir, `${feature}.md`);
-
-    const plan = [
-      `Create: ${path.relative(process.cwd(), outDir)}`,
-      `Create: ${path.relative(process.cwd(), outFile)}`
-    ];
-
-    console.log("PLAN:");
-    plan.forEach((p) => console.log("- " + p));
-
-    const answer = await ask("Proceed? (y/n): ");
-    if (answer.toLowerCase() !== "y") {
-      console.log("Aborted.");
-      process.exit(0);
-    }
-
-    fs.mkdirSync(outDir, { recursive: true });
-
-    let spec = template;
-
-    // Inject guided content into template sections
-    spec = spec.replace("## 1. Context\nDescribe the problem context.", `## 1. Context\n${context || ""}`);
-    spec = spec.replace("## 2. Actors\nList system actors.", `## 2. Actors\n${actors || ""}`);
-    spec = spec.replace(
-      /## 3\. Functional Rules[\s\S]*?\n1\.[^\n]*\n/,
-      `## 3. Functional Rules\n1. ${rule || ""}\n`
-    );
-    spec = spec.replace(
-      /## 7\. Security Considerations[\s\S]*?\n-.*\n/,
-      `## 7. Security Considerations\n- ${security || ""}\n`
-    );
-    spec = spec.replace(
-      /## 9\. Acceptance Criteria[\s\S]*?\n-.*\n/,
-      `## 9. Acceptance Criteria\n- ${ac || ""}\n`
-    );
-    spec = spec.replace(
-      /## 8\. Out of Scope[\s\S]*?\n-.*\n/,
-      `## 8. Out of Scope\n- ${oos || ""}\n`
-    );
-
-    fs.writeFileSync(outFile, spec, "utf8");
-    console.log(`Draft spec created: ${path.relative(process.cwd(), outFile)}`);
-    process.exit(0);
-  }
+ 
 if (cmd === "draft") {
   // We expect to run this from a project repo, not from the Aitri repo
   const feature = (await ask("Feature name (kebab-case, e.g. user-login): ")).replace(/\s+/g, "-").trim();
@@ -186,11 +117,6 @@ if (cmd === "approve") {
   const feature = (await ask("Feature name to approve (kebab-case): "))
     .replace(/\s+/g, "-")
     .trim();
-
-  if (!feature) {
-    console.log("Feature name is required.");
-    process.exit(1);
-  }
 
   const draftsFile = path.join(process.cwd(), "specs", "drafts", `${feature}.md`);
   const approvedDir = path.join(process.cwd(), "specs", "approved");
@@ -285,4 +211,98 @@ if (cmd === "approve") {
   process.exit(0);
 }
 
+if (cmd === "discover") {
+  const feature = (await ask("Feature name (kebab-case, e.g. user-login): "))
+    .replace(/\s+/g, "-")
+    .trim();
+
+  if (!feature) {
+    console.log("Feature name is required.");
+    process.exit(1);
+  }
+
+  const approvedFile = path.join(process.cwd(), "specs", "approved", `${feature}.md`);
+  if (!fs.existsSync(approvedFile)) {
+    console.log(`Approved spec not found: ${path.relative(process.cwd(), approvedFile)}`);
+    console.log("Approve the spec first: aitri approve");
+    process.exit(1);
+  }
+
+  const cliDir = path.dirname(new URL(import.meta.url).pathname);
+  const templatePath = path.resolve(cliDir, "..", "core", "templates", "discovery", "discovery_template.md");
+
+  if (!fs.existsSync(templatePath)) {
+    console.log(`Discovery template not found at: ${templatePath}`);
+    process.exit(1);
+  }
+
+  const outDir = path.join(process.cwd(), "docs", "discovery");
+  const backlogDir = path.join(process.cwd(), "backlog", feature);
+  const testsDir = path.join(process.cwd(), "tests", feature);
+
+  const backlogFile = path.join(backlogDir, "backlog.md");
+  const testsFile = path.join(testsDir, "tests.md");
+  const outFile = path.join(outDir, `${feature}.md`);
+
+  console.log("PLAN:");
+  console.log("- Read: " + path.relative(process.cwd(), approvedFile));
+  console.log("- Create: " + path.relative(process.cwd(), outDir));
+  console.log("- Create: " + path.relative(process.cwd(), outFile));
+  console.log("- Create: " + path.relative(process.cwd(), backlogDir));
+  console.log("- Create: " + path.relative(process.cwd(), backlogFile));
+  console.log("- Create: " + path.relative(process.cwd(), testsDir));
+  console.log("- Create: " + path.relative(process.cwd(), testsFile));
+
+  const answer = await ask("Proceed? (y/n): ");
+  if (answer.toLowerCase() !== "y") {
+    console.log("Aborted.");
+    process.exit(0);
+  }
+
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.mkdirSync(backlogDir, { recursive: true });
+  fs.mkdirSync(testsDir, { recursive: true });
+
+  const approvedSpec = fs.readFileSync(approvedFile, "utf8");
+  let discovery = fs.readFileSync(templatePath, "utf8");
+
+  // Basic injection
+  discovery = discovery.replace("# Discovery: <feature>", `# Discovery: ${feature}`);
+  discovery = discovery.replace("## 1. Problem Statement\n- What problem are we solving?\n- Why now?",
+    `## 1. Problem Statement\nDerived from approved spec:\n\n---\n\n${approvedSpec}\n\n---\n\nNow refine: what problem are we solving and why now?`
+  );
+
+  fs.writeFileSync(outFile, discovery, "utf8");
+    const backlog = `# Backlog: ${feature}
+
+## Epic
+- <one epic statement>
+
+## User Stories
+1. As a <actor>, I want <capability>, so that <benefit>.
+2. As a <actor>, I want <capability>, so that <benefit>.
+3. As a <actor>, I want <capability>, so that <benefit>.
+`;
+
+  const tests = `# Test Cases: ${feature}
+
+## Functional
+1. Given <context>, when <action>, then <expected>.
+
+## Security
+1. Input validation: reject invalid/unsafe inputs.
+2. Abuse prevention: rate limit critical endpoints (if any).
+
+## Edge Cases
+1. <edge case> -> <expected behavior>
+`;
+
+  fs.writeFileSync(backlogFile, backlog, "utf8");
+  fs.writeFileSync(testsFile, tests, "utf8");
+
+  console.log("Discovery created: " + path.relative(process.cwd(), outFile));
+  process.exit(0);
+}
+
+console.log("Unknown command.");
 process.exit(1);
