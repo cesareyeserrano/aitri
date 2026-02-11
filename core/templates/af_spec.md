@@ -8,8 +8,11 @@ Describe the problem context.
 ## 2. Actors
 List system actors.
 
-## 3. Functional Rules
-1. <write at least one verifiable rule>
+## 3. Functional Rules (traceable)
+Use stable IDs so stories/tests can reference them.
+
+- FR-1: <verifiable rule>
+- FR-2: <verifiable rule>
 
 ## 4. Edge Cases
 - <edge case>
@@ -26,5 +29,6 @@ List system actors.
 ## 8. Out of Scope
 - <explicitly excluded>
 
-## 9. Acceptance Criteria
-- <at least one verifiable criterion>
+## 9. Acceptance Criteria (Given/When/Then)
+- AC-1: Given <context>, when <action>, then <expected>.
+- AC-2: Given <context>, when <action>, then <expected>.
