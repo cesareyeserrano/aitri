@@ -55,7 +55,76 @@ if (cmd === "init") {
   console.log("Project initialized by Aitri ⚒️");
   process.exit(0);
 }
+  const guided = process.argv.includes("--guided");
+  const feature = (await ask("Feature name (kebab-case, e.g. user-login): "))
+    .replace(/\s+/g, "-")
+    .trim();
 
+  if (!feature) {
+    console.log("Feature name is required.");
+    process.exit(1);
+  }
+  if (guided) {
+    const context = await ask("Context (problem in 1-3 lines): ");
+    const actors = await ask("Actors (comma-separated): ");
+    const rule = await ask("One functional rule (e.g. 'Users can ...'): ");
+    const security = await ask("One security note/control: ");
+    const ac = await ask("One acceptance criterion (Given/When/Then): ");
+    const oos = await ask("One out-of-scope bullet: ");
+
+    const cliDir = path.dirname(new URL(import.meta.url).pathname);
+    const templatePath = path.resolve(cliDir, "..", "core", "templates", "af_spec.md");
+    if (!fs.existsSync(templatePath)) {
+      console.log(`Template not found at: ${templatePath}`);
+      process.exit(1);
+    }
+
+    const template = fs.readFileSync(templatePath, "utf8");
+    const outDir = path.join(process.cwd(), "specs", "drafts");
+    const outFile = path.join(outDir, `${feature}.md`);
+
+    const plan = [
+      `Create: ${path.relative(process.cwd(), outDir)}`,
+      `Create: ${path.relative(process.cwd(), outFile)}`
+    ];
+
+    console.log("PLAN:");
+    plan.forEach((p) => console.log("- " + p));
+
+    const answer = await ask("Proceed? (y/n): ");
+    if (answer.toLowerCase() !== "y") {
+      console.log("Aborted.");
+      process.exit(0);
+    }
+
+    fs.mkdirSync(outDir, { recursive: true });
+
+    let spec = template;
+
+    // Inject guided content into template sections
+    spec = spec.replace("## 1. Context\nDescribe the problem context.", `## 1. Context\n${context || ""}`);
+    spec = spec.replace("## 2. Actors\nList system actors.", `## 2. Actors\n${actors || ""}`);
+    spec = spec.replace(
+      /## 3\. Functional Rules[\s\S]*?\n1\.[^\n]*\n/,
+      `## 3. Functional Rules\n1. ${rule || ""}\n`
+    );
+    spec = spec.replace(
+      /## 7\. Security Considerations[\s\S]*?\n-.*\n/,
+      `## 7. Security Considerations\n- ${security || ""}\n`
+    );
+    spec = spec.replace(
+      /## 9\. Acceptance Criteria[\s\S]*?\n-.*\n/,
+      `## 9. Acceptance Criteria\n- ${ac || ""}\n`
+    );
+    spec = spec.replace(
+      /## 8\. Out of Scope[\s\S]*?\n-.*\n/,
+      `## 8. Out of Scope\n- ${oos || ""}\n`
+    );
+
+    fs.writeFileSync(outFile, spec, "utf8");
+    console.log(`Draft spec created: ${path.relative(process.cwd(), outFile)}`);
+    process.exit(0);
+  }
 if (cmd === "draft") {
   // We expect to run this from a project repo, not from the Aitri repo
   const feature = (await ask("Feature name (kebab-case, e.g. user-login): ")).replace(/\s+/g, "-").trim();
