@@ -19,7 +19,7 @@ function ask(question) {
 const cmd = process.argv[2];
 
 if (cmd === "--version" || cmd === "-v") {
-  const pkgPath = new URL("./package.json", import.meta.url);
+  const pkgPath = new URL("../package.json", import.meta.url);
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   console.log(`aitri v${pkg.version}`);
   process.exit(0);
