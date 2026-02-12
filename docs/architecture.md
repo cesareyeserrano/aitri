@@ -20,7 +20,7 @@ Aitri does **not** replace human ownership. Humans must review, correct, direct,
 1. **Spec first**: no work starts without a written spec.
 2. **Approved spec required**: no downstream artifacts without `specs/approved/<feature>.md`.
 3. **Gated actions**: any file operations must be previewed in a PLAN and require explicit user approval.
-4. **Traceability** (next phase): backlog and tests must map back to spec rules.
+4. Traceability enforced (Spec → Stories → Tests)
 5. **Human in control**: the human approves every step and final content.
 
 ## Spec-Driven Development (SDD) Flow
@@ -84,14 +84,67 @@ Agents must:
 - avoid implementation before approved artifacts
 
 ## Current Status
-- Stable CLI commands: init, draft, approve, discover, plan
+- Stable CLI commands: init, draft, approve, discover, plan, validate
 - Templates: spec, discovery, plan
+- Personas integrated (architect, security, QA)
+- Basic traceability enforcement (FR / AC / US / TC placeholders blocked)
 - Skills: Codex + Claude
 
 ## Roadmap (Next)
-1) Add minimal **traceability** (Spec → Stories → Tests)
-2) Add `aitri validate`:
-   - checks artifacts are meaningful (not placeholders)
-   - checks mapping coverage to spec rules
-3) Add optional build gates and coverage reporting
-4) (Optional) Provider-specific AI integration (API), after the skill workflow is proven
+
+1) Coverage reporting:
+   - Verify each FR has at least one US
+   - Verify each US has at least one TC
+   - Provide coverage report
+
+2) CLI stability features:
+   - `aitri --version`
+   - Release tagging discipline
+
+3) Optional AI API integration (after skill workflow maturity)
+
+4) Controlled build phase support (post-artifact approval)
+
+## V1 Scope – AI-Assisted SDLC Execution
+
+### Definition of Done (V1)
+
+Aitri V1 is considered complete when:
+
+1. It can be installed globally via terminal.
+2. It exposes a stable CLI (`aitri help`, `--version`, core commands).
+3. It enforces Spec-Driven Development gates.
+4. It integrates with AI agents (Codex, Claude, OpenCode) via skills.
+5. Agents can:
+   - Run Aitri commands
+   - Generate backlog/tests content
+   - Execute validation
+   - Request human approval before implementation
+
+V1 does NOT:
+- Autonomously write production code without human approval.
+- Replace human architectural decisions.
+- Remove gate enforcement.
+
+## AI Execution Model (V1)
+
+Execution flow:
+
+Human → Agent (Codex/Claude/OpenCode) → Aitri CLI → Filesystem → Validation → Human Approval
+
+Aitri is deterministic.
+AI is generative.
+Human is authority.
+
+Aitri enforces structure and traceability.
+AI generates content within constraints.
+Human approves before moving to build phase.
+
+## Installation Model
+
+V1 must support:
+
+- Global CLI installation
+- Invocation from any project directory
+- Agent skill-based invocation
+- Repeatable version detection (`aitri --version`)

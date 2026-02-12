@@ -18,6 +18,13 @@ function ask(question) {
 
 const cmd = process.argv[2];
 
+if (cmd === "--version" || cmd === "-v") {
+  const pkgPath = new URL("./package.json", import.meta.url);
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  console.log(`aitri v${pkg.version}`);
+  process.exit(0);
+}
+
 if (!cmd || cmd === "help") {
   console.log(`
 Aitri ⚒️
@@ -503,6 +510,7 @@ if (cmd === "validate") {
     process.exit(1);
   }
 
+  const spec = fs.readFileSync(approvedFile, "utf8");
   const backlog = fs.readFileSync(backlogFile, "utf8");
   const tests = fs.readFileSync(testsFile, "utf8");
 
@@ -535,6 +543,26 @@ if (cmd === "validate") {
     issues.forEach(i => console.log("- " + i));
     process.exit(1);
   }
+
+  // --- Coverage checks (minimal) ---
+  // 1) Every FR-* in spec should be referenced by at least one US-* in backlog
+  const specFRs = [...spec.matchAll(/\bFR-\d+\b/g)].map(m => m[0]);
+  const backlogFRs = new Set([...backlog.matchAll(/\bFR-\d+\b/g)].map(m => m[0]));
+
+  const missingFRCoverage = [...new Set(specFRs)].filter(fr => !backlogFRs.has(fr));
+  missingFRCoverage.forEach(fr =>
+    issues.push(`Coverage: ${fr} is defined in spec but not referenced in backlog user stories.`)
+  );
+
+  // 2) Every US-* in backlog should be referenced by at least one TC-* in tests
+  const backlogUS = [...backlog.matchAll(/\bUS-\d+\b/g)].map(m => m[0]);
+  const testsUS = new Set([...tests.matchAll(/\bUS-\d+\b/g)].map(m => m[0]));
+
+  const missingUSCoverage = [...new Set(backlogUS)].filter(us => !testsUS.has(us));
+  missingUSCoverage.forEach(us =>
+    issues.push(`Coverage: ${us} exists in backlog but is not referenced in tests.`)
+  );
+  // --- End coverage checks ---
 
   console.log("VALIDATION PASSED ✅");
   console.log("- Spec: " + path.relative(process.cwd(), approvedFile));
