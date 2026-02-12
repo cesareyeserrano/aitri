@@ -1,0 +1,20 @@
+{
+  "name": "aitri",
+  "version": "0.2.1",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "aitri": "./cli/index.js"
+  },
+  "files": [
+    "cli",
+    "core",
+    "adapters",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
