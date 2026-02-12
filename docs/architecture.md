@@ -53,6 +53,13 @@ Aitri formalizes this pipeline:
      - Overwrites `tests/<feature>/tests.md`
    - Content is a structured starting point; AI agents and humans refine it.
 
+6) `aitri validate`
+- Requires approved spec + generated artifacts
+- Fails if backlog/tests contain placeholders like `FR-?`, `AC-?`, `US-?`
+- Enforces minimum traceability discipline:
+  - Backlog must contain `### US-<n>`
+  - Tests must contain `### TC-<n>`
+
 ## Personas
 Aitri uses persona checklists to improve quality and avoid blind spots:
 
