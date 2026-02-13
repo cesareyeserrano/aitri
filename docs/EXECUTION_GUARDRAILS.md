@@ -68,6 +68,25 @@ Before ending a substantial work block:
 2. Report which checklist items moved
 3. Report unresolved risks or open decisions
 4. Confirm whether docs and code are still aligned
+5. Recommend a checkpoint commit command
+
+## Checkpoint Discipline
+Checkpoint frequency:
+- After each major phase (`draft`, `approve`, `discover`, `plan`, `validate`)
+- Before stopping a session with unmerged progress
+
+Checkpoint command:
+```bash
+git add -A && git commit -m "checkpoint: <feature> <phase>"
+```
+
+Fallback when commit is not possible:
+```bash
+git stash push -m "checkpoint: <feature> <phase>"
+```
+
+Recovery anchor:
+- Always resume with `aitri status --json` and follow `nextStep`.
 
 ## Definition of Drift
 Drift exists if any of the following is true:

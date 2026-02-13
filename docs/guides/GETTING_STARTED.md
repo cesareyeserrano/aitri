@@ -171,3 +171,23 @@ For reproducible team adoption:
 1. Keep Aitri installed globally in contributor machines.
 2. Add project-level skill files (`.claude/skills` or `.opencode/skills`) when team-shared behavior is required.
 3. Run `aitri status --json` as the first step of every agent session.
+
+## 10) Pause and Resume Safely
+
+Before stopping work:
+```bash
+git add -A
+git commit -m "checkpoint: <feature> <phase>"
+```
+
+If you cannot commit:
+```bash
+git stash push -m "checkpoint: <feature> <phase>"
+```
+
+When resuming in a new session:
+```bash
+aitri status --json
+```
+
+Continue with `nextStep` returned by status.

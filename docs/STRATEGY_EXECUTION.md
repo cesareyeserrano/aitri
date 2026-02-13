@@ -41,6 +41,7 @@ Status: COMPLETE (baseline)
 - non-interactive command mode
 - consistent exit codes
 - smoke tests in CI
+- checkpoint/resume protocol documented for session continuity
 
 ### Phase D: Supervised Build/Deploy Assistance
 Status: COMPLETE (baseline docs)

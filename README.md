@@ -18,6 +18,7 @@ It enforces a deterministic workflow from specification to validated artifacts, 
 - [Validation Model](#validation-model)
 - [Exit Codes](#exit-codes)
 - [Real Test Procedure](#real-test-procedure)
+- [Checkpoint and Resume](#checkpoint-and-resume)
 - [Troubleshooting](#troubleshooting)
 - [Documentation Index](#documentation-index)
 
@@ -170,6 +171,24 @@ cd examples/validate-coverage
 node ../../cli/index.js validate --feature validate-coverage --non-interactive --json
 ```
 
+## Checkpoint and Resume
+Recommended checkpoint after each major phase (`draft`, `approve`, `discover`, `plan`, `validate`):
+```bash
+git add -A
+git commit -m "checkpoint: <feature> <phase>"
+```
+
+Fallback:
+```bash
+git stash push -m "checkpoint: <feature> <phase>"
+```
+
+Resume in a new session:
+```bash
+aitri status --json
+```
+Then execute the returned `nextStep`.
+
 ## Troubleshooting
 - If command waits for input in CI: add `--non-interactive --yes`.
 - If `validate` fails with missing feature: add `--feature <name>`.
@@ -182,6 +201,10 @@ node ../../cli/index.js validate --feature validate-coverage --non-interactive -
   - Run `aitri status --json`.
   - If `nextStep` is `aitri init`, run `aitri init --non-interactive --yes`.
   - Re-run `aitri status --json` and continue workflow.
+- If your machine shuts down abruptly mid-session:
+  - Run `git status --short` and recover stashes if needed.
+  - Run `aitri status --json`.
+  - Continue with the returned `nextStep`.
 
 ## Documentation Index
 - `docs/README.md`

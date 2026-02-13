@@ -5,6 +5,7 @@ Make Aitri consumable as a skill contract across Codex, Claude, and OpenCode env
 
 For full first-time setup (including global Aitri install and first workflow), see:
 - `docs/guides/GETTING_STARTED.md`
+- `docs/runbook/SESSION_CHECKPOINT_AND_RESUME.md`
 
 ## Included Skill Assets
 - `adapters/codex/SKILL.md`

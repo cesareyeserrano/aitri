@@ -106,6 +106,15 @@ export function runStatus(options = {}) {
       ok: false,
       issues: []
     },
+    checkpoint: {
+      recommended: true,
+      command: "git add -A && git commit -m \"checkpoint: <feature-or-stage>\"",
+      fallback: "git stash push -m \"checkpoint: <feature-or-stage>\""
+    },
+    resume: {
+      command: "aitri status --json",
+      rule: "Follow nextStep from status output."
+    },
     nextStep: null
   };
 
@@ -189,4 +198,8 @@ export function runStatus(options = {}) {
   } else {
     console.log(report.nextStep);
   }
+
+  console.log("\nCheckpoint recommendation:");
+  console.log(`- Commit: ${report.checkpoint.command}`);
+  console.log(`- Fallback: ${report.checkpoint.fallback}`);
 }

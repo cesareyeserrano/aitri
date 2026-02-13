@@ -12,10 +12,11 @@ Use this folder as the official reference for product intent, governance, execut
 7. `docs/PROGRESS_CHECKLIST.md` - closure checklist for ongoing tracking
 8. `docs/guides/SKILL_PACKAGING_AND_INSTALL.md` - skill packaging and installation guide
 9. `docs/runbook/BUILD_DEPLOY_ASSIST_WORKFLOW.md` - supervised build/deploy-assist flow
-10. `docs/templates/deploy/` - deployment plan/checklist templates
-11. `docs/release/V1_CLOSEOUT_RC1.md` - release closeout evidence and readiness summary
-12. `docs/release/RELEASE_NOTES_v1.0.0-rc1.md` - RC release notes draft
-13. `docs/release/GITHUB_RELEASE_CHECKLIST_v1.0.0-rc1.md` - RC tagging and publish checklist
+10. `docs/runbook/SESSION_CHECKPOINT_AND_RESUME.md` - interruption-safe checkpoint and resume protocol
+11. `docs/templates/deploy/` - deployment plan/checklist templates
+12. `docs/release/V1_CLOSEOUT_RC1.md` - release closeout evidence and readiness summary
+13. `docs/release/RELEASE_NOTES_v1.0.0-rc1.md` - RC release notes draft
+14. `docs/release/GITHUB_RELEASE_CHECKLIST_v1.0.0-rc1.md` - RC tagging and publish checklist
 
 ## Purpose
 Preserve continuity across time, contributors, and agent platforms.

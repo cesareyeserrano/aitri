@@ -72,6 +72,15 @@ If Aitri outputs `PLAN` and requests `Proceed? (y/n)`:
 2. Ask for explicit approval
 3. Execute only after approval
 
+## Checkpoint Behavior
+At the end of substantial progress, recommend:
+- `git add -A && git commit -m "checkpoint: <feature> <phase>"`
+- fallback: `git stash push -m "checkpoint: <feature> <phase>"`
+
+When resuming a new session:
+1. Run `aitri status --json`
+2. Follow `nextStep`
+
 ## Exit Codes
 - `0`: success
 - `1`: error

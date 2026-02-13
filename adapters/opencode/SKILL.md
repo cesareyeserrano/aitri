@@ -36,6 +36,15 @@ Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory hum
 - `--feature <name>` where required
 - `--json` for `status` and `validate`
 
+## Checkpoint Behavior
+At the end of substantial progress, recommend:
+- `git add -A && git commit -m "checkpoint: <feature> <phase>"`
+- fallback: `git stash push -m "checkpoint: <feature> <phase>"`
+
+Resume protocol:
+1. `aitri status --json`
+2. Follow `nextStep`
+
 ## Exit Codes
 - `0` success
 - `1` error
