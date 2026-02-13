@@ -43,6 +43,7 @@ Before implementation approval:
 - Developer: practical implementation sequence
 - QA: functional, negative, edge coverage
 - Security: controls, threat and abuse prevention
+- UX/UI (if user-facing): user flow clarity, accessibility baseline, and state handling
 
 ## Validation Contract (Current Baseline)
 `validate` should assert at minimum:

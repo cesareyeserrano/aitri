@@ -88,6 +88,7 @@ Minimum perspectives:
 - Developer: implementation strategy, maintainability
 - QA: testability, negative/edge coverage, quality gates
 - Security (cross-cutting): threats and controls
+- UX/UI (optional for user-facing features): usability, accessibility baseline, interaction quality
 
 ## Governance and Anti-Drift
 The `docs/` folder is long-term memory and the verification baseline.

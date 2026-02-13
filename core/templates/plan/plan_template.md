@@ -54,7 +54,17 @@ STATUS: DRAFT
 ### Abuse prevention / rate limiting (if applicable)
 -
 
-## 6. Backlog
+## 6. UX/UI Review (UX/UI Persona, if user-facing)
+### Primary user flow
+-
+
+### Key states (empty/loading/error/success)
+-
+
+### Accessibility baseline
+-
+
+## 7. Backlog
 > Create as many epics/stories as needed. Do not impose artificial limits.
 
 ### Epics
@@ -76,7 +86,7 @@ For each story include clear Acceptance Criteria (Given/When/Then).
 
 (repeat as needed)
 
-## 7. Test Cases (QA Persona)
+## 8. Test Cases (QA Persona)
 > Create as many test cases as needed. Include negative and edge cases.
 
 ### Functional
@@ -95,7 +105,7 @@ For each story include clear Acceptance Criteria (Given/When/Then).
 1.
 2.
 
-## 8. Implementation Notes (Developer Persona)
+## 9. Implementation Notes (Developer Persona)
 - Suggested sequence:
 -
 - Dependencies:

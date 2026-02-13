@@ -424,6 +424,7 @@ if (cmd === "plan") {
   const securityPersona = path.resolve(cliDir, "..", "core", "personas", "security.md");
   const productPersona = path.resolve(cliDir, "..", "core", "personas", "product.md");
   const developerPersona = path.resolve(cliDir, "..", "core", "personas", "developer.md");
+  const uxUiPersona = path.resolve(cliDir, "..", "core", "personas", "ux-ui.md");
   const qaPersona = path.resolve(cliDir, "..", "core", "personas", "qa.md");
 
   const outPlanDir = path.join(process.cwd(), "docs", "plan");
@@ -438,6 +439,7 @@ if (cmd === "plan") {
   console.log("- Read: " + (fs.existsSync(productPersona) ? productPersona : "core/personas/product.md (missing in repo)"));
   console.log("- Read: " + (fs.existsSync(architectPersona) ? architectPersona : "core/personas/architect.md (missing in repo)"));
   console.log("- Read: " + (fs.existsSync(developerPersona) ? developerPersona : "core/personas/developer.md (missing in repo)"));
+  console.log("- Read: " + (fs.existsSync(uxUiPersona) ? uxUiPersona : "core/personas/ux-ui.md (missing in repo)"));
   console.log("- Read: " + (fs.existsSync(securityPersona) ? securityPersona : "core/personas/security.md (missing in repo)"));
   console.log("- Read: " + (fs.existsSync(qaPersona) ? qaPersona : "core/personas/qa.md (missing in repo)"));
   console.log("- Create: " + path.relative(process.cwd(), outPlanDir));

@@ -20,6 +20,7 @@ Check items as they are completed to prevent context drift.
 - [x] Security persona available
 - [x] Developer persona complete
 - [x] QA persona complete
+- [x] UX/UI persona available (for user-facing features)
 - [x] Personas explicitly integrated into templates/flow
 
 ## 4) Validation Quality
