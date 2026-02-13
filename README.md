@@ -2,7 +2,7 @@
   <img src="assets/aitri-avatar.png" alt="Aitri Header" width="381" />
 </p>
 
-# Aitri
+<h1 align="center">AITRI</h1>
 
 Aitri is a CLI-first, spec-driven SDLC guardrail for human + AI collaboration.
 
