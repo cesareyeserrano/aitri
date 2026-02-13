@@ -9,6 +9,10 @@ It covers:
 - Installing Aitri as a skill for Codex, Claude, and OpenCode
 - Running a real first workflow
 
+Language behavior:
+- Aitri CLI prompts are in English.
+- You can speak to Codex/Claude/OpenCode in Spanish; command responses from Aitri remain English.
+
 ## 1) Prerequisites
 
 Install these first:
@@ -79,6 +83,11 @@ aitri validate --feature user-auth --non-interactive --json
 Expected:
 - `validate` exits with code `0`
 - JSON output reports no unresolved gaps for the generated baseline
+
+Optional guided draft (interactive):
+```bash
+aitri draft --guided
+```
 
 ## 5) Install Aitri as a Codex Skill
 

@@ -60,6 +60,10 @@ For complete onboarding (from no agent CLI installed to first validated workflow
 
 ## Command Manual
 
+Note on language:
+- CLI prompts and generated scaffolding are currently in English.
+- You can still converse with your coding agent in Spanish; Aitri command I/O remains English.
+
 ### `aitri help`
 Shows command reference and options.
 
@@ -71,6 +75,7 @@ Creates base project structure (`specs`, `backlog`, `tests`, `docs`).
 
 ### `aitri draft [--guided]`
 Creates `specs/drafts/<feature>.md` from idea input.
+In guided mode, Aitri asks structured questions (summary, actor, outcome, scope).
 
 ### `aitri approve`
 Runs spec gates and moves draft to `specs/approved/<feature>.md`.

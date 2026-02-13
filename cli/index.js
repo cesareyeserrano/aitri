@@ -87,8 +87,14 @@ const EXIT_ABORTED = 2;
 async function confirmProceed(opts) {
   if (opts.yes) return true;
   if (opts.nonInteractive) return null;
-  const answer = await ask("Proceed? (y/n): ");
+  const answer = await ask("Proceed with this plan? (y/n): ");
   return answer.toLowerCase() === "y";
+}
+
+function printGuidedDraftWizard() {
+  console.log("\nGuided Draft Wizard (English prompts)");
+  console.log("Answer briefly. Aitri will transform your answers into the draft context.");
+  console.log("Example feature name: user-login\n");
 }
 
 const cmd = process.argv[2];
@@ -165,24 +171,48 @@ if (cmd === "draft") {
   // We expect to run this from a project repo, not from the Aitri repo
   let feature = normalizeFeatureName(options.feature || options.positional[0]);
   if (!feature && !options.nonInteractive) {
-    feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
+    feature = normalizeFeatureName(await ask("Feature name in kebab-case (example: user-login): "));
   }
   if (!feature) {
-    console.log("Feature name is required.");
+    console.log("Feature name is required. Use kebab-case (example: user-login).");
     process.exit(EXIT_ERROR);
   }
 
   let idea = options.idea || "";
-  if (!idea && !options.nonInteractive) {
-    idea = await ask("Describe the idea (1-3 lines): ");
-  }
   if (options.guided) {
-    const actor = options.nonInteractive ? "TBD" : await ask("Primary actor (e.g. admin, customer): ");
-    const outcome = options.nonInteractive ? "TBD" : await ask("Expected outcome (what should happen): ");
-    idea = `${idea}\n\nPrimary actor: ${actor || "TBD"}\nExpected outcome: ${outcome || "TBD"}`;
+    if (options.nonInteractive && !idea) {
+      console.log("In guided + non-interactive mode, provide --idea \"<summary>\".");
+      process.exit(EXIT_ERROR);
+    }
+
+    if (!options.nonInteractive) {
+      printGuidedDraftWizard();
+      const summary = idea || await ask("1) What capability do you want to build? (1-2 lines): ");
+      const actor = await ask("2) Primary actor (example: customer, admin): ");
+      const outcome = await ask("3) Expected outcome (what should happen): ");
+      const inScope = await ask("4) In scope (main things to include): ");
+      const outOfScope = await ask("5) Out of scope (optional): ");
+      idea = [
+        `Summary: ${summary || "TBD"}`,
+        `Primary actor: ${actor || "TBD"}`,
+        `Expected outcome: ${outcome || "TBD"}`,
+        `In scope: ${inScope || "TBD"}`,
+        `Out of scope: ${outOfScope || "Not specified"}`
+      ].join("\n");
+    } else {
+      idea = [
+        `Summary: ${idea}`,
+        "Primary actor: TBD",
+        "Expected outcome: TBD",
+        "In scope: TBD",
+        "Out of scope: Not specified"
+      ].join("\n");
+    }
+  } else if (!idea && !options.nonInteractive) {
+    idea = await ask("Describe the idea in 1-3 lines: ");
   }
   if (!idea) {
-    console.log("Idea is required.");
+    console.log("Idea is required. Provide --idea in non-interactive mode.");
     process.exit(EXIT_ERROR);
   }
 
