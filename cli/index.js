@@ -87,8 +87,12 @@ const EXIT_ABORTED = 2;
 async function confirmProceed(opts) {
   if (opts.yes) return true;
   if (opts.nonInteractive) return null;
-  const answer = await ask("Proceed with this plan? (y/n): ");
-  return answer.toLowerCase() === "y";
+  while (true) {
+    const answer = (await ask("Proceed with this plan? Type 'y' to continue or 'n' to cancel: ")).toLowerCase();
+    if (answer === "y" || answer === "yes") return true;
+    if (answer === "n" || answer === "no") return false;
+    console.log("Invalid input. Please type 'y' or 'n'.");
+  }
 }
 
 function printGuidedDraftWizard() {
