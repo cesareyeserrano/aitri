@@ -29,7 +29,7 @@ Check items as they are completed to prevent context drift.
 - [x] FR -> US minimum rule
 - [x] US -> TC minimum rule
 - [x] FR -> TC rule when applicable
-- [ ] Coverage report clarity by gap type
+- [x] Coverage report clarity by gap type
 - [x] Stable machine-readable mode for CI
 
 ## 5) Operational Reliability
