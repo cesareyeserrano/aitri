@@ -11,6 +11,7 @@ Use this folder as the official reference for product intent, governance, and ex
 6. `docs/PROGRESS_CHECKLIST.md` - closure checklist for ongoing tracking
 7. `docs/runbook/BUILD_DEPLOY_ASSIST_WORKFLOW.md` - supervised build/deploy-assist flow
 8. `docs/templates/deploy/` - deployment plan/checklist templates
+9. `docs/release/V1_CLOSEOUT_RC1.md` - release closeout evidence and readiness summary
 
 ## Purpose
 Preserve continuity across time, contributors, and agent platforms.

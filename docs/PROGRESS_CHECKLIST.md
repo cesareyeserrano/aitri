@@ -46,7 +46,7 @@ Check items as they are completed to prevent context drift.
 - [x] Post-deploy evidence documented
 
 ## 7) Ready for V1 Close
-- [ ] Core stable on new and existing repositories
-- [ ] Validation reliable in real cases
-- [ ] Documentation sufficient for continuity without original author
-- [ ] Agent skills execute flow without bypassing gates
+- [x] Core stable on new and existing repositories
+- [x] Validation reliable in real cases
+- [x] Documentation sufficient for continuity without original author
+- [x] Agent skills execute flow without bypassing gates

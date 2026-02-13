@@ -1,81 +1,79 @@
 # Aitri Skill (Codex) — Spec-Driven SDLC
 
 ## Purpose
-Use Aitri as the workflow guardrail to turn an idea into approved specs and SDLC artifacts, then implement code **only after approvals**.
+Use Aitri as the workflow guardrail to move from idea to validated SDLC artifacts, and only then proceed to implementation with explicit human approval.
 
-Aitri is not a chatbot. It is a CLI + process:
-- Humans decide, direct, and approve
-- The agent proposes and executes actions using `PLAN → Proceed? (y/n)` gates
+Aitri execution model:
+- Human decides and approves
+- Aitri enforces structure and traceability
+- Agent executes within Aitri constraints
 
-## Core Principles (Non-negotiable)
-1. **No code before approved spec.**
-2. **Never skip gates.** If Aitri prints a PLAN and asks `Proceed?`, stop and ask the user for approval.
-3. **One step at a time.** Execute a single command, report results, then wait for the next instruction/approval.
-4. **Use kebab-case** feature names (lowercase, hyphenated).
-5. **Prefer minimal changes** and keep output deterministic.
+## Session Bootstrap (Mandatory)
+1. Read `docs/README.md`
+2. Read `docs/EXECUTION_GUARDRAILS.md`
+3. Run `aitri status --json`
+4. Report current state and next recommended step
 
-## Commands and Intent
-### `aitri init`
-Creates base project folders.
-- Use when project has no `specs/`, `backlog/`, `tests/`, `docs/`.
+## Core Rules (Non-Negotiable)
+1. No code implementation before approved spec.
+2. Never bypass Aitri gate prompts.
+3. One command step at a time.
+4. Use kebab-case feature names.
+5. Keep output deterministic and minimal.
 
-### `aitri draft`
-Creates `specs/drafts/<feature>.md` from a short idea.
-- If user is unsure, use `aitri draft --guided` to collect minimal inputs.
+## Commands
+- `aitri init`
+- `aitri draft [--guided]`
+- `aitri approve`
+- `aitri discover`
+- `aitri plan`
+- `aitri validate`
+- `aitri status`
 
-### `aitri approve`
-Runs strict gates and moves draft into `specs/approved/`.
-- If gates fail, propose edits to the draft spec and re-run.
+## CI/Agent Mode
+For non-interactive execution:
+- Use `--non-interactive`
+- For write commands (`init`, `draft`, `approve`, `discover`, `plan`) also use `--yes`
+- Pass feature explicitly where needed: `--feature <name>`
+- Use `--json` for machine-readable output (`status`, `validate`)
 
-### `aitri discover`
-Requires an approved spec. Generates:
-- `docs/discovery/<feature>.md`
-- `backlog/<feature>/backlog.md`
-- `tests/<feature>/tests.md`
-
-### `aitri plan`
-Generates a planning package from an approved spec:
-- Creates: `docs/plan/<feature>.md`
-- Overwrites: `backlog/<feature>/backlog.md`
-- Overwrites: `tests/<feature>/tests.md`
-
-Use this to turn placeholders into a structured plan. The agent must then refine backlog/tests content in alignment with personas, and request human approval before implementation.
-
-This is where the agent starts producing SDLC artifacts from the approved spec.
-
-## Workflow (Default)
-1) Ensure in the project root (`pwd` should show the repo/project folder).
-2) Run `aitri init` if structure is missing.
-3) Run `aitri draft` (or `aitri draft --guided`) to create a draft spec.
-4) Ask the user to review the draft spec and make changes if needed.
-5) Run `aitri approve`. If failed, fix spec and repeat.
-6) Run `aitri discover` to generate discovery/backlog/tests.
-6b) Run `aitri plan` to generate a plan doc and refresh backlog/tests structure.
-6c) Refine `docs/plan/<feature>.md`, `backlog/<feature>/backlog.md`, and `tests/<feature>/tests.md` using personas, then ask user approval.
-7) Ask the user to approve generated artifacts before any implementation work.
-8) Only after approvals: begin implementation (outside Aitri scope unless user asks).
+## Recommended Workflow
+1. `aitri status --json`
+2. `aitri init` (if structure missing)
+3. `aitri draft`
+4. Human review of draft
+5. `aitri approve`
+6. `aitri discover`
+7. `aitri plan`
+8. Refine artifacts with personas
+9. `aitri validate`
+10. Human approval before implementation/deployment assistance
 
 ## Persona Usage
-When writing artifacts, align content with personas:
-- Architect: system boundaries, components, failure modes, observability
-- Security: threats, controls, input validation, abuse prevention
-- QA: test strategy, edge cases, acceptance criteria quality
+When refining artifacts, apply:
+- Product
+- Architect
+- Developer
+- QA
+- Security
+- UX/UI (if user-facing)
 
-If persona files exist, consult them:
+Reference files:
+- `core/personas/product.md`
 - `core/personas/architect.md`
-- `core/personas/security.md`
+- `core/personas/developer.md`
 - `core/personas/qa.md`
+- `core/personas/security.md`
+- `core/personas/ux-ui.md`
 
-## Approval Gates (How to behave)
-If Aitri shows:
-- `PLAN:` followed by actions and `Proceed? (y/n)`
-Then the agent must:
-1) Stop
-2) Summarize the plan
-3) Ask the user for `y/n`
-4) Only proceed on explicit `y`
+## Approval Behavior
+If Aitri shows `PLAN` + `Proceed? (y/n)`:
+1. Stop
+2. Summarize plan
+3. Ask for human approval
+4. Proceed only on explicit approval
 
-## Output Style
-- Keep terminal commands minimal.
-- Do not invent files; only create what Aitri creates or what user explicitly approves.
-- Always report paths of created artifacts.
+## Exit Codes
+- `0`: success
+- `1`: error
+- `2`: user-aborted action
