@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
 
 function exists(p) {
   return fs.existsSync(p);
@@ -8,91 +7,186 @@ function exists(p) {
 
 function listMd(dir) {
   if (!exists(dir)) return [];
-  return fs.readdirSync(dir).filter(f => f.endsWith(".md"));
+  return fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
 }
 
 function firstOrNull(arr) {
   return arr.length > 0 ? arr[0] : null;
 }
 
-export function runStatus() {
+function collectValidationIssues(spec, backlog, tests) {
+  const issues = [];
+
+  if (!/###\s+US-\d+/m.test(backlog)) {
+    issues.push("Backlog must include at least one user story with an ID like `### US-1`.");
+  }
+  if (backlog.includes("FR-?")) {
+    issues.push("Backlog contains placeholder `FR-?`.");
+  }
+  if (backlog.includes("AC-?")) {
+    issues.push("Backlog contains placeholder `AC-?`.");
+  }
+
+  if (!/###\s+TC-\d+/m.test(tests)) {
+    issues.push("Tests must include at least one test case with an ID like `### TC-1`.");
+  }
+  if (tests.includes("US-?")) {
+    issues.push("Tests contain placeholder `US-?`.");
+  }
+  if (tests.includes("FR-?")) {
+    issues.push("Tests contain placeholder `FR-?`.");
+  }
+  if (tests.includes("AC-?")) {
+    issues.push("Tests contain placeholder `AC-?`.");
+  }
+
+  const specFRs = [...new Set([...spec.matchAll(/\bFR-\d+\b/g)].map((m) => m[0]))];
+  const backlogFRs = new Set([...backlog.matchAll(/\bFR-\d+\b/g)].map((m) => m[0]));
+  const testsFRs = new Set([...tests.matchAll(/\bFR-\d+\b/g)].map((m) => m[0]));
+
+  const backlogUS = [...new Set([...backlog.matchAll(/\bUS-\d+\b/g)].map((m) => m[0]))];
+  const testsUS = new Set([...tests.matchAll(/\bUS-\d+\b/g)].map((m) => m[0]));
+
+  for (const fr of specFRs) {
+    if (!backlogFRs.has(fr)) {
+      issues.push(`Coverage: ${fr} is defined in spec but not referenced in backlog user stories.`);
+    }
+    if (!testsFRs.has(fr)) {
+      issues.push(`Coverage: ${fr} is defined in spec but not referenced in tests.`);
+    }
+  }
+
+  for (const us of backlogUS) {
+    if (!testsUS.has(us)) {
+      issues.push(`Coverage: ${us} exists in backlog but is not referenced in tests.`);
+    }
+  }
+
+  return issues;
+}
+
+function computeNextStep({ missingDirs, approvedSpecFound, discoveryExists, planExists, validateOk }) {
+  if (missingDirs.length > 0) return "aitri init";
+  if (!approvedSpecFound) return "aitri draft";
+  if (!discoveryExists) return "aitri discover";
+  if (!planExists) return "aitri plan";
+  if (!validateOk) return "aitri validate";
+  return "ready_for_human_approval";
+}
+
+export function runStatus(options = {}) {
+  const { json = false } = options;
   const root = process.cwd();
 
   const requiredDirs = ["specs", "backlog", "tests", "docs"];
-  const missingDirs = requiredDirs.filter(d => !exists(path.join(root, d)));
+  const missingDirs = requiredDirs.filter((d) => !exists(path.join(root, d)));
 
-  console.log("Aitri Project Status ⚒️\n");
-
-  // 1) Structure
-  if (missingDirs.length === 0) {
-    console.log("✔ Structure initialized");
-  } else {
-    console.log("✖ Missing structure:", missingDirs.join(", "));
-  }
-
-  // 2) Approved spec
   const approvedDir = path.join(root, "specs", "approved");
   const approvedSpecs = listMd(approvedDir);
   const approvedSpecFile = firstOrNull(approvedSpecs);
 
-  if (approvedSpecFile) {
-    const feature = approvedSpecFile.replace(".md", "");
-    console.log(`✔ Approved spec found: ${feature}`);
+  const report = {
+    root,
+    structure: {
+      ok: missingDirs.length === 0,
+      missingDirs
+    },
+    approvedSpec: {
+      found: !!approvedSpecFile,
+      feature: approvedSpecFile ? approvedSpecFile.replace(".md", "") : null,
+      file: approvedSpecFile ? path.join("specs", "approved", approvedSpecFile) : null
+    },
+    artifacts: {
+      discovery: false,
+      plan: false,
+      backlog: false,
+      tests: false
+    },
+    validation: {
+      ok: false,
+      issues: []
+    },
+    nextStep: null
+  };
 
-    // 3) Discovery / Plan presence (by feature name)
+  if (approvedSpecFile) {
+    const feature = report.approvedSpec.feature;
     const discoveryFile = path.join(root, "docs", "discovery", `${feature}.md`);
     const planFile = path.join(root, "docs", "plan", `${feature}.md`);
-
-    if (exists(discoveryFile)) console.log("✔ Discovery exists");
-    else console.log("✖ Discovery not generated");
-
-    if (exists(planFile)) console.log("✔ Plan exists");
-    else console.log("✖ Plan not generated");
-
-    // 4) Validate (best effort)
-    let validateOk = false;
-    try {
-      execSync(`aitri validate`, { stdio: "pipe" }); // will prompt; we avoid prompting here
-    } catch {
-      // ignore: validate is interactive; we only run non-interactive check below
-    }
-
-    // Non-interactive validate check: if backlog/tests exist and no placeholders remain
     const backlogFile = path.join(root, "backlog", feature, "backlog.md");
     const testsFile = path.join(root, "tests", feature, "tests.md");
+    const specFile = path.join(root, "specs", "approved", `${feature}.md`);
 
-    if (exists(backlogFile) && exists(testsFile)) {
+    report.artifacts.discovery = exists(discoveryFile);
+    report.artifacts.plan = exists(planFile);
+    report.artifacts.backlog = exists(backlogFile);
+    report.artifacts.tests = exists(testsFile);
+
+    if (exists(specFile) && exists(backlogFile) && exists(testsFile)) {
+      const spec = fs.readFileSync(specFile, "utf8");
       const backlog = fs.readFileSync(backlogFile, "utf8");
       const tests = fs.readFileSync(testsFile, "utf8");
 
-      const hasPlaceholders =
-        backlog.includes("FR-?") ||
-        backlog.includes("AC-?") ||
-        tests.includes("US-?") ||
-        tests.includes("FR-?") ||
-        tests.includes("AC-?");
-
-      const hasIds = /###\s+US-\d+/m.test(backlog) && /###\s+TC-\d+/m.test(tests);
-
-      validateOk = hasIds && !hasPlaceholders;
+      report.validation.issues = collectValidationIssues(spec, backlog, tests);
+      report.validation.ok = report.validation.issues.length === 0;
+    } else {
+      if (!exists(specFile)) report.validation.issues.push(`Missing approved spec: ${path.relative(root, specFile)}`);
+      if (!exists(backlogFile)) report.validation.issues.push(`Missing backlog: ${path.relative(root, backlogFile)}`);
+      if (!exists(testsFile)) report.validation.issues.push(`Missing tests: ${path.relative(root, testsFile)}`);
+      report.validation.ok = false;
     }
 
-    if (validateOk) console.log("✔ Validation likely passed (no placeholders detected)");
-    else console.log("✖ Validation not passed (or cannot be determined)");
-
-    // 5) Next step
-    console.log("\nNext recommended step:");
-    if (missingDirs.length > 0) console.log("aitri init");
-    else if (!approvedSpecFile) console.log("aitri draft");
-    else if (!exists(discoveryFile)) console.log("aitri discover");
-    else if (!exists(planFile)) console.log("aitri plan");
-    else if (!validateOk) console.log("aitri validate");
-    else console.log("✅ Ready for human approval → implementation phase");
-    return;
+    report.nextStep = computeNextStep({
+      missingDirs,
+      approvedSpecFound: true,
+      discoveryExists: report.artifacts.discovery,
+      planExists: report.artifacts.plan,
+      validateOk: report.validation.ok
+    });
   } else {
+    report.nextStep = computeNextStep({
+      missingDirs,
+      approvedSpecFound: false,
+      discoveryExists: false,
+      planExists: false,
+      validateOk: false
+    });
+  }
+
+  if (json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
+  console.log("Aitri Project Status ⚒️\n");
+
+  if (report.structure.ok) {
+    console.log("✔ Structure initialized");
+  } else {
+    console.log("✖ Missing structure:", report.structure.missingDirs.join(", "));
+  }
+
+  if (!report.approvedSpec.found) {
     console.log("✖ No approved specs found");
     console.log("\nNext recommended step:");
-    if (missingDirs.length > 0) console.log("aitri init");
-    else console.log("aitri draft");
+    console.log(report.nextStep);
+    return;
+  }
+
+  console.log(`✔ Approved spec found: ${report.approvedSpec.feature}`);
+  console.log(report.artifacts.discovery ? "✔ Discovery exists" : "✖ Discovery not generated");
+  console.log(report.artifacts.plan ? "✔ Plan exists" : "✖ Plan not generated");
+
+  if (report.validation.ok) {
+    console.log("✔ Validation likely passed");
+  } else {
+    console.log("✖ Validation not passed");
+  }
+
+  console.log("\nNext recommended step:");
+  if (report.nextStep === "ready_for_human_approval") {
+    console.log("✅ Ready for human approval → implementation phase");
+  } else {
+    console.log(report.nextStep);
   }
 }

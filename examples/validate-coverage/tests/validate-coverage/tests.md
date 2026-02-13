@@ -30,7 +30,7 @@
 
 ### TC-3 — Validation passes with full coverage
 - Description: Validation passes when all FR-* are referenced in backlog and tests.
-- Trace: US-1, US-2, FR-1, FR-2
+- Trace: US-1, US-2, US-3, FR-1, FR-2, FR-3
 - Steps:
   1. Create approved spec with FR-1 and FR-2.
   2. Reference both FR-1 and FR-2 in backlog.
