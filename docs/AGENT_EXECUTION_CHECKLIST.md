@@ -56,6 +56,7 @@ Before implementation approval:
 
 Persona invocation is iterative (not one-time):
 - Re-run relevant personas whenever scope, architecture, contracts, or validation state changes.
+- Follow role boundaries in `docs/runbook/PERSONA_INTERACTION_FLOW.md`.
 
 ## Validation Contract (Current Baseline)
 `validate` should assert at minimum:

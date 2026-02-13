@@ -30,6 +30,7 @@ Status: COMPLETE
 - persona model complete
 - command contract stabilized
 - discovery persona added and discover interview depth increased
+- persona interaction boundaries documented to reduce role overlap
 
 ### Phase B: Validation Maturity
 Status: COMPLETE (baseline)

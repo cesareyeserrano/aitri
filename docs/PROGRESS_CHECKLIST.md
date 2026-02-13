@@ -17,6 +17,7 @@ Check items as they are completed to prevent context drift.
 
 ## 3) SDLC Personas
 - [x] Discovery persona complete
+- [x] Discovery persona optimized with confidence gate
 - [x] Product persona complete
 - [x] Architect persona available
 - [x] Security persona available
@@ -24,6 +25,7 @@ Check items as they are completed to prevent context drift.
 - [x] QA persona complete
 - [x] UX/UI persona available (for user-facing features)
 - [x] Personas explicitly integrated into templates/flow
+- [x] Persona interaction flow documented (role boundaries + multi-pass)
 
 ## 4) Validation Quality
 - [x] Placeholder blocking baseline
