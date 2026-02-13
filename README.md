@@ -1,144 +1,118 @@
 <p align="center">
-  <img src="assets/aitri-avatar.png" alt="Aitri Header" width="381" />
+  <img src="assets/aitri-avatar.png" alt="Aitri Header" width="250" />
 </p>
 
 <h1 align="center">AITRI</h1>
 
-Aitri is a CLI-first, spec-driven SDLC guardrail for human + AI collaboration.
+<p align="center">
+  CLI-first, spec-driven SDLC guardrail for human + AI collaboration.
+</p>
 
-It enforces a deterministic workflow from specification to validated artifacts, with explicit human approvals before implementation and deployment assistance steps.
+## What Aitri Is
+Aitri enforces a deterministic path from idea to validated SDLC artifacts with explicit human approvals before implementation and deployment assistance.
 
-## Table of Contents
-- [Why Aitri](#why-aitri)
-- [Install](#install)
-- [Zero-to-First-Run Guide](#zero-to-first-run-guide)
-- [Core Workflow](#core-workflow)
-- [Command Manual](#command-manual)
-- [Automation Helpers](#automation-helpers)
-- [Skill Adapters](#skill-adapters)
-- [Project Structure](#project-structure)
-- [Validation Model](#validation-model)
-- [Exit Codes](#exit-codes)
-- [Real Test Procedure](#real-test-procedure)
-- [Checkpoint and Resume](#checkpoint-and-resume)
-- [Troubleshooting](#troubleshooting)
-- [Documentation Index](#documentation-index)
+Core contract:
+- Spec first, implementation later.
+- Traceability required: `FR -> US -> TC`.
+- Human remains final authority on irreversible actions.
+- Agents execute inside Aitri gates, not outside them.
 
-## Why Aitri
-- Spec first: no implementation without approved scope.
-- Traceability: FR -> US -> TC.
-- Deterministic CLI behavior for humans, CI, and agents.
-- Explicit gate approvals for file-changing actions.
-- Human authority over all irreversible steps.
-
-## Install
-
-### Local repo usage
+## Quick Start (2 Minutes)
+### 1) Install globally
 ```bash
-cd /path/to/aitri
-node cli/index.js help
-```
-
-### Global install from source
-```bash
+git clone https://github.com/cesareyeserrano/aitri.git
+cd aitri
 npm i -g .
+hash -r
 aitri --version
 ```
 
-## Zero-to-First-Run Guide
-For complete onboarding (from no agent CLI installed to first validated workflow), use:
-- `docs/guides/GETTING_STARTED.md`
-
-## Core Workflow
-1. `aitri status json`
-2. `aitri init`
-3. `aitri draft`
-4. Human review of draft
-5. `aitri approve`
-6. `aitri discover`
-7. `aitri plan`
-8. Refine artifacts with personas (Discovery/Product/Architect/Developer/QA/Security/UX)
-9. `aitri validate`
-10. Human approval before implementation/deployment assistance
-
-## Command Manual
-
-Note on language:
-- CLI prompts and generated scaffolding are currently in English.
-- You can still converse with your coding agent in Spanish; Aitri command I/O remains English.
-
-### `aitri help`
-Shows command reference and options.
-
-### `aitri --version`
-Prints installed version.
-
-### `aitri init`
-Creates base project structure (`specs`, `backlog`, `tests`, `docs`).
-
-### `aitri draft [--guided]`
-Creates `specs/drafts/<feature>.md` from idea input.
-In guided mode, Aitri asks structured questions (summary, actor, outcome, scope, technology).
-If the requirement already names a technology, Aitri asks to confirm/replace it.
-If not, Aitri suggests a baseline stack based on the requirement context.
-
-### `aitri approve`
-Runs spec gates and moves draft to `specs/approved/<feature>.md`.
-
-### `aitri discover`
-Generates discovery, backlog skeleton, and tests skeleton from approved spec.
-Use `--guided` to run a deeper discovery interview (users, JTBD, constraints, dependencies, metrics, assumptions, scope).
-
-### `aitri plan`
-Generates plan + structured backlog/tests templates.
-
-### `aitri validate`
-Validates structure, placeholders, and coverage links.
-
-### `aitri status`
-Shows project state and next recommended step.
-
-## Automation Helpers
-Use these flags for CI/agent execution:
-- `--non-interactive`: disable prompts
-- `--yes`: auto-approve write-command plans
-- `--feature <name>`: explicit feature targeting
-- `--idea <text>`: non-interactive draft content
-- `--json` or `-j`: machine-readable output (`status`, `validate`)
-- `--format json`: explicit output format
-- `json` shorthand: `aitri status json`
-- `--no-checkpoint`: disable auto-checkpoint for a single command
-
-Example non-interactive sequence:
+### 2) Initialize a target project
 ```bash
+mkdir -p ~/Documents/PROJECTS/my-feature
+cd ~/Documents/PROJECTS/my-feature
 aitri init --non-interactive --yes
+aitri status json
+```
+
+### 3) Run the SDLC baseline flow
+```bash
 aitri draft --feature user-login --idea "Email/password login" --non-interactive --yes
 aitri approve --feature user-login --non-interactive --yes
 aitri discover --feature user-login --non-interactive --yes
 aitri plan --feature user-login --non-interactive --yes
-aitri validate --feature user-login --non-interactive --format json
+aitri validate --feature user-login --format json
 ```
 
+## Command Reference
+| Command | Purpose |
+|---|---|
+| `aitri init` | Create base SDLC structure (`specs`, `backlog`, `tests`, `docs`) |
+| `aitri draft [--guided]` | Create draft spec from idea input |
+| `aitri approve` | Run gates and move draft to approved spec |
+| `aitri discover [--guided]` | Create discovery artifact + backlog/tests scaffolding |
+| `aitri plan` | Create plan artifact + structured backlog/tests templates |
+| `aitri validate` | Validate artifacts, placeholders, and coverage links |
+| `aitri status` | Show state and next recommended step |
+| `aitri help` | Show command/options help |
+
+## Output Modes and Automation Flags
+- `json` shorthand: `aitri status json`
+- `--json` or `-j`: machine-readable output (`status`, `validate`)
+- `--format json`: explicit format mode
+- `--non-interactive`: disable prompts
+- `--yes`: auto-approve write plans
+- `--feature <name>`: explicit feature target
+- `--idea "<text>"`: non-interactive draft input
+- `--no-checkpoint`: disable auto-checkpoint for one command
+
+## Guided Modes
+- `aitri draft --guided`
+  - Structured requirement intake (summary, actor, outcome, scope, technology).
+  - Confirms requirement-defined technology or suggests a baseline.
+- `aitri discover --guided`
+  - Deeper discovery interview (users, JTBD, constraints, dependencies, metrics, assumptions, scope).
+
+## Auto-Checkpoint and Resume
+Write commands (`init`, `draft`, `approve`, `discover`, `plan`) create auto-checkpoints in Git repositories.
+
+Checkpoint policy:
+- Commit message pattern: `checkpoint: <feature> <phase>`
+- Managed tag pattern: `aitri-checkpoint/*`
+- Retention: latest 10 managed checkpoint tags
+
+Resume protocol:
+```bash
+aitri status json
+```
+Follow `nextStep`.  
+If `checkpoint.state.resumeDecision = "ask_user_resume_from_checkpoint"`, confirm resume with the user before any write action.
+
+## Persona Model (Iterative, Multi-Pass)
+Aitri personas are not one-shot. Re-run them whenever context changes.
+
+Available personas:
+- Discovery
+- Product
+- Architect
+- Developer
+- QA
+- Security
+- UX/UI (for user-facing features)
+
+Role boundaries and interaction flow:
+- `docs/runbook/PERSONA_INTERACTION_FLOW.md`
+
 ## Skill Adapters
-Aitri includes adapter skill contracts for:
+Aitri skill contracts:
 - Codex: `adapters/codex/SKILL.md`
 - Claude: `adapters/claude/SKILL.md`
 - OpenCode: `adapters/opencode/SKILL.md`
 
-UI metadata files for skill lists:
-- `adapters/codex/agents/openai.yaml`
-- `adapters/claude/agents/openai.yaml`
-- `adapters/opencode/agents/openai.yaml`
-
-### Install as Codex Skill (Local)
+Codex local install:
 ```bash
 mkdir -p ~/.codex/skills/aitri
 cp adapters/codex/SKILL.md ~/.codex/skills/aitri/SKILL.md
-```
-
-Then restart Codex and invoke it explicitly in-session:
-```text
-Use the aitri skill and run aitri status json
 ```
 
 ## Project Structure
@@ -153,77 +127,45 @@ docs/plan/<feature>.md
 ```
 
 ## Validation Model
-`validate` checks:
-- Missing required artifacts
-- Placeholder leakage (`FR-?`, `AC-?`, `US-?`)
-- Structure requirements (`### US-*`, `### TC-*`)
-- Coverage links:
-  - FR -> US
-  - FR -> TC
-  - US -> TC
+`aitri validate` checks:
+- required artifacts
+- placeholder leakage (`FR-?`, `AC-?`, `US-?`)
+- structure (`### US-*`, `### TC-*`)
+- coverage links:
+  - `FR -> US`
+  - `FR -> TC`
+  - `US -> TC`
 
-JSON output includes:
-- `issues` (compatible flat list)
-- `gaps` (typed issue lists)
-- `gapSummary` (typed counts)
+JSON response includes:
+- `issues`
+- `gaps`
+- `gapSummary`
 
 ## Exit Codes
 - `0` success
-- `1` error (usage/validation/runtime)
+- `1` error
 - `2` user-aborted action
 
-## Real Test Procedure
-```bash
-npm run test:smoke
-cd examples/validate-coverage
-node ../../cli/index.js validate --feature validate-coverage --non-interactive --format json
-```
-
-## Checkpoint and Resume
-Auto-checkpoint is enabled by default for write commands (`init`, `draft`, `approve`, `discover`, `plan`).
-Aitri keeps the latest 10 managed checkpoint tags (`aitri-checkpoint/*`).
-
-Manual checkpoint (optional):
-```bash
-git add -A
-git commit -m "checkpoint: <feature> <phase>"
-```
-
-Fallback:
-```bash
-git stash push -m "checkpoint: <feature> <phase>"
-```
-
-Resume in a new session:
-```bash
-aitri status json
-```
-Then execute the returned `nextStep`.
-
-If `status` reports `checkpoint.state.resumeDecision = "ask_user_resume_from_checkpoint"`,
-the agent should ask the user to confirm resume before any write action.
-
 ## Troubleshooting
-- If command waits for input in CI: add `--non-interactive --yes`.
-- If `validate` fails with missing feature: add `--feature <name>`.
-- If merge is blocked by branch policy: complete required checks/review or use admin merge when appropriate.
-- If Codex does not discover the local skill:
-  - Verify `~/.codex/skills/aitri/SKILL.md` exists.
-  - Verify `SKILL.md` starts with YAML frontmatter (`name`, `description`).
-  - Restart Codex after installation/update.
-- If a skill session in a new repository reports missing `docs/*`:
-  - Run `aitri status json`.
-  - If `nextStep` is `aitri init`, run `aitri init --non-interactive --yes`.
-  - Re-run `aitri status json` and continue workflow.
-- If your machine shuts down abruptly mid-session:
-  - Run `git status --short` and recover stashes if needed.
-  - Run `aitri status json`.
-  - Continue with the returned `nextStep`.
+- Prompting in automation:
+  - add `--non-interactive --yes`
+- Missing feature in non-interactive validate:
+  - add `--feature <name>`
+- Skill not discovered (Codex):
+  - confirm `~/.codex/skills/aitri/SKILL.md`
+  - confirm YAML frontmatter (`name`, `description`)
+  - restart Codex
+- New repo missing structure:
+  - run `aitri status json`
+  - if `nextStep = aitri init`, run `aitri init --non-interactive --yes`
 
 ## Documentation Index
 - `docs/README.md`
+- `docs/guides/GETTING_STARTED.md`
 - `docs/EXECUTION_GUARDRAILS.md`
 - `docs/AGENT_EXECUTION_CHECKLIST.md`
 - `docs/PROGRESS_CHECKLIST.md`
 - `docs/STRATEGY_EXECUTION.md`
-- `docs/release/`
+- `docs/guides/SKILL_PACKAGING_AND_INSTALL.md`
+- `docs/runbook/SESSION_CHECKPOINT_AND_RESUME.md`
+- `docs/runbook/PERSONA_INTERACTION_FLOW.md`
