@@ -132,6 +132,7 @@ test("validate fails in non-interactive mode without --feature", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, false);
   assert.match(payload.issues[0], /Feature name is required/);
+  assert.equal(payload.gaps.usage.length, 1);
 });
 
 test("write commands fail in non-interactive mode when --yes is missing", () => {
@@ -148,4 +149,53 @@ test("interactive abort returns exit code 2", () => {
 
   assert.equal(result.status, 2);
   assert.match(result.stdout, /Aborted/);
+});
+
+test("validate json classifies coverage gaps by type", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-gaps-"));
+  const feature = "coverage-gaps";
+
+  fs.mkdirSync(path.join(tempDir, "specs", "approved"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "backlog", feature), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "tests", feature), { recursive: true });
+
+  fs.writeFileSync(
+    path.join(tempDir, "specs", "approved", `${feature}.md`),
+    `# AF-SPEC: ${feature}
+STATUS: APPROVED
+## 3. Functional Rules (traceable)
+- FR-1: Rule one.
+- FR-2: Rule two.
+`,
+    "utf8"
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, "backlog", feature, "backlog.md"),
+    `# Backlog: ${feature}
+### US-1
+- Trace: FR-1
+`,
+    "utf8"
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, "tests", feature, "tests.md"),
+    `# Test Cases: ${feature}
+### TC-1
+- Trace: US-1, FR-1
+`,
+    "utf8"
+  );
+
+  const result = runNode(["validate", "--feature", feature, "--non-interactive", "--json"], { cwd: tempDir });
+  assert.equal(result.status, 1);
+
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.gapSummary.coverage_fr_us, 1);
+  assert.equal(payload.gapSummary.coverage_fr_tc, 1);
+  assert.equal(payload.gapSummary.coverage_us_tc, 0);
+  assert.equal(payload.gaps.coverage_fr_us.length, 1);
+  assert.equal(payload.gaps.coverage_fr_tc.length, 1);
 });

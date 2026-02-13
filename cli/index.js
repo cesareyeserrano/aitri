@@ -622,7 +622,14 @@ if (cmd === "validate") {
   if (!feature) {
     const msg = "Feature name is required. Use --feature <name> in non-interactive mode.";
     if (options.json) {
-      console.log(JSON.stringify({ ok: false, feature: null, issues: [msg] }, null, 2));
+      console.log(JSON.stringify({
+        ok: false,
+        feature: null,
+        issues: [msg],
+        gaps: {
+          usage: [msg]
+        }
+      }, null, 2));
     } else {
       console.log(msg);
     }
@@ -634,6 +641,18 @@ if (cmd === "validate") {
   const testsFile = path.join(process.cwd(), "tests", feature, "tests.md");
 
   const issues = [];
+  const gapTypes = {
+    missing_artifact: [],
+    structure: [],
+    placeholder: [],
+    coverage_fr_us: [],
+    coverage_fr_tc: [],
+    coverage_us_tc: []
+  };
+  const addIssue = (type, message) => {
+    issues.push(message);
+    if (gapTypes[type]) gapTypes[type].push(message);
+  };
   const result = {
     ok: false,
     feature,
@@ -649,18 +668,22 @@ if (cmd === "validate") {
       backlogUs: 0,
       testsUs: 0
     },
+    gaps: gapTypes,
+    gapSummary: {},
     issues
   };
 
   if (!fs.existsSync(approvedFile)) {
-    issues.push(`Missing approved spec: ${path.relative(process.cwd(), approvedFile)}`);
+    addIssue("missing_artifact", `Missing approved spec: ${path.relative(process.cwd(), approvedFile)}`);
   }
   if (!fs.existsSync(backlogFile)) {
-    issues.push(`Missing backlog: ${path.relative(process.cwd(), backlogFile)}`);
+    addIssue("missing_artifact", `Missing backlog: ${path.relative(process.cwd(), backlogFile)}`);
   }
   if (!fs.existsSync(testsFile)) {
-    issues.push(`Missing tests: ${path.relative(process.cwd(), testsFile)}`);
+    addIssue("missing_artifact", `Missing tests: ${path.relative(process.cwd(), testsFile)}`);
   }
+
+  result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
 
   if (issues.length > 0) {
     if (options.json) {
@@ -678,31 +701,37 @@ if (cmd === "validate") {
 
   // Basic structure checks
   if (!/###\s+US-\d+/m.test(backlog)) {
-    issues.push("Backlog must include at least one user story with an ID like `### US-1`.");
+    addIssue("structure", "Backlog must include at least one user story with an ID like `### US-1`.");
   }
   if (backlog.includes("FR-?")) {
-    issues.push("Backlog contains placeholder `FR-?`. Replace with real Functional Rule IDs (FR-1, FR-2...).");
+    addIssue("placeholder", "Backlog contains placeholder `FR-?`. Replace with real Functional Rule IDs (FR-1, FR-2...).");
   }
   if (backlog.includes("AC-?")) {
-    issues.push("Backlog contains placeholder `AC-?`. Replace with real Acceptance Criteria IDs (AC-1, AC-2...).");
+    addIssue("placeholder", "Backlog contains placeholder `AC-?`. Replace with real Acceptance Criteria IDs (AC-1, AC-2...).");
   }
 
   if (!/###\s+TC-\d+/m.test(tests)) {
-    issues.push("Tests must include at least one test case with an ID like `### TC-1`.");
+    addIssue("structure", "Tests must include at least one test case with an ID like `### TC-1`.");
   }
   if (tests.includes("US-?")) {
-    issues.push("Tests contain placeholder `US-?`. Replace with real User Story IDs (US-1, US-2...).");
+    addIssue("placeholder", "Tests contain placeholder `US-?`. Replace with real User Story IDs (US-1, US-2...).");
   }
   if (tests.includes("FR-?")) {
-    issues.push("Tests contain placeholder `FR-?`. Replace with real Functional Rule IDs (FR-1, FR-2...).");
+    addIssue("placeholder", "Tests contain placeholder `FR-?`. Replace with real Functional Rule IDs (FR-1, FR-2...).");
   }
   if (tests.includes("AC-?")) {
-    issues.push("Tests contain placeholder `AC-?`. Replace with real Acceptance Criteria IDs (AC-1, AC-2...).");
+    addIssue("placeholder", "Tests contain placeholder `AC-?`. Replace with real Acceptance Criteria IDs (AC-1, AC-2...).");
   }
 
+  result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
+
   if (issues.length > 0) {
-    console.log("VALIDATION FAILED:");
-    issues.forEach(i => console.log("- " + i));
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log("VALIDATION FAILED:");
+      issues.forEach(i => console.log("- " + i));
+    }
     process.exit(EXIT_ERROR);
   }
 
@@ -713,14 +742,14 @@ if (cmd === "validate") {
 
   const missingFRCoverage = [...new Set(specFRs)].filter(fr => !backlogFRs.has(fr));
   missingFRCoverage.forEach(fr =>
-    issues.push(`Coverage: ${fr} is defined in spec but not referenced in backlog user stories.`)
+    addIssue("coverage_fr_us", `Coverage: ${fr} is defined in spec but not referenced in backlog user stories.`)
   );
 
   // 2) Every FR-* in spec should be referenced by at least one TC-* in tests
   const testsFRs = new Set([...tests.matchAll(/\bFR-\d+\b/g)].map(m => m[0]));
   const missingFRTestsCoverage = [...new Set(specFRs)].filter(fr => !testsFRs.has(fr));
   missingFRTestsCoverage.forEach(fr =>
-    issues.push(`Coverage: ${fr} is defined in spec but not referenced in tests.`)
+    addIssue("coverage_fr_tc", `Coverage: ${fr} is defined in spec but not referenced in tests.`)
   );
 
   // 2) Every US-* in backlog should be referenced by at least one TC-* in tests
@@ -729,7 +758,7 @@ if (cmd === "validate") {
 
   const missingUSCoverage = [...new Set(backlogUS)].filter(us => !testsUS.has(us));
   missingUSCoverage.forEach(us =>
-    issues.push(`Coverage: ${us} exists in backlog but is not referenced in tests.`)
+    addIssue("coverage_us_tc", `Coverage: ${us} exists in backlog but is not referenced in tests.`)
   );
   // --- End coverage checks ---
 
@@ -738,6 +767,7 @@ if (cmd === "validate") {
   result.coverage.testsFr = testsFRs.size;
   result.coverage.backlogUs = new Set(backlogUS).size;
   result.coverage.testsUs = testsUS.size;
+  result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
 
   if (issues.length > 0) {
     if (options.json) {
