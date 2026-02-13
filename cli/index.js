@@ -2,6 +2,26 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import { runStatus } from "./commands/status.js";
+
+function showBanner() {
+  const iron = "\x1b[38;5;24m";      // dark iron gray
+  const fire = "\x1b[38;5;208m";     // forge orange
+  const ember = "\x1b[38;5;196m";    // deep red
+  const reset = "\x1b[0m";
+
+  console.log(`
+${iron}   █████╗ ██╗████████╗██████╗ ██╗${reset}
+${iron}  ██╔══██╗██║╚══██╔══╝██╔══██╗██║${reset}
+${fire}  ███████║██║   ██║   ██████╔╝██║${reset}
+${ember}  ██╔══██║██║   ██║   ██╔══██╗██║${reset}
+${fire}  ██║  ██║██║   ██║   ██║  ██║██║${reset}
+${iron}  ╚═╝  ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝${reset}
+
+${fire}⚒ Spec-Driven Development Engine.${reset}
+${iron}Aitri designed by César Augusto Reyes${reset}
+`);
+}
 
 function ask(question) {
   const rl = readline.createInterface({
@@ -26,6 +46,7 @@ if (cmd === "--version" || cmd === "-v") {
 }
 
 if (!cmd || cmd === "help") {
+  showBanner();
   console.log(`
 Aitri ⚒️
 
@@ -41,6 +62,7 @@ Commands:
 }
 
 if (cmd === "init") {
+  showBanner();
   const plan = [
     "Create: specs/drafts",
     "Create: specs/approved",
@@ -568,6 +590,11 @@ if (cmd === "validate") {
   console.log("- Spec: " + path.relative(process.cwd(), approvedFile));
   console.log("- Backlog: " + path.relative(process.cwd(), backlogFile));
   console.log("- Tests: " + path.relative(process.cwd(), testsFile));
+  process.exit(0);
+}
+
+if (cmd === "status") {
+  runStatus();
   process.exit(0);
 }
 
