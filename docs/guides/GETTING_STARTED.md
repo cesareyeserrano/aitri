@@ -63,7 +63,7 @@ aitri init --non-interactive --yes
 
 Check status:
 ```bash
-aitri status --json
+aitri status json
 ```
 
 Expected after init:
@@ -77,7 +77,7 @@ aitri draft --feature user-auth --idea "Email and password login with forgot-pas
 aitri approve --feature user-auth --non-interactive --yes
 aitri discover --feature user-auth --non-interactive --yes
 aitri plan --feature user-auth --non-interactive --yes
-aitri validate --feature user-auth --non-interactive --json
+aitri validate --feature user-auth --non-interactive --format json
 ```
 
 Expected:
@@ -103,7 +103,7 @@ cp adapters/codex/SKILL.md ~/.codex/skills/aitri/SKILL.md
 
 Restart Codex, then in any project prompt:
 ```text
-Use the aitri skill and run aitri status --json
+Use the aitri skill and run aitri status json
 ```
 
 If project is empty, continue with:
@@ -161,16 +161,16 @@ Restart OpenCode and request Aitri workflow execution in your target repo.
 - Add `--feature <feature-name>` in non-interactive mode
 
 `Skill tries to read docs before init in a new repo`
-- Run `aitri status --json`
+- Run `aitri status json`
 - If `nextStep` is `aitri init`, run `aitri init --non-interactive --yes`
-- Re-run `aitri status --json`
+- Re-run `aitri status json`
 
 ## 9) Operational Recommendation
 
 For reproducible team adoption:
 1. Keep Aitri installed globally in contributor machines.
 2. Add project-level skill files (`.claude/skills` or `.opencode/skills`) when team-shared behavior is required.
-3. Run `aitri status --json` as the first step of every agent session.
+3. Run `aitri status json` as the first step of every agent session.
 
 ## 10) Pause and Resume Safely
 
@@ -187,7 +187,7 @@ git stash push -m "checkpoint: <feature> <phase>"
 
 When resuming in a new session:
 ```bash
-aitri status --json
+aitri status json
 ```
 
 Continue with `nextStep` returned by status.

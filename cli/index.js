@@ -40,6 +40,7 @@ function ask(question) {
 function parseArgs(argv) {
   const parsed = {
     json: false,
+    format: null,
     nonInteractive: false,
     guided: false,
     yes: false,
@@ -50,8 +51,13 @@ function parseArgs(argv) {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === "--json") {
+    if (arg === "--json" || arg === "-j") {
       parsed.json = true;
+    } else if (arg === "--format") {
+      parsed.format = (argv[i + 1] || "").trim().toLowerCase();
+      i += 1;
+    } else if (arg.startsWith("--format=")) {
+      parsed.format = arg.slice("--format=".length).trim().toLowerCase();
     } else if (arg === "--non-interactive") {
       parsed.nonInteractive = true;
     } else if (arg === "--guided") {
@@ -74,6 +80,12 @@ function parseArgs(argv) {
   }
 
   return parsed;
+}
+
+function wantsJson(options, positional = []) {
+  if (options.json) return true;
+  if ((options.format || "").toLowerCase() === "json") return true;
+  return positional.some((p) => p.toLowerCase() === "json");
 }
 
 function normalizeFeatureName(value) {
@@ -130,7 +142,8 @@ Options:
   --feature, -f <name>   Feature name for non-interactive runs
   --idea <text>          Idea text for non-interactive draft
   --non-interactive      Do not prompt; fail if required args are missing
-  --json                 Output machine-readable JSON (status, validate)
+  --json, -j             Output machine-readable JSON (status, validate)
+  --format <type>        Output format (json supported)
 
 Exit codes:
   0 success
@@ -648,14 +661,20 @@ if (cmd === "plan") {
 }
 
 if (cmd === "validate") {
-  let feature = normalizeFeatureName(options.feature || options.positional[0]);
+  const validatePositional = [...options.positional];
+  const jsonOutput = wantsJson(options, validatePositional);
+  if (validatePositional.length > 0 && validatePositional[validatePositional.length - 1].toLowerCase() === "json") {
+    validatePositional.pop();
+  }
+
+  let feature = normalizeFeatureName(options.feature || validatePositional[0]);
   if (!feature && !options.nonInteractive) {
     feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
   }
 
   if (!feature) {
     const msg = "Feature name is required. Use --feature <name> in non-interactive mode.";
-    if (options.json) {
+    if (jsonOutput) {
       console.log(JSON.stringify({
         ok: false,
         feature: null,
@@ -720,7 +739,7 @@ if (cmd === "validate") {
   result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
 
   if (issues.length > 0) {
-    if (options.json) {
+    if (jsonOutput) {
       console.log(JSON.stringify(result, null, 2));
     } else {
       console.log("VALIDATION FAILED:");
@@ -760,7 +779,7 @@ if (cmd === "validate") {
   result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
 
   if (issues.length > 0) {
-    if (options.json) {
+    if (jsonOutput) {
       console.log(JSON.stringify(result, null, 2));
     } else {
       console.log("VALIDATION FAILED:");
@@ -804,7 +823,7 @@ if (cmd === "validate") {
   result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
 
   if (issues.length > 0) {
-    if (options.json) {
+    if (jsonOutput) {
       console.log(JSON.stringify(result, null, 2));
     } else {
       console.log("VALIDATION FAILED:");
@@ -814,7 +833,7 @@ if (cmd === "validate") {
   }
 
   result.ok = true;
-  if (options.json) {
+  if (jsonOutput) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log("VALIDATION PASSED ✅");
@@ -826,7 +845,7 @@ if (cmd === "validate") {
 }
 
 if (cmd === "status") {
-  runStatus({ json: options.json });
+  runStatus({ json: wantsJson(options, options.positional) });
   process.exit(EXIT_OK);
 }
 

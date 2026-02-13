@@ -25,7 +25,7 @@ git stash push -m "checkpoint: <feature> <phase>"
 ## Resume Procedure (New Session)
 From your target project:
 ```bash
-aitri status --json
+aitri status json
 ```
 
 Then execute the returned `nextStep`.
@@ -46,11 +46,11 @@ Typical mapping:
 git stash list
 git stash apply stash@{0}
 ```
-4. Run `aitri status --json`.
+4. Run `aitri status json`.
 5. Continue with `nextStep`.
 
 ## Agent Behavior Requirement
 Agents should:
 1. Suggest a checkpoint before ending a substantial work block.
-2. Start each new session with `aitri status --json`.
+2. Start each new session with `aitri status json`.
 3. Report detected state and next step before continuing.

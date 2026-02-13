@@ -9,9 +9,9 @@ description: Spec-driven SDLC workflow guardrail for Claude sessions using Aitri
 Use Aitri as the execution guardrail for spec-driven SDLC work with explicit human approvals.
 
 ## Session Bootstrap (Mandatory)
-1. Run `aitri status --json`
+1. Run `aitri status json`
 2. If structure is missing (`nextStep: "aitri init"`), run `aitri init --non-interactive --yes`
-3. Re-run `aitri status --json`
+3. Re-run `aitri status json`
 4. Read `docs/README.md` and `docs/EXECUTION_GUARDRAILS.md` if present
 5. Report state and next recommended step
 
@@ -35,10 +35,10 @@ Use Aitri as the execution guardrail for spec-driven SDLC work with explicit hum
 - Use `--non-interactive`
 - Use `--yes` for write commands
 - Use `--feature <name>` when required
-- Use `--json` for `status` and `validate`
+- Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `validate`)
 
 ## Default Workflow
-1. `aitri status --json`
+1. `aitri status json`
 2. `aitri init` when needed
 3. `aitri draft`
 4. Human review and adjustments
@@ -78,7 +78,7 @@ At the end of substantial progress, recommend:
 - fallback: `git stash push -m "checkpoint: <feature> <phase>"`
 
 When resuming a new session:
-1. Run `aitri status --json`
+1. Run `aitri status json`
 2. Follow `nextStep`
 
 ## Exit Codes

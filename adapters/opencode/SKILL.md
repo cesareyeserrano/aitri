@@ -9,9 +9,9 @@ description: Spec-driven SDLC workflow guardrail for OpenCode sessions using Ait
 Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory human approvals.
 
 ## Session Bootstrap
-1. Run `aitri status --json`
+1. Run `aitri status json`
 2. If structure is missing (`nextStep: "aitri init"`), run `aitri init --non-interactive --yes`
-3. Re-run `aitri status --json`
+3. Re-run `aitri status json`
 4. Read `docs/README.md` and `docs/EXECUTION_GUARDRAILS.md` if present
 5. Report state and next step
 
@@ -34,7 +34,7 @@ Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory hum
 - `--non-interactive`
 - `--yes` for write commands
 - `--feature <name>` where required
-- `--json` for `status` and `validate`
+- `json`, `-j`, or `--format json` for `status` and `validate`
 
 ## Checkpoint Behavior
 At the end of substantial progress, recommend:
@@ -42,7 +42,7 @@ At the end of substantial progress, recommend:
 - fallback: `git stash push -m "checkpoint: <feature> <phase>"`
 
 Resume protocol:
-1. `aitri status --json`
+1. `aitri status json`
 2. Follow `nextStep`
 
 ## Exit Codes

@@ -18,7 +18,7 @@ Applies to agents operating Aitri from terminal:
 Before any substantial action:
 1. Read `docs/README.md`
 2. Read `docs/EXECUTION_GUARDRAILS.md`
-3. Run `aitri status --json`
+3. Run `aitri status json`
 4. Report state + next recommended step
 
 ## Standard Runtime Sequence
@@ -73,7 +73,7 @@ After each command, the agent reports:
 At minimum, checkpoint after each major phase (`draft`, `approve`, `discover`, `plan`, `validate`):
 1. `git add -A && git commit -m "checkpoint: <feature> <phase>"`
 2. If commit is not possible: `git stash push -m "checkpoint: <feature> <phase>"`
-3. On new session: `aitri status --json` and continue with `nextStep`
+3. On new session: `aitri status json` and continue with `nextStep`
 
 ## Deployment Assistance Contract
 For local and production-assist deploy workflows:

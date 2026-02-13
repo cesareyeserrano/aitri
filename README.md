@@ -48,7 +48,7 @@ For complete onboarding (from no agent CLI installed to first validated workflow
 - `docs/guides/GETTING_STARTED.md`
 
 ## Core Workflow
-1. `aitri status --json`
+1. `aitri status json`
 2. `aitri init`
 3. `aitri draft`
 4. Human review of draft
@@ -99,7 +99,9 @@ Use these flags for CI/agent execution:
 - `--yes`: auto-approve write-command plans
 - `--feature <name>`: explicit feature targeting
 - `--idea <text>`: non-interactive draft content
-- `--json`: machine-readable output (`status`, `validate`)
+- `--json` or `-j`: machine-readable output (`status`, `validate`)
+- `--format json`: explicit output format
+- `json` shorthand: `aitri status json`
 
 Example non-interactive sequence:
 ```bash
@@ -108,7 +110,7 @@ aitri draft --feature user-login --idea "Email/password login" --non-interactive
 aitri approve --feature user-login --non-interactive --yes
 aitri discover --feature user-login --non-interactive --yes
 aitri plan --feature user-login --non-interactive --yes
-aitri validate --feature user-login --non-interactive --json
+aitri validate --feature user-login --non-interactive --format json
 ```
 
 ## Skill Adapters
@@ -130,7 +132,7 @@ cp adapters/codex/SKILL.md ~/.codex/skills/aitri/SKILL.md
 
 Then restart Codex and invoke it explicitly in-session:
 ```text
-Use the aitri skill and run aitri status --json
+Use the aitri skill and run aitri status json
 ```
 
 ## Project Structure
@@ -168,7 +170,7 @@ JSON output includes:
 ```bash
 npm run test:smoke
 cd examples/validate-coverage
-node ../../cli/index.js validate --feature validate-coverage --non-interactive --json
+node ../../cli/index.js validate --feature validate-coverage --non-interactive --format json
 ```
 
 ## Checkpoint and Resume
@@ -185,7 +187,7 @@ git stash push -m "checkpoint: <feature> <phase>"
 
 Resume in a new session:
 ```bash
-aitri status --json
+aitri status json
 ```
 Then execute the returned `nextStep`.
 
@@ -198,12 +200,12 @@ Then execute the returned `nextStep`.
   - Verify `SKILL.md` starts with YAML frontmatter (`name`, `description`).
   - Restart Codex after installation/update.
 - If a skill session in a new repository reports missing `docs/*`:
-  - Run `aitri status --json`.
+  - Run `aitri status json`.
   - If `nextStep` is `aitri init`, run `aitri init --non-interactive --yes`.
-  - Re-run `aitri status --json` and continue workflow.
+  - Re-run `aitri status json` and continue workflow.
 - If your machine shuts down abruptly mid-session:
   - Run `git status --short` and recover stashes if needed.
-  - Run `aitri status --json`.
+  - Run `aitri status json`.
   - Continue with the returned `nextStep`.
 
 ## Documentation Index

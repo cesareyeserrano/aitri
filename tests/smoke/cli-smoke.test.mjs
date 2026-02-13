@@ -34,6 +34,8 @@ test("help and version are available", () => {
   assert.match(help.stdout, /Commands:/);
   assert.match(help.stdout, /status/);
   assert.match(help.stdout, /--non-interactive/);
+  assert.match(help.stdout, /--json, -j/);
+  assert.match(help.stdout, /--format <type>/);
 });
 
 test("status json works in empty project", () => {
@@ -41,6 +43,14 @@ test("status json works in empty project", () => {
   const result = runNodeOk(["status", "--json"], { cwd: tempDir });
   const payload = JSON.parse(result.stdout);
 
+  assert.equal(payload.structure.ok, false);
+  assert.equal(payload.nextStep, "aitri init");
+});
+
+test("status accepts json shorthand without --json", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-status-shorthand-"));
+  const result = runNodeOk(["status", "json"], { cwd: tempDir });
+  const payload = JSON.parse(result.stdout);
   assert.equal(payload.structure.ok, false);
   assert.equal(payload.nextStep, "aitri init");
 });
@@ -198,4 +208,13 @@ STATUS: APPROVED
   assert.equal(payload.gapSummary.coverage_us_tc, 0);
   assert.equal(payload.gaps.coverage_fr_us.length, 1);
   assert.equal(payload.gaps.coverage_fr_tc.length, 1);
+});
+
+test("validate supports --format json", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-validate-format-"));
+  const result = runNode(["validate", "--non-interactive", "--format", "json"], { cwd: tempDir });
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.match(payload.issues[0], /Feature name is required/);
 });

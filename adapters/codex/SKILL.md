@@ -14,9 +14,9 @@ Aitri execution model:
 - Agent executes within Aitri constraints
 
 ## Session Bootstrap (Mandatory)
-1. Run `aitri status --json`
+1. Run `aitri status json`
 2. If structure is missing (`nextStep: "aitri init"`), run `aitri init --non-interactive --yes`
-3. Re-run `aitri status --json`
+3. Re-run `aitri status json`
 4. Read `docs/README.md` and `docs/EXECUTION_GUARDRAILS.md` if present
 5. Report current state and next recommended step
 
@@ -41,10 +41,10 @@ For non-interactive execution:
 - Use `--non-interactive`
 - For write commands (`init`, `draft`, `approve`, `discover`, `plan`) also use `--yes`
 - Pass feature explicitly where needed: `--feature <name>`
-- Use `--json` for machine-readable output (`status`, `validate`)
+- Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `validate`)
 
 ## Recommended Workflow
-1. `aitri status --json`
+1. `aitri status json`
 2. `aitri init` (if structure missing)
 3. `aitri draft`
 4. Human review of draft
@@ -85,7 +85,7 @@ At the end of substantial progress, recommend:
 - fallback: `git stash push -m "checkpoint: <feature> <phase>"`
 
 When resuming a new session:
-1. Run `aitri status --json`
+1. Run `aitri status json`
 2. Follow `nextStep`
 
 ## Exit Codes
