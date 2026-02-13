@@ -7,6 +7,7 @@ Check items as they are completed to prevent context drift.
 - [x] Spec-driven philosophy documented
 - [x] Human supervision contract documented
 - [x] Agent operating contract documented
+- [x] Execution guardrails documented (anti-drift / anti-impulsive-change)
 
 ## 2) Docs vs Implementation Alignment
 - [x] Help/README reflect real CLI commands

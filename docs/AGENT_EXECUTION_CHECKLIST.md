@@ -14,6 +14,13 @@ Applies to agents operating Aitri from terminal:
 4. Do not execute production deployment without explicit human confirmation.
 5. Always report: what was done, what changed, and the next step.
 
+## Mandatory Session Bootstrap
+Before any substantial action:
+1. Read `docs/README.md`
+2. Read `docs/EXECUTION_GUARDRAILS.md`
+3. Run `aitri status`
+4. Report state + next recommended step
+
 ## Standard Runtime Sequence
 1. `aitri status`
 2. If structure is missing -> `aitri init`
