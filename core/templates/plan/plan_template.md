@@ -15,7 +15,17 @@ STATUS: DRAFT
 ### Out of scope
 -
 
-## 3. Architecture (Architect Persona)
+## 3. Product Review (Product Persona)
+### Business value
+-
+
+### Success metric
+-
+
+### Assumptions to validate
+-
+
+## 4. Architecture (Architect Persona)
 ### Components
 -
 
@@ -31,7 +41,7 @@ STATUS: DRAFT
 ### Observability (logs/metrics/tracing)
 -
 
-## 4. Security (Security Persona)
+## 5. Security (Security Persona)
 ### Threats
 -
 
@@ -44,7 +54,7 @@ STATUS: DRAFT
 ### Abuse prevention / rate limiting (if applicable)
 -
 
-## 5. Backlog
+## 6. Backlog
 > Create as many epics/stories as needed. Do not impose artificial limits.
 
 ### Epics
@@ -66,7 +76,7 @@ For each story include clear Acceptance Criteria (Given/When/Then).
 
 (repeat as needed)
 
-## 6. Test Cases (QA Persona)
+## 7. Test Cases (QA Persona)
 > Create as many test cases as needed. Include negative and edge cases.
 
 ### Functional
@@ -85,7 +95,7 @@ For each story include clear Acceptance Criteria (Given/When/Then).
 1.
 2.
 
-## 7. Implementation Notes
+## 8. Implementation Notes (Developer Persona)
 - Suggested sequence:
 -
 - Dependencies:

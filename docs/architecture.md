@@ -1,150 +1,112 @@
-# Aitri Architecture & Operating Model
+# Aitri: Architecture and Operating Model
 
-## What Aitri is
-Aitri is a **spec-driven SDLC CLI** that helps humans and AI agents collaborate safely to turn an idea into executable work **through approved artifacts**.
+## Purpose
+Aitri is a **CLI-first** SDLC system with strict **spec-driven** discipline.
 
-Aitri provides:
-- A repeatable workflow (SDD)
-- Templates and structure
-- Quality gates
-- Approval checkpoints (PLAN → Proceed? y/n)
+It is designed for direct terminal use by humans and for operation by agents (Codex, Claude, OpenCode, others) under a controlled execution contract.
 
-Aitri does **not** replace human ownership. Humans must review, correct, direct, and approve.
+Core model:
+- Human defines intent and approves
+- Aitri enforces workflow, structure, and traceability
+- AI executes tasks inside explicit constraints
 
-## What Aitri is NOT
-- Not a full autonomous builder
-- Not a project manager that “decides” scope
-- Not a code generator that bypasses specs or approvals
+## Product Positioning
+Aitri is:
+- A spec-driven SDLC guardian
+- A deterministic workflow engine
+- A reusable skill context for AI-assisted delivery
 
-## Core Principles (Non-negotiable)
-1. **Spec first**: no work starts without a written spec.
-2. **Approved spec required**: no downstream artifacts without `specs/approved/<feature>.md`.
-3. **Gated actions**: any file operations must be previewed in a PLAN and require explicit user approval.
-4. Traceability enforced (Spec → Stories → Tests)
-5. **Human in control**: the human approves every step and final content.
+Aitri is not:
+- An autonomous coding autopilot
+- A replacement for product or architecture ownership
+- A system that bypasses human approval
 
-## Spec-Driven Development (SDD) Flow
-Aitri formalizes this pipeline:
+## Non-Negotiable Principles
+1. Spec first: no implementation without a written specification.
+2. Approved spec required: no downstream artifacts without `specs/approved/<feature>.md`.
+3. Explicit gates: write or destructive actions require a plan and approval.
+4. Traceability required: Spec -> Backlog -> Tests -> Implementation.
+5. Human authority: final decisions always remain with the human owner.
 
-1) `aitri init`
-   - Initializes project structure (`specs/`, `backlog/`, `tests/`, `docs/`)
+## SDLC Coverage Target
+Under human supervision, Aitri should cover:
+1. Discovery and requirement capture
+2. Formal specification
+3. Planning and artifact generation
+4. Implementation planning
+5. Development execution (human-approved)
+6. Quality and traceability validation
+7. Local and production deployment assistance (always human-approved)
 
-2) `aitri draft`
-   - Captures an idea into a draft spec (`specs/drafts/<feature>.md`)
-   - Optionally: `aitri draft --guided` for minimal structured input
+V1 scope note:
+- In V1, development/deployment assistance remains a **documented target capability** (not mandatory full automation in the core).
 
-3) `aitri approve`
-   - Runs gates to ensure spec completeness and quality
-   - Moves draft → approved (`specs/approved/<feature>.md`)
-   - Fails fast if missing key sections or meaningful content
+## Artifact Topology
+Standard project structure:
+- `specs/drafts/`
+- `specs/approved/`
+- `docs/discovery/`
+- `docs/plan/`
+- `backlog/<feature>/backlog.md`
+- `tests/<feature>/tests.md`
 
-4) `aitri discover`
-   - Requires approved spec
-   - Generates SDLC artifact structure:
-     - `docs/discovery/<feature>.md`
-     - `backlog/<feature>/backlog.md`
-     - `tests/<feature>/tests.md`
+Extended artifacts (roadmap):
+- architecture notes per feature
+- release/deploy runbooks
+- operational checklists
 
-5) `aitri plan`
-   - Requires approved spec
-   - Generates a planning package:
-     - `docs/plan/<feature>.md` (master plan doc)
-     - Overwrites `backlog/<feature>/backlog.md`
-     - Overwrites `tests/<feature>/tests.md`
-   - Content is a structured starting point; AI agents and humans refine it.
+## Command-Level Flow (Current Core)
+1. `aitri init`
+2. `aitri draft`
+3. `aitri approve`
+4. `aitri discover`
+5. `aitri plan`
+6. `aitri validate`
+7. human approval before implementation/deployment
 
-6) `aitri validate`
-- Requires approved spec + generated artifacts
-- Fails if backlog/tests contain placeholders like `FR-?`, `AC-?`, `US-?`
-- Enforces minimum traceability discipline:
-  - Backlog must contain `### US-<n>`
-  - Tests must contain `### TC-<n>`
+## Agent Integration Model
+Aitri is consumed as skill context plus CLI commands.
 
-## Personas
-Aitri uses persona checklists to improve quality and avoid blind spots:
+Target environments:
+- Codex
+- Claude
+- OpenCode
+- Other terminal-capable agents
 
-- Architect (`core/personas/architect.md`)
-  - boundaries, components, resilience, observability, risks
+Agent contract:
+- Execute one step at a time
+- Respect gates and approval points
+- Do not invent parallel workflows outside Aitri
+- Report outcomes and the next recommended step
 
-- Security (`core/personas/security.md`)
-  - threat model, required controls, validation, abuse prevention
+## Persona Model
+Personas are structured SDLC lenses, not autonomous personalities.
 
-- QA (`core/personas/qa.md`)
-  - test strategy, edge cases, acceptance criteria quality
+Minimum perspectives:
+- Product: value, scope, acceptance clarity
+- Architect: boundaries, decisions, NFRs, risks
+- Developer: implementation strategy, maintainability
+- QA: testability, negative/edge coverage, quality gates
+- Security (cross-cutting): threats and controls
 
-## Agent Integration (Skills)
-Aitri is designed to be used as a **tool** by AI agents:
-- Codex: `adapters/codex/SKILL.md`
-- Claude: `adapters/claude/SKILL.md`
-- OpenCode (if used): `adapters/opencode/...`
+## Governance and Anti-Drift
+The `docs/` folder is long-term memory and the verification baseline.
 
-Agents must:
-- run commands one at a time
-- respect PLAN → approval gates
-- avoid implementation before approved artifacts
+Any change in philosophy, scope, or workflow must update:
+1. `docs/architecture.md`
+2. `docs/SCOPE_V1.md`
+3. `docs/STRATEGY_EXECUTION.md`
+4. `docs/AGENT_EXECUTION_CHECKLIST.md`
+5. `docs/CHECKLIST_AVANCE.md`
 
-## Current Status
-- Stable CLI commands: init, draft, approve, discover, plan, validate
-- Templates: spec, discovery, plan
-- Personas integrated (architect, security, QA)
-- Basic traceability enforcement (FR / AC / US / TC placeholders blocked)
-- Skills: Codex + Claude
+If code and docs conflict, resolve the conflict explicitly before continuing roadmap work.
 
-## Roadmap (Next)
+## External Inspiration
+Aitri is inspired by skill-based SDLC workflows:
+- https://github.com/DarrenBenson/sdlc-studio
 
-1) Coverage reporting:
-   - Verify each FR has at least one US
-   - Verify each US has at least one TC
-   - Provide coverage report
-
-2) CLI stability features:
-   - `aitri --version`
-   - Release tagging discipline
-
-3) Optional AI API integration (after skill workflow maturity)
-
-4) Controlled build phase support (post-artifact approval)
-
-## V1 Scope – AI-Assisted SDLC Execution
-
-### Definition of Done (V1)
-
-Aitri V1 is considered complete when:
-
-1. It can be installed globally via terminal.
-2. It exposes a stable CLI (`aitri help`, `--version`, core commands).
-3. It enforces Spec-Driven Development gates.
-4. It integrates with AI agents (Codex, Claude, OpenCode) via skills.
-5. Agents can:
-   - Run Aitri commands
-   - Generate backlog/tests content
-   - Execute validation
-   - Request human approval before implementation
-
-V1 does NOT:
-- Autonomously write production code without human approval.
-- Replace human architectural decisions.
-- Remove gate enforcement.
-
-## AI Execution Model (V1)
-
-Execution flow:
-
-Human → Agent (Codex/Claude/OpenCode) → Aitri CLI → Filesystem → Validation → Human Approval
-
-Aitri is deterministic.
-AI is generative.
-Human is authority.
-
-Aitri enforces structure and traceability.
-AI generates content within constraints.
-Human approves before moving to build phase.
-
-## Installation Model
-
-V1 must support:
-
-- Global CLI installation
-- Invocation from any project directory
-- Agent skill-based invocation
-- Repeatable version detection (`aitri --version`)
+Aitri differentiators:
+- CLI-first operation
+- strict spec-driven discipline
+- human-supervised execution
+- deterministic governance over blind automation

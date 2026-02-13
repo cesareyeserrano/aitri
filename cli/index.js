@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import { fileURLToPath } from "node:url";
 import { runStatus } from "./commands/status.js";
 
 function showBanner() {
@@ -36,7 +37,42 @@ function ask(question) {
   );
 }
 
+function parseArgs(argv) {
+  const parsed = {
+    json: false,
+    nonInteractive: false,
+    guided: false,
+    feature: null,
+    positional: []
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--json") {
+      parsed.json = true;
+    } else if (arg === "--non-interactive") {
+      parsed.nonInteractive = true;
+    } else if (arg === "--guided") {
+      parsed.guided = true;
+    } else if (arg === "--feature" || arg === "-f") {
+      parsed.feature = (argv[i + 1] || "").trim();
+      i += 1;
+    } else if (arg.startsWith("--feature=")) {
+      parsed.feature = arg.slice("--feature=".length).trim();
+    } else {
+      parsed.positional.push(arg);
+    }
+  }
+
+  return parsed;
+}
+
+function normalizeFeatureName(value) {
+  return (value || "").replace(/\s+/g, "-").trim();
+}
+
 const cmd = process.argv[2];
+const options = parseArgs(process.argv.slice(3));
 
 if (cmd === "--version" || cmd === "-v") {
   const pkgPath = new URL("../package.json", import.meta.url);
@@ -57,6 +93,12 @@ Commands:
   discover   Generate discovery + artifact scaffolding from an approved spec
   plan       Generate plan doc + traceable backlog/tests from an approved spec
   validate   Validate traceability placeholders are resolved (FR/AC/US/TC)
+  status     Show project state and next recommended step
+
+Options:
+  --feature, -f <name>   Feature name for non-interactive runs
+  --non-interactive      Do not prompt; fail if required args are missing
+  --json                 Output machine-readable JSON (status, validate)
 `);
   process.exit(0);
 }
@@ -90,20 +132,25 @@ if (cmd === "init") {
  
 if (cmd === "draft") {
   // We expect to run this from a project repo, not from the Aitri repo
-  const feature = (await ask("Feature name (kebab-case, e.g. user-login): ")).replace(/\s+/g, "-").trim();
+  const feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
   if (!feature) {
     console.log("Feature name is required.");
     process.exit(1);
   }
 
-  const idea = await ask("Describe the idea (1-3 lines): ");
+  let idea = await ask("Describe the idea (1-3 lines): ");
+  if (options.guided) {
+    const actor = await ask("Primary actor (e.g. admin, customer): ");
+    const outcome = await ask("Expected outcome (what should happen): ");
+    idea = `${idea}\n\nPrimary actor: ${actor || "TBD"}\nExpected outcome: ${outcome || "TBD"}`;
+  }
   if (!idea) {
     console.log("Idea is required.");
     process.exit(1);
   }
 
   // Locate Aitri core template relative to where this CLI package lives
-  const cliDir = path.dirname(new URL(import.meta.url).pathname);
+  const cliDir = path.dirname(fileURLToPath(import.meta.url));
   const templatePath = path.resolve(cliDir, "..", "core", "templates", "af_spec.md");
 
   if (!fs.existsSync(templatePath)) {
@@ -272,7 +319,7 @@ if (cmd === "discover") {
     process.exit(1);
   }
 
-  const cliDir = path.dirname(new URL(import.meta.url).pathname);
+  const cliDir = path.dirname(fileURLToPath(import.meta.url));
   const templatePath = path.resolve(cliDir, "..", "core", "templates", "discovery", "discovery_template.md");
 
   if (!fs.existsSync(templatePath)) {
@@ -365,7 +412,7 @@ if (cmd === "plan") {
     process.exit(1);
   }
 
-  const cliDir = path.dirname(new URL(import.meta.url).pathname);
+  const cliDir = path.dirname(fileURLToPath(import.meta.url));
   const templatePath = path.resolve(cliDir, "..", "core", "templates", "plan", "plan_template.md");
 
   if (!fs.existsSync(templatePath)) {
@@ -375,6 +422,8 @@ if (cmd === "plan") {
 
   const architectPersona = path.resolve(cliDir, "..", "core", "personas", "architect.md");
   const securityPersona = path.resolve(cliDir, "..", "core", "personas", "security.md");
+  const productPersona = path.resolve(cliDir, "..", "core", "personas", "product.md");
+  const developerPersona = path.resolve(cliDir, "..", "core", "personas", "developer.md");
   const qaPersona = path.resolve(cliDir, "..", "core", "personas", "qa.md");
 
   const outPlanDir = path.join(process.cwd(), "docs", "plan");
@@ -386,7 +435,9 @@ if (cmd === "plan") {
   console.log("PLAN:");
   console.log("- Read: " + path.relative(process.cwd(), approvedFile));
   console.log("- Read: " + path.relative(process.cwd(), templatePath));
+  console.log("- Read: " + (fs.existsSync(productPersona) ? productPersona : "core/personas/product.md (missing in repo)"));
   console.log("- Read: " + (fs.existsSync(architectPersona) ? architectPersona : "core/personas/architect.md (missing in repo)"));
+  console.log("- Read: " + (fs.existsSync(developerPersona) ? developerPersona : "core/personas/developer.md (missing in repo)"));
   console.log("- Read: " + (fs.existsSync(securityPersona) ? securityPersona : "core/personas/security.md (missing in repo)"));
   console.log("- Read: " + (fs.existsSync(qaPersona) ? qaPersona : "core/personas/qa.md (missing in repo)"));
   console.log("- Create: " + path.relative(process.cwd(), outPlanDir));
@@ -501,12 +552,18 @@ if (cmd === "plan") {
 }
 
 if (cmd === "validate") {
-  const feature = (await ask("Feature name (kebab-case, e.g. user-login): "))
-    .replace(/\s+/g, "-")
-    .trim();
+  let feature = normalizeFeatureName(options.feature || options.positional[0]);
+  if (!feature && !options.nonInteractive) {
+    feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
+  }
 
   if (!feature) {
-    console.log("Feature name is required.");
+    const msg = "Feature name is required. Use --feature <name> in non-interactive mode.";
+    if (options.json) {
+      console.log(JSON.stringify({ ok: false, feature: null, issues: [msg] }, null, 2));
+    } else {
+      console.log(msg);
+    }
     process.exit(1);
   }
 
@@ -515,6 +572,23 @@ if (cmd === "validate") {
   const testsFile = path.join(process.cwd(), "tests", feature, "tests.md");
 
   const issues = [];
+  const result = {
+    ok: false,
+    feature,
+    files: {
+      spec: path.relative(process.cwd(), approvedFile),
+      backlog: path.relative(process.cwd(), backlogFile),
+      tests: path.relative(process.cwd(), testsFile)
+    },
+    coverage: {
+      specFr: 0,
+      backlogFr: 0,
+      testsFr: 0,
+      backlogUs: 0,
+      testsUs: 0
+    },
+    issues
+  };
 
   if (!fs.existsSync(approvedFile)) {
     issues.push(`Missing approved spec: ${path.relative(process.cwd(), approvedFile)}`);
@@ -527,8 +601,12 @@ if (cmd === "validate") {
   }
 
   if (issues.length > 0) {
-    console.log("VALIDATION FAILED:");
-    issues.forEach(i => console.log("- " + i));
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log("VALIDATION FAILED:");
+      issues.forEach(i => console.log("- " + i));
+    }
     process.exit(1);
   }
 
@@ -576,6 +654,13 @@ if (cmd === "validate") {
     issues.push(`Coverage: ${fr} is defined in spec but not referenced in backlog user stories.`)
   );
 
+  // 2) Every FR-* in spec should be referenced by at least one TC-* in tests
+  const testsFRs = new Set([...tests.matchAll(/\bFR-\d+\b/g)].map(m => m[0]));
+  const missingFRTestsCoverage = [...new Set(specFRs)].filter(fr => !testsFRs.has(fr));
+  missingFRTestsCoverage.forEach(fr =>
+    issues.push(`Coverage: ${fr} is defined in spec but not referenced in tests.`)
+  );
+
   // 2) Every US-* in backlog should be referenced by at least one TC-* in tests
   const backlogUS = [...backlog.matchAll(/\bUS-\d+\b/g)].map(m => m[0]);
   const testsUS = new Set([...tests.matchAll(/\bUS-\d+\b/g)].map(m => m[0]));
@@ -586,15 +671,36 @@ if (cmd === "validate") {
   );
   // --- End coverage checks ---
 
-  console.log("VALIDATION PASSED ✅");
-  console.log("- Spec: " + path.relative(process.cwd(), approvedFile));
-  console.log("- Backlog: " + path.relative(process.cwd(), backlogFile));
-  console.log("- Tests: " + path.relative(process.cwd(), testsFile));
+  result.coverage.specFr = new Set(specFRs).size;
+  result.coverage.backlogFr = backlogFRs.size;
+  result.coverage.testsFr = testsFRs.size;
+  result.coverage.backlogUs = new Set(backlogUS).size;
+  result.coverage.testsUs = testsUS.size;
+
+  if (issues.length > 0) {
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log("VALIDATION FAILED:");
+      issues.forEach((i) => console.log("- " + i));
+    }
+    process.exit(1);
+  }
+
+  result.ok = true;
+  if (options.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log("VALIDATION PASSED ✅");
+    console.log("- Spec: " + path.relative(process.cwd(), approvedFile));
+    console.log("- Backlog: " + path.relative(process.cwd(), backlogFile));
+    console.log("- Tests: " + path.relative(process.cwd(), testsFile));
+  }
   process.exit(0);
 }
 
 if (cmd === "status") {
-  runStatus();
+  runStatus({ json: options.json });
   process.exit(0);
 }
 

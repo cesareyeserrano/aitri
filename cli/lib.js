@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ask } from "./lib.js";
 
 export function readText(filePath) {
   return fs.readFileSync(filePath, "utf8");

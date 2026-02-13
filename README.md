@@ -1,29 +1,47 @@
 # Aitri ⚒️ — The AI Craftsman
 
-> “Named after Eitri, the legendary smith who forged impossible artifacts — with an A for Artificial Intelligence.”
+Aitri is a CLI-first, spec-driven SDLC workflow engine for humans and AI agents.
 
-## What is Aitri?
-Aitri is a **spec-driven SDLC CLI** designed to help humans and AI agents collaborate safely:
-- **Humans decide and approve**
-- **Aitri generates structure and artifacts**
-- **AI agents (Codex / Claude / OpenCode) execute tasks using Aitri as a workflow guardrail**
+## What Aitri does
+- Enforces a spec-first process
+- Generates core SDLC artifacts from approved specs
+- Validates traceability before implementation
+- Keeps humans in control via explicit approval gates
 
-## Spec-Driven Development (SDD)
-Aitri follows a strict flow:
+## Core flow
+1. `aitri init`
+2. `aitri draft`
+3. `aitri approve`
+4. `aitri discover`
+5. `aitri plan`
+6. `aitri validate`
+7. human approval before implementation/deployment actions
 
-1) **Draft** a spec from an idea  
-2) **Approve** the spec with gates (quality + completeness)  
-3) **Discover**: generate SDLC artifacts from the approved spec (discovery doc, backlog, tests)  
-4) (Next) **Build**: implement with AI assistance, always behind approvals
+## Commands
+- `aitri help`
+- `aitri --version`
+- `aitri init`
+- `aitri draft [--guided]`
+- `aitri approve`
+- `aitri discover`
+- `aitri plan`
+- `aitri validate [--feature <name>] [--non-interactive] [--json]`
+- `aitri status [--json]`
 
-This ensures you don’t “generate code first and hope it fits later”.
-You **lock the intent** in a spec, then generate work from it.
-
-## Quick Start
-Inside any project:
-
+## Quick start
 ```bash
 aitri init
-aitri draft
+aitri draft --guided
 aitri approve
 aitri discover
+aitri plan
+aitri validate --feature your-feature --non-interactive
+```
+
+## Docs
+Project governance and execution model live in `docs/`:
+- `docs/architecture.md`
+- `docs/SCOPE_V1.md`
+- `docs/STRATEGY_EXECUTION.md`
+- `docs/AGENT_EXECUTION_CHECKLIST.md`
+- `docs/CHECKLIST_AVANCE.md`

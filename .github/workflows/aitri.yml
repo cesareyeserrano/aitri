@@ -17,11 +17,16 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install Aitri
-        run: npm i -g aitri
+      - name: Install Aitri (local package)
+        run: npm i -g .
 
-      - name: Aitri validate (json)
-        run: aitri validate --json
+      - name: Aitri version
+        run: aitri --version
 
       - name: Aitri status (json)
         run: aitri status --json
+
+      - name: Aitri validate example (json)
+        run: |
+          cd examples/validate-coverage
+          aitri validate --feature validate-coverage --non-interactive --json
