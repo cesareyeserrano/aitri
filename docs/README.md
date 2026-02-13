@@ -14,10 +14,11 @@ Use this folder as the official reference for product intent, governance, execut
 9. `docs/runbook/BUILD_DEPLOY_ASSIST_WORKFLOW.md` - supervised build/deploy-assist flow
 10. `docs/runbook/SESSION_CHECKPOINT_AND_RESUME.md` - interruption-safe checkpoint and resume protocol
 11. `docs/runbook/PERSONA_INTERACTION_FLOW.md` - role boundaries and multi-pass persona flow
-12. `docs/templates/deploy/` - deployment plan/checklist templates
-13. `docs/release/V1_CLOSEOUT_RC1.md` - release closeout evidence and readiness summary
-14. `docs/release/RELEASE_NOTES_v1.0.0-rc1.md` - RC release notes draft
-15. `docs/release/GITHUB_RELEASE_CHECKLIST_v1.0.0-rc1.md` - RC tagging and publish checklist
+12. `backlog/aitri-core/backlog.md` - prioritized next-improvement backlog
+13. `docs/templates/deploy/` - deployment plan/checklist templates
+14. `docs/release/V1_CLOSEOUT_RC1.md` - release closeout evidence and readiness summary
+15. `docs/release/RELEASE_NOTES_v1.0.0-rc1.md` - RC release notes draft
+16. `docs/release/GITHUB_RELEASE_CHECKLIST_v1.0.0-rc1.md` - RC tagging and publish checklist
 
 ## Purpose
 Preserve continuity across time, contributors, and agent platforms.

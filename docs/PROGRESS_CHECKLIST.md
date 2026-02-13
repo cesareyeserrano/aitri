@@ -66,3 +66,11 @@ Check items as they are completed to prevent context drift.
 - [x] Skill bootstrap clarified for empty repositories (`status -> init -> status`)
 - [x] Troubleshooting includes real user-reported setup issues
 - [x] Checkpoint and resume protocol documented for abrupt interruptions
+
+## 10) Next Improvement Backlog
+- [x] Brutal-feedback findings captured as actionable backlog
+- [x] Prioritized epics and user stories documented
+- [x] Next-target strategy aligned with backlog source of truth
+- [ ] Persona output enforcement moved from soft guidance to CLI gates
+- [ ] Explicit handoff/resume commands implemented
+- [ ] 5-minute reproducible demo path published

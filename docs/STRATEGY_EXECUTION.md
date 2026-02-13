@@ -58,10 +58,14 @@ Status: COMPLETE (baseline)
 - zero-to-first-run onboarding guide added (global/project/skill)
 
 ## Next Targets (v1.0.x)
-1. Add optional machine-readable `status` gap categorization parity with validate.
-2. Add additional regression tests for edge validation cases.
-3. Publish `v1.0.0-rc2` or `v1.0.0` based on release confidence.
-4. Add onboarding examples for multi-feature repos.
+1. Enforce persona outputs in engine gates (reduce soft compliance).
+2. Add explicit handoff/resume commands to remove post-validation ambiguity.
+3. Deepen discovery-to-plan signal quality and reduce scaffold noise.
+4. Publish a reproducible <=5 minute end-to-end demo path.
+5. Split docs into default quick path vs advanced operations path.
+
+Backlog source of truth:
+- `backlog/aitri-core/backlog.md`
 
 ## Operating Metrics
 - Workflow completion rate (`draft -> validate`)

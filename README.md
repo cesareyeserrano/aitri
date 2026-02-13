@@ -169,6 +169,7 @@ JSON response includes:
 - `docs/guides/SKILL_PACKAGING_AND_INSTALL.md`
 - `docs/runbook/SESSION_CHECKPOINT_AND_RESUME.md`
 - `docs/runbook/PERSONA_INTERACTION_FLOW.md`
+- `backlog/aitri-core/backlog.md`
 
 ## License and Authorship
 - License: Apache-2.0 (`LICENSE`)
