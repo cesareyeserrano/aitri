@@ -5,6 +5,7 @@ import readline from "node:readline";
 import { execSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getStatusReport, runStatus } from "./commands/status.js";
+import { CONFIG_FILE, loadAitriConfig, resolveProjectPaths } from "./config.js";
 
 function showBanner() {
   const iron = "\x1b[38;5;24m";      // dark iron gray
@@ -106,6 +107,28 @@ const EXIT_OK = 0;
 const EXIT_ERROR = 1;
 const EXIT_ABORTED = 2;
 const AUTO_CHECKPOINT_MAX = 10;
+
+function getProjectContextOrExit() {
+  try {
+    const config = loadAitriConfig(process.cwd());
+    const paths = resolveProjectPaths(process.cwd(), config.paths);
+    return { config, paths };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
+    console.log(message);
+    process.exit(EXIT_ERROR);
+  }
+}
+
+function getStatusReportOrExit() {
+  try {
+    return getStatusReport({ root: process.cwd() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
+    console.log(message);
+    process.exit(EXIT_ERROR);
+  }
+}
 
 function shellEscapeSingle(value) {
   return String(value).replace(/'/g, "'\\''");
@@ -507,7 +530,7 @@ Aitri ⚒️
 Commands:
   init       Initialize project structure
   draft      Create a draft spec from an idea (use --guided for guided input)
-  approve    Approve a draft spec (runs gates and moves to specs/approved)
+  approve    Approve a draft spec (runs gates and moves draft into approved specs)
   discover   Generate discovery + artifact scaffolding from an approved spec (use --guided for discovery interview)
   plan       Generate plan doc + traceable backlog/tests from an approved spec
   verify     Execute runtime verification suite and persist machine-readable evidence
@@ -536,17 +559,21 @@ Exit codes:
 }
 
 if (cmd === "init") {
+  const project = getProjectContextOrExit();
   showBanner();
-  const plan = [
-    "Create: specs/drafts",
-    "Create: specs/approved",
-    "Create: backlog",
-    "Create: tests",
-    "Create: docs"
+  const initDirs = [
+    project.paths.specsDraftsDir,
+    project.paths.specsApprovedDir,
+    project.paths.backlogRoot,
+    project.paths.testsRoot,
+    project.paths.docsRoot
   ];
 
   console.log("PLAN:");
-  plan.forEach((p) => console.log("- " + p));
+  initDirs.forEach((dir) => console.log("- Create: " + path.relative(process.cwd(), dir)));
+  if (project.config.loaded) {
+    console.log(`- Config: ${project.config.file}`);
+  }
 
   const proceed = await confirmProceed(options);
   if (proceed === null) {
@@ -558,9 +585,7 @@ if (cmd === "init") {
     process.exit(EXIT_ABORTED);
   }
 
-  ["specs/drafts", "specs/approved", "backlog", "tests", "docs"].forEach((p) =>
-    fs.mkdirSync(path.join(process.cwd(), p), { recursive: true })
-  );
+  initDirs.forEach((dir) => fs.mkdirSync(dir, { recursive: true }));
 
   console.log("Project initialized by Aitri ⚒️");
   printCheckpointSummary(runAutoCheckpoint({
@@ -572,6 +597,7 @@ if (cmd === "init") {
 }
  
 if (cmd === "draft") {
+  const project = getProjectContextOrExit();
   // We expect to run this from a project repo, not from the Aitri repo
   let feature = normalizeFeatureName(options.feature || options.positional[0]);
   if (!feature && !options.nonInteractive) {
@@ -644,8 +670,8 @@ if (cmd === "draft") {
 
   const template = fs.readFileSync(templatePath, "utf8");
 
-  const outDir = path.join(process.cwd(), "specs", "drafts");
-  const outFile = path.join(outDir, `${feature}.md`);
+  const outDir = project.paths.specsDraftsDir;
+  const outFile = project.paths.draftSpecFile(feature);
 
   const plan = [
     `Create: ${path.relative(process.cwd(), outDir)}`,
@@ -685,6 +711,7 @@ if (cmd === "draft") {
 }
 
 if (cmd === "approve") {
+  const project = getProjectContextOrExit();
   let feature = normalizeFeatureName(options.feature || options.positional[0]);
   if (!feature && !options.nonInteractive) {
     feature = normalizeFeatureName(await ask("Feature name to approve (kebab-case): "));
@@ -694,9 +721,9 @@ if (cmd === "approve") {
     process.exit(EXIT_ERROR);
   }
 
-  const draftsFile = path.join(process.cwd(), "specs", "drafts", `${feature}.md`);
-  const approvedDir = path.join(process.cwd(), "specs", "approved");
-  const approvedFile = path.join(approvedDir, `${feature}.md`);
+  const draftsFile = project.paths.draftSpecFile(feature);
+  const approvedDir = project.paths.specsApprovedDir;
+  const approvedFile = project.paths.approvedSpecFile(feature);
 
   if (!fs.existsSync(draftsFile)) {
     console.log(`Draft spec not found: ${path.relative(process.cwd(), draftsFile)}`);
@@ -777,7 +804,7 @@ if (cmd === "approve") {
   }
 
   const plan = [
-    `Move: specs/drafts/${feature}.md → specs/approved/${feature}.md`
+    `Move: ${path.relative(process.cwd(), draftsFile)} → ${path.relative(process.cwd(), approvedFile)}`
   ];
 
   console.log("PLAN:");
@@ -809,6 +836,7 @@ if (cmd === "approve") {
 }
 
 if (cmd === "discover") {
+  const project = getProjectContextOrExit();
   let feature = normalizeFeatureName(options.feature || options.positional[0]);
   if (!feature && !options.nonInteractive) {
     feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
@@ -819,7 +847,7 @@ if (cmd === "discover") {
     process.exit(EXIT_ERROR);
   }
 
-  const approvedFile = path.join(process.cwd(), "specs", "approved", `${feature}.md`);
+  const approvedFile = project.paths.approvedSpecFile(feature);
   if (!fs.existsSync(approvedFile)) {
     console.log(`Approved spec not found: ${path.relative(process.cwd(), approvedFile)}`);
     console.log("Approve the spec first: aitri approve");
@@ -834,13 +862,12 @@ if (cmd === "discover") {
     process.exit(EXIT_ERROR);
   }
 
-  const outDir = path.join(process.cwd(), "docs", "discovery");
-  const backlogDir = path.join(process.cwd(), "backlog", feature);
-  const testsDir = path.join(process.cwd(), "tests", feature);
-
-  const backlogFile = path.join(backlogDir, "backlog.md");
-  const testsFile = path.join(testsDir, "tests.md");
-  const outFile = path.join(outDir, `${feature}.md`);
+  const outDir = project.paths.docsDiscoveryDir;
+  const backlogFile = project.paths.backlogFile(feature);
+  const testsFile = project.paths.testsFile(feature);
+  const backlogDir = path.dirname(backlogFile);
+  const testsDir = path.dirname(testsFile);
+  const outFile = project.paths.discoveryFile(feature);
 
   console.log("PLAN:");
   console.log("- Read: " + path.relative(process.cwd(), approvedFile));
@@ -957,6 +984,7 @@ if (cmd === "discover") {
 }
 
 if (cmd === "plan") {
+  const project = getProjectContextOrExit();
   let feature = normalizeFeatureName(options.feature || options.positional[0]);
   if (!feature && !options.nonInteractive) {
     feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
@@ -967,8 +995,8 @@ if (cmd === "plan") {
     process.exit(EXIT_ERROR);
   }
 
-  const approvedFile = path.join(process.cwd(), "specs", "approved", `${feature}.md`);
-  const discoveryFile = path.join(process.cwd(), "docs", "discovery", `${feature}.md`);
+  const approvedFile = project.paths.approvedSpecFile(feature);
+  const discoveryFile = project.paths.discoveryFile(feature);
   if (!fs.existsSync(approvedFile)) {
     console.log(`Approved spec not found: ${path.relative(process.cwd(), approvedFile)}`);
     console.log("Approve the spec first: aitri approve");
@@ -1014,11 +1042,11 @@ if (cmd === "plan") {
   const uxUiPersona = path.resolve(cliDir, "..", "core", "personas", "ux-ui.md");
   const qaPersona = path.resolve(cliDir, "..", "core", "personas", "qa.md");
 
-  const outPlanDir = path.join(process.cwd(), "docs", "plan");
-  const outPlanFile = path.join(outPlanDir, `${feature}.md`);
+  const outPlanDir = project.paths.docsPlanDir;
+  const outPlanFile = project.paths.planFile(feature);
 
-  const backlogFile = path.join(process.cwd(), "backlog", feature, "backlog.md");
-  const testsFile = path.join(process.cwd(), "tests", feature, "tests.md");
+  const backlogFile = project.paths.backlogFile(feature);
+  const testsFile = project.paths.testsFile(feature);
 
   console.log("PLAN:");
   console.log("- Read: " + path.relative(process.cwd(), approvedFile));
@@ -1223,13 +1251,25 @@ if (cmd === "plan") {
 }
 
 if (cmd === "verify") {
+  const project = getProjectContextOrExit();
   const verifyPositional = [...options.positional];
   const jsonOutput = wantsJson(options, verifyPositional);
   if (verifyPositional.length > 0 && verifyPositional[verifyPositional.length - 1].toLowerCase() === "json") {
     verifyPositional.pop();
   }
 
-  const feature = resolveVerifyFeature({ ...options, positional: verifyPositional }, process.cwd());
+  let feature = null;
+  try {
+    feature = resolveVerifyFeature({ ...options, positional: verifyPositional }, process.cwd());
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
+    if (jsonOutput) {
+      console.log(JSON.stringify({ ok: false, feature: null, issues: [msg] }, null, 2));
+    } else {
+      console.log(msg);
+    }
+    process.exit(EXIT_ERROR);
+  }
   if (!feature) {
     const msg = "Feature name is required. Use --feature <name> or ensure an approved spec exists.";
     if (jsonOutput) {
@@ -1250,8 +1290,8 @@ if (cmd === "verify") {
     verifyCmd: options.verifyCmd
   });
 
-  const evidenceDir = path.join(process.cwd(), "docs", "verification");
-  const evidenceFile = path.join(evidenceDir, `${feature}.json`);
+  const evidenceDir = project.paths.docsVerificationDir;
+  const evidenceFile = project.paths.verificationFile(feature);
   fs.mkdirSync(evidenceDir, { recursive: true });
   fs.writeFileSync(evidenceFile, JSON.stringify({
     ...result,
@@ -1284,6 +1324,7 @@ if (cmd === "verify") {
 }
 
 if (cmd === "validate") {
+  const project = getProjectContextOrExit();
   const validatePositional = [...options.positional];
   const jsonOutput = wantsJson(options, validatePositional);
   if (validatePositional.length > 0 && validatePositional[validatePositional.length - 1].toLowerCase() === "json") {
@@ -1312,11 +1353,11 @@ if (cmd === "validate") {
     process.exit(EXIT_ERROR);
   }
 
-  const approvedFile = path.join(process.cwd(), "specs", "approved", `${feature}.md`);
-  const backlogFile = path.join(process.cwd(), "backlog", feature, "backlog.md");
-  const testsFile = path.join(process.cwd(), "tests", feature, "tests.md");
-  const discoveryFile = path.join(process.cwd(), "docs", "discovery", `${feature}.md`);
-  const planFile = path.join(process.cwd(), "docs", "plan", `${feature}.md`);
+  const approvedFile = project.paths.approvedSpecFile(feature);
+  const backlogFile = project.paths.backlogFile(feature);
+  const testsFile = project.paths.testsFile(feature);
+  const discoveryFile = project.paths.discoveryFile(feature);
+  const planFile = project.paths.planFile(feature);
 
   const issues = [];
   const gapTypes = {
@@ -1481,12 +1522,18 @@ if (cmd === "validate") {
 }
 
 if (cmd === "status") {
-  runStatus({ json: wantsJson(options, options.positional) });
+  try {
+    runStatus({ json: wantsJson(options, options.positional), root: process.cwd() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
+    console.log(message);
+    process.exit(EXIT_ERROR);
+  }
   process.exit(EXIT_OK);
 }
 
 if (cmd === "resume") {
-  const report = getStatusReport({ root: process.cwd() });
+  const report = getStatusReportOrExit();
   const jsonOutput = wantsJson(options, options.positional);
   const checkpointDetected = report.checkpoint.state.detected;
   const needsResumeDecision = report.checkpoint.state.resumeDecision === "ask_user_resume_from_checkpoint";
@@ -1526,7 +1573,7 @@ if (cmd === "resume") {
 }
 
 if (cmd === "handoff") {
-  const report = getStatusReport({ root: process.cwd() });
+  const report = getStatusReportOrExit();
   const jsonOutput = wantsJson(options, options.positional);
   const payload = {
     ok: report.nextStep === "ready_for_human_approval",
@@ -1552,7 +1599,7 @@ if (cmd === "handoff") {
 }
 
 if (cmd === "go") {
-  const report = getStatusReport({ root: process.cwd() });
+  const report = getStatusReportOrExit();
   const ready = report.nextStep === "ready_for_human_approval";
   if (!ready) {
     console.log("GO BLOCKED: SDLC flow is not ready for implementation handoff.");
@@ -1570,13 +1617,17 @@ if (cmd === "go") {
     process.exit(EXIT_ABORTED);
   }
 
+  const project = getProjectContextOrExit();
+  const feature = report.approvedSpec.feature;
+
   console.log("Implementation go/no-go decision: GO.");
   console.log("Use approved artifacts as source of truth:");
   console.log(`- ${report.approvedSpec.file}`);
-  console.log(`- docs/discovery/${report.approvedSpec.feature}.md`);
-  console.log(`- docs/plan/${report.approvedSpec.feature}.md`);
-  console.log(`- backlog/${report.approvedSpec.feature}/backlog.md`);
-  console.log(`- tests/${report.approvedSpec.feature}/tests.md`);
+  console.log(`- ${path.relative(process.cwd(), project.paths.discoveryFile(feature))}`);
+  console.log(`- ${path.relative(process.cwd(), project.paths.planFile(feature))}`);
+  console.log(`- ${path.relative(process.cwd(), project.paths.backlogFile(feature))}`);
+  console.log(`- ${path.relative(process.cwd(), project.paths.testsFile(feature))}`);
+  console.log(`- ${path.relative(process.cwd(), project.paths.verificationFile(feature))}`);
   process.exit(EXIT_OK);
 }
 

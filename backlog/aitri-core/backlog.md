@@ -64,11 +64,11 @@
 - Objective:
   - Make Aitri usable in existing repositories without forced folder migration.
 
-### US-11
+### US-11 [DONE]
 - As a team using an existing codebase, I want configurable path mapping (`aitri.config.json`), so that Aitri can bind to current project structures.
 - Trace: FR-6, AC-11
 
-### US-12
+### US-12 [DONE]
 - As a maintainer, I want config validation and fallback defaults, so that mapping errors are explicit and safe.
 - Trace: FR-6, AC-12
 
@@ -119,8 +119,8 @@
 - AC-8: README and docs separate "default quick path" from "advanced operations path".
 - AC-9: `aitri verify` executes runtime checks and returns machine-readable verification evidence. [DONE]
 - AC-10: `handoff`/`go` can be blocked when runtime verification is missing or failing. [DONE]
-- AC-11: `aitri.config.json` path mapping supports specs/backlog/tests/docs for brownfield projects.
-- AC-12: Invalid mapping configuration fails fast with explicit diagnostics and safe defaults.
+- AC-11: `aitri.config.json` path mapping supports specs/backlog/tests/docs for brownfield projects. [DONE]
+- AC-12: Invalid mapping configuration fails fast with explicit diagnostics and safe defaults. [DONE]
 - AC-13: Managed-go mode enforces deterministic policy checks before progression.
 - AC-14: Dependency/policy drift output is machine-readable for CI gating.
 - AC-15: `aitri status --ui` generates static visibility output for non-technical stakeholders.

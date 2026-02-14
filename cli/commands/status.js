@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import { loadAitriConfig, resolveProjectPaths } from "../config.js";
 
 function exists(p) {
   return fs.existsSync(p);
@@ -239,8 +240,8 @@ function safeStatMs(file) {
   }
 }
 
-function detectVerificationState(root, feature) {
-  const verificationFile = path.join(root, "docs", "verification", `${feature}.json`);
+function detectVerificationState(root, paths, feature) {
+  const verificationFile = paths.verificationFile(feature);
   if (!exists(verificationFile)) {
     return {
       required: true,
@@ -269,11 +270,11 @@ function detectVerificationState(root, feature) {
   }
 
   const inputs = [
-    path.join(root, "specs", "approved", `${feature}.md`),
-    path.join(root, "docs", "discovery", `${feature}.md`),
-    path.join(root, "docs", "plan", `${feature}.md`),
-    path.join(root, "backlog", feature, "backlog.md"),
-    path.join(root, "tests", feature, "tests.md")
+    paths.approvedSpecFile(feature),
+    paths.discoveryFile(feature),
+    paths.planFile(feature),
+    paths.backlogFile(feature),
+    paths.testsFile(feature)
   ];
   const latestInputMs = Math.max(0, ...inputs.map((file) => safeStatMs(file)));
   const verifiedAtMs = Number.isFinite(Date.parse(payload.finishedAt || ""))
@@ -298,16 +299,28 @@ function detectVerificationState(root, feature) {
 
 export function getStatusReport(options = {}) {
   const { root = process.cwd() } = options;
+  const config = loadAitriConfig(root);
+  const paths = resolveProjectPaths(root, config.paths);
 
-  const requiredDirs = ["specs", "backlog", "tests", "docs"];
-  const missingDirs = requiredDirs.filter((d) => !exists(path.join(root, d)));
+  const requiredDirs = [
+    { key: "specs", rel: config.paths.specs, abs: paths.specsRoot },
+    { key: "backlog", rel: config.paths.backlog, abs: paths.backlogRoot },
+    { key: "tests", rel: config.paths.tests, abs: paths.testsRoot },
+    { key: "docs", rel: config.paths.docs, abs: paths.docsRoot }
+  ];
+  const missingDirs = requiredDirs.filter((d) => !exists(d.abs)).map((d) => d.rel);
 
-  const approvedDir = path.join(root, "specs", "approved");
+  const approvedDir = paths.specsApprovedDir;
   const approvedSpecs = listMd(approvedDir);
   const approvedSpecFile = firstOrNull(approvedSpecs);
 
   const report = {
     root,
+    config: {
+      loaded: config.loaded,
+      file: config.file,
+      paths: { ...config.paths }
+    },
     structure: {
       ok: missingDirs.length === 0,
       missingDirs
@@ -315,7 +328,7 @@ export function getStatusReport(options = {}) {
     approvedSpec: {
       found: !!approvedSpecFile,
       feature: approvedSpecFile ? approvedSpecFile.replace(".md", "") : null,
-      file: approvedSpecFile ? path.join("specs", "approved", approvedSpecFile) : null
+      file: approvedSpecFile ? path.relative(root, path.join(approvedDir, approvedSpecFile)) : null
     },
     artifacts: {
       discovery: false,
@@ -357,11 +370,11 @@ export function getStatusReport(options = {}) {
 
   if (approvedSpecFile) {
     const feature = report.approvedSpec.feature;
-    const discoveryFile = path.join(root, "docs", "discovery", `${feature}.md`);
-    const planFile = path.join(root, "docs", "plan", `${feature}.md`);
-    const backlogFile = path.join(root, "backlog", feature, "backlog.md");
-    const testsFile = path.join(root, "tests", feature, "tests.md");
-    const specFile = path.join(root, "specs", "approved", `${feature}.md`);
+    const discoveryFile = paths.discoveryFile(feature);
+    const planFile = paths.planFile(feature);
+    const backlogFile = paths.backlogFile(feature);
+    const testsFile = paths.testsFile(feature);
+    const specFile = paths.approvedSpecFile(feature);
 
     report.artifacts.discovery = exists(discoveryFile);
     report.artifacts.plan = exists(planFile);
@@ -384,7 +397,7 @@ export function getStatusReport(options = {}) {
       report.validation.ok = false;
     }
 
-    report.verification = detectVerificationState(root, feature);
+    report.verification = detectVerificationState(root, paths, feature);
 
     report.nextStep = computeNextStep({
       missingDirs,
@@ -429,8 +442,8 @@ export function getStatusReport(options = {}) {
 }
 
 export function runStatus(options = {}) {
-  const { json = false } = options;
-  const report = getStatusReport({ root: process.cwd() });
+  const { json = false, root = process.cwd() } = options;
+  const report = getStatusReport({ root });
 
   if (json) {
     console.log(JSON.stringify(report, null, 2));
@@ -438,6 +451,12 @@ export function runStatus(options = {}) {
   }
 
   console.log("Aitri Project Status ⚒️\n");
+  if (report.config.loaded) {
+    console.log(`✔ Config loaded: ${report.config.file}`);
+    console.log(
+      `  paths specs=${report.config.paths.specs} backlog=${report.config.paths.backlog} tests=${report.config.paths.tests} docs=${report.config.paths.docs}`
+    );
+  }
 
   if (report.structure.ok) {
     console.log("✔ Structure initialized");

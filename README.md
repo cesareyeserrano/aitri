@@ -142,6 +142,23 @@ docs/discovery/<feature>.md
 docs/plan/<feature>.md
 ```
 
+Brownfield mapping (`aitri.config.json`) example:
+```json
+{
+  "paths": {
+    "specs": "workspace/specs",
+    "backlog": "workspace/backlog",
+    "tests": "quality/tests",
+    "docs": "knowledge/docs"
+  }
+}
+```
+Rules:
+- all mapped paths must be relative
+- `..` segments are not allowed
+- invalid config fails fast with explicit diagnostics
+- when config is absent, defaults are used (`specs/backlog/tests/docs`)
+
 ## Validation Model
 `aitri validate` checks:
 - required artifacts
@@ -167,7 +184,6 @@ JSON response includes:
 - gates `handoff`/`go` through `status` (`nextStep = aitri verify` when missing/failing/stale)
 
 ## Planned Next Capabilities
-- Brownfield project mapping via `aitri.config.json`.
 - Managed implementation policy checks after `go`.
 - Static insight output (`aitri status --ui`) with confidence scoring.
 - Scalable retrieval path for large-context projects.

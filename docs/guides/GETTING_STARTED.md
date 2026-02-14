@@ -222,3 +222,23 @@ Continue with the recommended command (or use `aitri resume json` for machine-re
 
 If `checkpoint.state.resumeDecision` says `ask_user_resume_from_checkpoint`,
 confirm resume with the user before any write command.
+
+## 11) Brownfield Path Mapping
+
+If your repository already uses custom folders, create `aitri.config.json` at project root:
+
+```json
+{
+  "paths": {
+    "specs": "workspace/specs",
+    "backlog": "workspace/backlog",
+    "tests": "quality/tests",
+    "docs": "knowledge/docs"
+  }
+}
+```
+
+Validation rules:
+- paths must be relative
+- paths cannot contain `..`
+- invalid config fails fast with explicit diagnostics

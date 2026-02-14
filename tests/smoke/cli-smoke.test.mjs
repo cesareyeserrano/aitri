@@ -52,6 +52,48 @@ test("status json works in empty project", () => {
   assert.equal(payload.checkpoint.state.detected, false);
 });
 
+test("init respects aitri.config.json custom path mapping", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-config-init-"));
+  fs.writeFileSync(
+    path.join(tempDir, "aitri.config.json"),
+    JSON.stringify({
+      paths: {
+        specs: "workspace/specs",
+        backlog: "workspace/backlog",
+        tests: "quality/tests",
+        docs: "knowledge/docs"
+      }
+    }, null, 2),
+    "utf8"
+  );
+
+  runNodeOk(["init", "--non-interactive", "--yes"], { cwd: tempDir });
+
+  assert.equal(fs.existsSync(path.join(tempDir, "workspace", "specs", "drafts")), true);
+  assert.equal(fs.existsSync(path.join(tempDir, "workspace", "specs", "approved")), true);
+  assert.equal(fs.existsSync(path.join(tempDir, "workspace", "backlog")), true);
+  assert.equal(fs.existsSync(path.join(tempDir, "quality", "tests")), true);
+  assert.equal(fs.existsSync(path.join(tempDir, "knowledge", "docs")), true);
+  assert.equal(fs.existsSync(path.join(tempDir, "specs")), false);
+});
+
+test("status fails fast on invalid aitri.config.json", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-config-invalid-"));
+  fs.writeFileSync(
+    path.join(tempDir, "aitri.config.json"),
+    JSON.stringify({
+      paths: {
+        specs: "/abs/not-allowed"
+      }
+    }, null, 2),
+    "utf8"
+  );
+
+  const result = runNode(["status", "--json"], { cwd: tempDir });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /Invalid aitri\.config\.json/);
+});
+
 test("status accepts json shorthand without --json", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-status-shorthand-"));
   const result = runNodeOk(["status", "json"], { cwd: tempDir });
@@ -258,6 +300,105 @@ Users need to authenticate securely with email and password.
 
   const go = runNodeOk(["go", "--non-interactive", "--yes"], { cwd: tempDir });
   assert.match(go.stdout, /Implementation go\/no-go decision: GO/);
+});
+
+test("end-to-end workflow supports custom mapped paths", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-config-flow-"));
+  const feature = "mapped-flow";
+  fs.writeFileSync(
+    path.join(tempDir, "aitri.config.json"),
+    JSON.stringify({
+      paths: {
+        specs: "workspace/specs",
+        backlog: "workspace/backlog",
+        tests: "quality/tests",
+        docs: "knowledge/docs"
+      }
+    }, null, 2),
+    "utf8"
+  );
+
+  runNodeOk(["init", "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["draft", "--feature", feature, "--idea", "Mapped path login flow", "--non-interactive", "--yes"], { cwd: tempDir });
+
+  const draftFile = path.join(tempDir, "workspace", "specs", "drafts", `${feature}.md`);
+  fs.writeFileSync(
+    draftFile,
+    `# AF-SPEC: ${feature}
+
+STATUS: DRAFT
+
+## 1. Context
+Users need secure login.
+
+## 2. Actors
+- End user
+
+## 3. Functional Rules (traceable)
+- FR-1: Authenticate valid credentials.
+- FR-2: Reject invalid credentials.
+
+## 7. Security Considerations
+- Apply login rate limiting.
+
+## 9. Acceptance Criteria
+- AC-1: Given valid credentials, when login occurs, then access is granted.
+- AC-2: Given invalid credentials, when login occurs, then access is denied.
+`,
+    "utf8"
+  );
+
+  runNodeOk(["approve", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["discover", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["plan", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+
+  fs.writeFileSync(
+    path.join(tempDir, "workspace", "backlog", feature, "backlog.md"),
+    `# Backlog: ${feature}
+### US-1
+- Trace: FR-1, AC-1
+
+### US-2
+- Trace: FR-2, AC-2
+`,
+    "utf8"
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, "quality", "tests", feature, "tests.md"),
+    `# Test Cases: ${feature}
+### TC-1
+- Trace: US-1, FR-1, AC-1
+
+### TC-2
+- Trace: US-2, FR-2, AC-2
+`,
+    "utf8"
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, "package.json"),
+    `{
+  "name": "aitri-smoke-mapped",
+  "private": true,
+  "scripts": {
+    "test:aitri": "node -e \\"process.exit(0)\\""
+  }
+}
+`,
+    "utf8"
+  );
+
+  const validate = runNodeOk(["validate", "--feature", feature, "--non-interactive", "--json"], { cwd: tempDir });
+  assert.equal(JSON.parse(validate.stdout).ok, true);
+
+  const verify = runNodeOk(["verify", "--feature", feature, "--non-interactive", "--json"], { cwd: tempDir });
+  const verifyPayload = JSON.parse(verify.stdout);
+  assert.equal(verifyPayload.ok, true);
+  assert.match(verifyPayload.evidenceFile, /knowledge\/docs\/verification/);
+
+  const handoff = runNodeOk(["handoff", "json"], { cwd: tempDir });
+  assert.equal(JSON.parse(handoff.stdout).ok, true);
 });
 
 test("handoff is blocked when verification evidence is missing", () => {
