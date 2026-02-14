@@ -165,6 +165,7 @@ Users need to authenticate securely with email and password.
   const discoveryContent = fs.readFileSync(discoveryFile, "utf8");
   assert.match(discoveryContent, /## 2\. Discovery Interview Summary \(Discovery Persona\)/);
   assert.match(discoveryContent, /## 3\. Scope/);
+  assert.match(discoveryContent, /## 9\. Discovery Confidence/);
 
   runNodeOk(["plan", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
 
@@ -195,6 +196,84 @@ Users need to authenticate securely with email and password.
   assert.equal(payload.ok, true);
   assert.equal(payload.feature, feature);
   assert.deepEqual(payload.issues, []);
+
+  const handoff = runNodeOk(["handoff", "json"], { cwd: tempDir });
+  const handoffPayload = JSON.parse(handoff.stdout);
+  assert.equal(handoffPayload.ok, true);
+  assert.equal(handoffPayload.nextStep, "ready_for_human_approval");
+
+  const go = runNodeOk(["go", "--non-interactive", "--yes"], { cwd: tempDir });
+  assert.match(go.stdout, /Implementation go\/no-go decision: GO/);
+});
+
+test("plan blocks when discovery confidence is low", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-low-confidence-"));
+  const feature = "low-confidence";
+  runNodeOk(["init", "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["draft", "--feature", feature, "--idea", "Feature with uncertain discovery", "--non-interactive", "--yes"], { cwd: tempDir });
+
+  const draftFile = path.join(tempDir, "specs", "drafts", `${feature}.md`);
+  fs.writeFileSync(
+    draftFile,
+    `# AF-SPEC: ${feature}
+
+STATUS: DRAFT
+
+## 1. Context
+Context.
+
+## 2. Actors
+- User
+
+## 3. Functional Rules (traceable)
+- FR-1: Rule one.
+
+## 7. Security Considerations
+- Basic control.
+
+## 9. Acceptance Criteria
+- AC-1: Given ..., when ..., then ...
+`,
+    "utf8"
+  );
+
+  runNodeOk(["approve", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+
+  fs.mkdirSync(path.join(tempDir, "docs", "discovery"), { recursive: true });
+  fs.writeFileSync(
+    path.join(tempDir, "docs", "discovery", `${feature}.md`),
+    `# Discovery: ${feature}
+
+## 2. Discovery Interview Summary (Discovery Persona)
+- Primary users:
+- TBD
+
+## 3. Scope
+### In scope
+- TBD
+
+### Out of scope
+- TBD
+
+## 9. Discovery Confidence
+- Confidence:
+- Low
+
+- Reason:
+- Missing critical evidence
+
+- Evidence gaps:
+- TBD
+
+- Handoff decision:
+- Blocked for Clarification
+`,
+    "utf8"
+  );
+
+  const result = runNode(["plan", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /PLAN BLOCKED: Discovery confidence is Low/);
 });
 
 test("validate fails in non-interactive mode without --feature", () => {

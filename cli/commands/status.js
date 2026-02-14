@@ -137,9 +137,8 @@ function detectCheckpointState(root) {
   };
 }
 
-export function runStatus(options = {}) {
-  const { json = false } = options;
-  const root = process.cwd();
+export function getStatusReport(options = {}) {
+  const { root = process.cwd() } = options;
 
   const requiredDirs = ["specs", "backlog", "tests", "docs"];
   const missingDirs = requiredDirs.filter((d) => !exists(path.join(root, d)));
@@ -251,6 +250,13 @@ export function runStatus(options = {}) {
       nextActions: [report.nextStep]
     };
   }
+
+  return report;
+}
+
+export function runStatus(options = {}) {
+  const { json = false } = options;
+  const report = getStatusReport({ root: process.cwd() });
 
   if (json) {
     console.log(JSON.stringify(report, null, 2));

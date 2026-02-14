@@ -54,6 +54,8 @@ aitri validate --feature user-login --format json
 | `aitri plan` | Create plan artifact + structured backlog/tests templates |
 | `aitri validate` | Validate artifacts, placeholders, and coverage links |
 | `aitri status` | Show state and next recommended step |
+| `aitri handoff` | Summarize SDLC readiness and require explicit go/no-go |
+| `aitri go` | Explicitly enter implementation mode after handoff readiness |
 | `aitri help` | Show command/options help |
 
 ## Output Modes and Automation Flags
@@ -72,6 +74,8 @@ aitri validate --feature user-login --format json
   - Confirms requirement-defined technology or suggests a baseline.
 - `aitri discover --guided`
   - Deeper discovery interview (users, JTBD, constraints, dependencies, metrics, assumptions, scope).
+- `aitri plan`
+  - Blocks if discovery confidence is `Low` or required discovery sections are missing.
 
 ## Auto-Checkpoint and Resume
 Write commands (`init`, `draft`, `approve`, `discover`, `plan`) create auto-checkpoints in Git repositories.

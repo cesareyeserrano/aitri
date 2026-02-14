@@ -4,7 +4,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { runStatus } from "./commands/status.js";
+import { getStatusReport, runStatus } from "./commands/status.js";
 
 function showBanner() {
   const iron = "\x1b[38;5;24m";      // dark iron gray
@@ -244,16 +244,16 @@ function suggestStackFromSummary(text) {
 
 async function collectDiscoveryInterview(options) {
   const defaults = {
-    primaryUsers: "TBD",
-    jtbd: "TBD",
-    currentPain: "TBD",
-    constraints: "TBD",
-    dependencies: "TBD",
-    successMetrics: "TBD",
-    assumptions: "TBD",
-    inScope: "TBD",
-    outOfScope: "Not specified",
-    journey: "TBD"
+    primaryUsers: "Users defined in approved spec",
+    jtbd: "Deliver capability described in approved spec",
+    currentPain: "Problem stated in approved spec context",
+    constraints: "Constraints to be refined during planning",
+    dependencies: "Dependencies to be refined during planning",
+    successMetrics: "Baseline and target to be confirmed in product review",
+    assumptions: "Assumptions pending explicit validation",
+    inScope: "Approved spec functional scope",
+    outOfScope: "Anything not explicitly stated in approved spec",
+    journey: "Primary journey derived from approved spec context"
   };
 
   if (options.nonInteractive) return defaults;
@@ -316,6 +316,8 @@ Commands:
   plan       Generate plan doc + traceable backlog/tests from an approved spec
   validate   Validate traceability placeholders are resolved (FR/AC/US/TC)
   status     Show project state and next recommended step
+  handoff    Summarize validated SDLC artifacts and require explicit go/no-go decision
+  go         Explicitly enter implementation mode after handoff readiness
 
 Options:
   --yes, -y              Auto-approve plan prompts where supported
@@ -666,6 +668,33 @@ if (cmd === "discover") {
 
   const approvedSpec = fs.readFileSync(approvedFile, "utf8");
   const discoveryInterview = await collectDiscoveryInterview(options);
+  const confidence = (() => {
+    if (
+      [discoveryInterview.primaryUsers, discoveryInterview.currentPain, discoveryInterview.successMetrics]
+        .some((v) => /TBD|Not specified|pending/i.test(v))
+    ) {
+      return {
+        level: "Low",
+        reason: "Critical discovery inputs are missing or too generic.",
+        handoff: "Blocked for Clarification"
+      };
+    }
+    if (
+      [discoveryInterview.jtbd, discoveryInterview.constraints, discoveryInterview.dependencies, discoveryInterview.assumptions]
+        .some((v) => /TBD|Not specified|pending/i.test(v))
+    ) {
+      return {
+        level: "Medium",
+        reason: "Discovery is usable but still has notable evidence gaps.",
+        handoff: "Ready for Product/Architecture"
+      };
+    }
+    return {
+      level: "High",
+      reason: "Discovery inputs are specific and decision-ready.",
+      handoff: "Ready for Product/Architecture"
+    };
+  })();
   let discovery = fs.readFileSync(templatePath, "utf8");
 
   // Basic injection
@@ -685,6 +714,10 @@ if (cmd === "discover") {
   discovery = discovery.replace(
     "## 4. Actors & User Journeys\nActors:\n-\n\nPrimary journey:\n-",
     `## 4. Actors & User Journeys\nActors:\n- ${discoveryInterview.primaryUsers}\n\nPrimary journey:\n- ${discoveryInterview.journey}`
+  );
+  discovery = discovery.replace(
+    "## 9. Discovery Confidence\n- Confidence:\n-\n- Reason:\n-\n- Evidence gaps:\n-\n- Handoff decision:\n-",
+    `## 9. Discovery Confidence\n- Confidence:\n- ${confidence.level}\n\n- Reason:\n- ${confidence.reason}\n\n- Evidence gaps:\n- ${discoveryInterview.assumptions}\n\n- Handoff decision:\n- ${confidence.handoff}`
   );
 
   fs.writeFileSync(outFile, discovery, "utf8");
@@ -736,9 +769,34 @@ if (cmd === "plan") {
   }
 
   const approvedFile = path.join(process.cwd(), "specs", "approved", `${feature}.md`);
+  const discoveryFile = path.join(process.cwd(), "docs", "discovery", `${feature}.md`);
   if (!fs.existsSync(approvedFile)) {
     console.log(`Approved spec not found: ${path.relative(process.cwd(), approvedFile)}`);
     console.log("Approve the spec first: aitri approve");
+    process.exit(EXIT_ERROR);
+  }
+  if (!fs.existsSync(discoveryFile)) {
+    console.log(`Discovery artifact not found: ${path.relative(process.cwd(), discoveryFile)}`);
+    console.log("Run discovery first: aitri discover --feature <name>");
+    process.exit(EXIT_ERROR);
+  }
+  const discoveryContent = fs.readFileSync(discoveryFile, "utf8");
+  const requiredDiscoverySections = [
+    "## 2. Discovery Interview Summary (Discovery Persona)",
+    "## 3. Scope",
+    "## 9. Discovery Confidence"
+  ];
+  const missingDiscoverySections = requiredDiscoverySections.filter((section) => !discoveryContent.includes(section));
+  if (missingDiscoverySections.length > 0) {
+    console.log("PLAN BLOCKED: Discovery artifact is missing required sections.");
+    missingDiscoverySections.forEach((section) => console.log(`- Missing: ${section}`));
+    console.log("Re-run discovery with the latest template before planning.");
+    process.exit(EXIT_ERROR);
+  }
+  const lowConfidence = /- Confidence:\s*\n-\s*Low\b/i.test(discoveryContent);
+  if (lowConfidence) {
+    console.log("PLAN BLOCKED: Discovery confidence is Low.");
+    console.log("Address discovery evidence gaps and re-run `aitri discover --guided` before planning.");
     process.exit(EXIT_ERROR);
   }
 
@@ -1078,6 +1136,61 @@ if (cmd === "validate") {
 
 if (cmd === "status") {
   runStatus({ json: wantsJson(options, options.positional) });
+  process.exit(EXIT_OK);
+}
+
+if (cmd === "handoff") {
+  const report = getStatusReport({ root: process.cwd() });
+  const jsonOutput = wantsJson(options, options.positional);
+  const payload = {
+    ok: report.nextStep === "ready_for_human_approval",
+    feature: report.approvedSpec.feature,
+    nextStep: report.nextStep,
+    handoff: report.handoff
+  };
+
+  if (jsonOutput) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else if (payload.ok) {
+    console.log("HANDOFF READY ✅");
+    console.log(`Feature: ${payload.feature}`);
+    console.log("Human decision required: GO or NO-GO for implementation.");
+    console.log("Recommended next command: aitri go");
+  } else {
+    console.log("HANDOFF NOT READY ❌");
+    console.log(`Current next step: ${payload.nextStep}`);
+    console.log("Complete the SDLC flow first, then run handoff again.");
+  }
+
+  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
+}
+
+if (cmd === "go") {
+  const report = getStatusReport({ root: process.cwd() });
+  const ready = report.nextStep === "ready_for_human_approval";
+  if (!ready) {
+    console.log("GO BLOCKED: SDLC flow is not ready for implementation handoff.");
+    console.log(`Current next step: ${report.nextStep}`);
+    process.exit(EXIT_ERROR);
+  }
+
+  const proceed = await confirmProceed(options);
+  if (proceed === null) {
+    console.log("Non-interactive mode requires --yes for go/no-go confirmation.");
+    process.exit(EXIT_ERROR);
+  }
+  if (!proceed) {
+    console.log("Implementation go/no-go decision: NO-GO.");
+    process.exit(EXIT_ABORTED);
+  }
+
+  console.log("Implementation go/no-go decision: GO.");
+  console.log("Use approved artifacts as source of truth:");
+  console.log(`- ${report.approvedSpec.file}`);
+  console.log(`- docs/discovery/${report.approvedSpec.feature}.md`);
+  console.log(`- docs/plan/${report.approvedSpec.feature}.md`);
+  console.log(`- backlog/${report.approvedSpec.feature}/backlog.md`);
+  console.log(`- tests/${report.approvedSpec.feature}/tests.md`);
   process.exit(EXIT_OK);
 }
 

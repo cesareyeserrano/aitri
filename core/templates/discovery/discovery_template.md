@@ -72,3 +72,16 @@ User stories:
 -
 - Edge cases:
 -
+
+## 9. Discovery Confidence
+- Confidence:
+-
+
+- Reason:
+-
+
+- Evidence gaps:
+-
+
+- Handoff decision:
+-

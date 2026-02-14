@@ -72,5 +72,6 @@ Check items as they are completed to prevent context drift.
 - [x] Prioritized epics and user stories documented
 - [x] Next-target strategy aligned with backlog source of truth
 - [ ] Persona output enforcement moved from soft guidance to CLI gates
-- [ ] Explicit handoff/resume commands implemented
+- [x] Explicit handoff/go commands implemented (`aitri handoff`, `aitri go`)
+- [ ] Explicit resume shortcut command implemented
 - [ ] 5-minute reproducible demo path published
