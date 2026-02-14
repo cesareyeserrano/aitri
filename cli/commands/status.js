@@ -170,6 +170,20 @@ function computeNextStep({ missingDirs, approvedSpecFound, discoveryExists, plan
   return "ready_for_human_approval";
 }
 
+function toRecommendedCommand(nextStep) {
+  if (!nextStep) return null;
+  if (nextStep === "ready_for_human_approval") return "aitri handoff";
+  return nextStep;
+}
+
+function nextStepMessage(nextStep) {
+  if (!nextStep) return "No next step detected.";
+  if (nextStep === "ready_for_human_approval") {
+    return "SDLC artifacts are complete. Human go/no-go approval is required.";
+  }
+  return `Continue SDLC flow with ${nextStep}.`;
+}
+
 function readGit(cmd, cwd) {
   try {
     return execSync(cmd, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -365,7 +379,9 @@ export function getStatusReport(options = {}) {
       message: "Continue with nextStep.",
       nextActions: []
     },
-    nextStep: null
+    nextStep: null,
+    recommendedCommand: null,
+    nextStepMessage: null
   };
 
   if (approvedSpecFile) {
@@ -438,6 +454,9 @@ export function getStatusReport(options = {}) {
     };
   }
 
+  report.recommendedCommand = toRecommendedCommand(report.nextStep);
+  report.nextStepMessage = nextStepMessage(report.nextStep);
+
   return report;
 }
 
@@ -467,7 +486,9 @@ export function runStatus(options = {}) {
   if (!report.approvedSpec.found) {
     console.log("✖ No approved specs found");
     console.log("\nNext recommended step:");
-    console.log(report.nextStep);
+    console.log(`- State: ${report.nextStep}`);
+    console.log(`- Run: ${report.recommendedCommand}`);
+    console.log(`- Why: ${report.nextStepMessage}`);
     return;
   }
 
@@ -493,10 +514,13 @@ export function runStatus(options = {}) {
 
   console.log("\nNext recommended step:");
   if (report.nextStep === "ready_for_human_approval") {
-    console.log("✅ Ready for human approval → implementation phase");
-    console.log("Human action required: review artifacts and approve go/no-go for implementation.");
+    console.log("✅ Ready for human approval");
+    console.log(`- Run: ${report.recommendedCommand}`);
+    console.log("- Why: SDLC artifact flow is complete and waiting for explicit human decision.");
   } else {
-    console.log(report.nextStep);
+    console.log(`- State: ${report.nextStep}`);
+    console.log(`- Run: ${report.recommendedCommand}`);
+    console.log(`- Why: ${report.nextStepMessage}`);
   }
 
   console.log("\nCheckpoint recommendation:");

@@ -87,6 +87,7 @@ Expected:
 - JSON output reports no unresolved gaps for the generated baseline
 - `verify` exits with code `0` when a runtime test command exists
 - `policy` exits with code `0` when managed-go checks pass
+- `status json`/`handoff json` expose `recommendedCommand` for the exact next CLI action
 
 Runtime verification command detection order:
 1. `package.json` script `test:aitri`

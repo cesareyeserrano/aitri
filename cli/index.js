@@ -103,6 +103,12 @@ function normalizeFeatureName(value) {
   return (value || "").replace(/\s+/g, "-").trim();
 }
 
+function toRecommendedCommand(nextStep) {
+  if (!nextStep) return null;
+  if (nextStep === "ready_for_human_approval") return "aitri handoff";
+  return nextStep;
+}
+
 const EXIT_OK = 0;
 const EXIT_ERROR = 1;
 const EXIT_ABORTED = 2;
@@ -1879,7 +1885,7 @@ if (cmd === "resume") {
   const jsonOutput = wantsJson(options, options.positional);
   const checkpointDetected = report.checkpoint.state.detected;
   const needsResumeDecision = report.checkpoint.state.resumeDecision === "ask_user_resume_from_checkpoint";
-  const recommendedCommand = report.nextStep === "ready_for_human_approval" ? "aitri handoff" : report.nextStep;
+  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
 
   const payload = {
     ok: true,
@@ -1910,6 +1916,7 @@ if (cmd === "resume") {
   }
 
   console.log("Resume decision: CONTINUE.");
+  console.log(`Current state: ${report.nextStep}`);
   console.log(`Recommended next command: ${recommendedCommand}`);
   process.exit(EXIT_OK);
 }
@@ -1917,10 +1924,12 @@ if (cmd === "resume") {
 if (cmd === "handoff") {
   const report = getStatusReportOrExit();
   const jsonOutput = wantsJson(options, options.positional);
+  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
   const payload = {
     ok: report.nextStep === "ready_for_human_approval",
     feature: report.approvedSpec.feature,
     nextStep: report.nextStep,
+    recommendedCommand,
     handoff: report.handoff
   };
 
@@ -1933,7 +1942,10 @@ if (cmd === "handoff") {
     console.log("Recommended next command: aitri go");
   } else {
     console.log("HANDOFF NOT READY ❌");
-    console.log(`Current next step: ${payload.nextStep}`);
+    console.log(`Current state: ${payload.nextStep}`);
+    if (payload.recommendedCommand) {
+      console.log(`Run next command: ${payload.recommendedCommand}`);
+    }
     console.log("Complete the SDLC flow first, then run handoff again.");
   }
 
@@ -1942,10 +1954,14 @@ if (cmd === "handoff") {
 
 if (cmd === "go") {
   const report = getStatusReportOrExit();
+  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
   const ready = report.nextStep === "ready_for_human_approval";
   if (!ready) {
     console.log("GO BLOCKED: SDLC flow is not ready for implementation handoff.");
-    console.log(`Current next step: ${report.nextStep}`);
+    console.log(`Current state: ${report.nextStep}`);
+    if (recommendedCommand) {
+      console.log(`Run next command: ${recommendedCommand}`);
+    }
     process.exit(EXIT_ERROR);
   }
 

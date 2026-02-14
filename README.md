@@ -79,6 +79,11 @@ npm run demo:5min
 - `--verify-cmd "<command>"`: explicit runtime verification command
 - `--no-checkpoint`: disable auto-checkpoint for one command
 
+`status` and `handoff` JSON responses include:
+- `nextStep`: internal SDLC state (example: `aitri verify`, `ready_for_human_approval`)
+- `recommendedCommand`: exact command to run next (human-friendly)
+- `nextStepMessage` (`status`): short reason for the recommendation
+
 ## Guided Modes
 - `aitri draft --guided`
   - Structured requirement intake (summary, actor, outcome, scope, technology).

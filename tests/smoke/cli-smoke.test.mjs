@@ -49,6 +49,8 @@ test("status json works in empty project", () => {
 
   assert.equal(payload.structure.ok, false);
   assert.equal(payload.nextStep, "aitri init");
+  assert.equal(payload.recommendedCommand, "aitri init");
+  assert.match(payload.nextStepMessage, /Continue SDLC flow/i);
   assert.equal(payload.checkpoint.state.git, false);
   assert.equal(payload.checkpoint.state.detected, false);
 });
@@ -352,6 +354,7 @@ Users need to authenticate securely with email and password.
   const handoffPayload = JSON.parse(handoff.stdout);
   assert.equal(handoffPayload.ok, true);
   assert.equal(handoffPayload.nextStep, "ready_for_human_approval");
+  assert.equal(handoffPayload.recommendedCommand, "aitri handoff");
 
   const go = runNodeOk(["go", "--non-interactive", "--yes"], { cwd: tempDir });
   assert.match(go.stdout, /Implementation go\/no-go decision: GO/);
@@ -516,6 +519,12 @@ Users need sign in.
   const payload = JSON.parse(handoff.stdout);
   assert.equal(payload.ok, false);
   assert.equal(payload.nextStep, "aitri verify");
+  assert.equal(payload.recommendedCommand, "aitri verify");
+
+  const handoffHuman = runNode(["handoff"], { cwd: tempDir });
+  assert.equal(handoffHuman.status, 1);
+  assert.match(handoffHuman.stdout, /HANDOFF NOT READY/);
+  assert.match(handoffHuman.stdout, /Run next command: aitri verify/);
 });
 
 test("go is blocked when managed-go policy detects dependency drift", () => {
