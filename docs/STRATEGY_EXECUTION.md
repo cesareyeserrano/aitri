@@ -52,9 +52,22 @@ Status: COMPLETE (baseline)
 - packaging and install guide added
 - zero-to-first-run onboarding guide added (global/project/skill)
 
+### Phase F: Strategic Feedback Intake (February 2026)
+Status: ACCEPTED / PLANNED
+- runtime verification loop accepted (`aitri verify`)
+- brownfield mapping accepted (`aitri.config.json`)
+- managed-go policy checks accepted (deterministic scan model)
+- static insight UI accepted (`status --ui` + confidence score)
+- scalable retrieval accepted as staged work (metadata first, optional semantic index later)
+
 ## Next Targets (v1.0.x)
-1. Deepen discovery-to-plan signal quality and reduce scaffold noise.
-2. Split docs into default quick path vs advanced operations path.
+1. Deliver runtime verification loop (`aitri verify`) and wire it into handoff/go gates.
+2. Add brownfield semantic path mapping via `aitri.config.json`.
+3. Introduce managed-go policy checks (dependency/policy drift detection).
+4. Publish `status --ui` static insight view with confidence scoring model.
+5. Deepen discovery-to-plan signal quality and reduce scaffold noise.
+6. Split docs into default quick path vs advanced operations path.
+7. Stage scalable retrieval for large contexts (section-level first, optional semantic index later).
 
 Backlog source of truth:
 - `backlog/aitri-core/backlog.md`
@@ -62,6 +75,7 @@ Backlog source of truth:
 ## Operating Metrics
 - Workflow completion rate (`draft -> validate`)
 - Validation failure categories (missing, placeholder, structure, coverage)
+- Runtime verification pass rate and stale-verification rate
 - Rework rate caused by specification gaps
 - Workflow violations caught by gates
 

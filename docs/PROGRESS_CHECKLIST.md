@@ -75,3 +75,10 @@ Check items as they are completed to prevent context drift.
 - [x] Explicit handoff/go commands implemented (`aitri handoff`, `aitri go`)
 - [x] Explicit resume shortcut command implemented (`aitri resume`)
 - [x] 5-minute reproducible demo path published
+- [ ] Runtime verification command implemented (`aitri verify`)
+- [ ] Handoff/go runtime verification gates implemented
+- [ ] Brownfield path mapping implemented (`aitri.config.json`)
+- [ ] Managed-go policy checks implemented (dependency/policy drift)
+- [ ] Static insight UI output available (`aitri status --ui`)
+- [ ] Confidence score model integrated into status output
+- [ ] Large-context staged retrieval implemented (section-level + optional semantic index)

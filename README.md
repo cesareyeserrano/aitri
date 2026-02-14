@@ -156,6 +156,17 @@ JSON response includes:
 - `gapSummary`
   - includes `persona` gap category when persona-required sections are unresolved
 
+## Planned Next Capabilities
+- Runtime verification loop (`aitri verify`) with handoff/go gating.
+- Brownfield project mapping via `aitri.config.json`.
+- Managed implementation policy checks after `go`.
+- Static insight output (`aitri status --ui`) with confidence scoring.
+- Scalable retrieval path for large-context projects.
+
+Roadmap references:
+- `backlog/aitri-core/backlog.md`
+- `docs/feedback/STRATEGIC_FEEDBACK_2026-02.md`
+
 ## Exit Codes
 - `0` success
 - `1` error

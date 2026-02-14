@@ -20,6 +20,7 @@ Use this folder as the official reference for product intent, governance, execut
 15. `docs/release/V1_CLOSEOUT_RC1.md` - release closeout evidence and readiness summary
 16. `docs/release/RELEASE_NOTES_v1.0.0-rc1.md` - RC release notes draft
 17. `docs/release/GITHUB_RELEASE_CHECKLIST_v1.0.0-rc1.md` - RC tagging and publish checklist
+18. `docs/feedback/STRATEGIC_FEEDBACK_2026-02.md` - audited strategic feedback with implementation verdicts
 
 ## Purpose
 Preserve continuity across time, contributors, and agent platforms.

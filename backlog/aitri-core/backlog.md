@@ -48,6 +48,66 @@
 - As a team lead, I want a default path vs advanced path docs split, so that onboarding is short while advanced depth remains available.
 - Trace: FR-4, AC-8
 
+## Epic 5: Runtime Verification Loop
+- Objective:
+  - Close the gap between documented traceability and executable behavior.
+
+### US-9
+- As a maintainer, I want `aitri verify` to execute project tests with deterministic output, so that runtime evidence becomes part of quality gates.
+- Trace: FR-5, AC-9
+
+### US-10
+- As a reviewer, I want handoff/go to require successful verification evidence, so that implementation cannot progress on unverified runtime behavior.
+- Trace: FR-5, AC-10
+
+## Epic 6: Brownfield Adoption via Semantic Mapping
+- Objective:
+  - Make Aitri usable in existing repositories without forced folder migration.
+
+### US-11
+- As a team using an existing codebase, I want configurable path mapping (`aitri.config.json`), so that Aitri can bind to current project structures.
+- Trace: FR-6, AC-11
+
+### US-12
+- As a maintainer, I want config validation and fallback defaults, so that mapping errors are explicit and safe.
+- Trace: FR-6, AC-12
+
+## Epic 7: Managed Implementation Mode
+- Objective:
+  - Reduce implementation drift after `go` with lightweight deterministic controls.
+
+### US-13
+- As a maintainer, I want a managed-go mode with policy checks, so that forbidden architectural/dependency drift is caught before commit/handoff.
+- Trace: FR-7, AC-13
+
+### US-14
+- As a reviewer, I want dependency drift and policy violations surfaced in machine-readable output, so that CI and humans can block unsafe progression.
+- Trace: FR-7, AC-14
+
+## Epic 8: Insight Dashboard and Confidence Score
+- Objective:
+  - Provide business + technical visibility without abandoning CLI-first principles.
+
+### US-15
+- As a stakeholder, I want `aitri status --ui` static output, so that project health is visible without manual parsing.
+- Trace: FR-8, AC-15
+
+### US-16
+- As a maintainer, I want a weighted confidence score (spec integrity + runtime verification), so that release readiness is objectively measurable.
+- Trace: FR-8, AC-16
+
+## Epic 9: Scalable Context Retrieval (Staged)
+- Objective:
+  - Improve artifact quality in large projects while controlling complexity.
+
+### US-17
+- As an agent operator, I want section-level retrieval before full-file loading, so that planning and refinement stay coherent in large scopes.
+- Trace: FR-9, AC-17
+
+### US-18
+- As a maintainer, I want optional local semantic indexing in advanced mode, so that retrieval quality scales without mandatory cloud services.
+- Trace: FR-9, AC-18
+
 ## Acceptance Criteria (Next Improvement Scope)
 - AC-1: Persona-required fields are machine-checked for at least Discovery/Product/Architect outputs. [DONE]
 - AC-2: `plan` blocks when critical discovery confidence is Low or required sections are missing. [DONE]
@@ -57,3 +117,13 @@
 - AC-6: Resume shortcut exists and maps to checkpoint decision + next step deterministically.
 - AC-7: Demo script runs end-to-end in a clean repo in <= 5 minutes. [DONE]
 - AC-8: README and docs separate "default quick path" from "advanced operations path".
+- AC-9: `aitri verify` executes runtime checks and returns machine-readable verification evidence.
+- AC-10: `handoff`/`go` can be blocked when runtime verification is missing or failing.
+- AC-11: `aitri.config.json` path mapping supports specs/backlog/tests/docs for brownfield projects.
+- AC-12: Invalid mapping configuration fails fast with explicit diagnostics and safe defaults.
+- AC-13: Managed-go mode enforces deterministic policy checks before progression.
+- AC-14: Dependency/policy drift output is machine-readable for CI gating.
+- AC-15: `aitri status --ui` generates static visibility output for non-technical stakeholders.
+- AC-16: Confidence score model is documented and includes runtime + spec inputs.
+- AC-17: Section-level retrieval is used before raw full-document loading in large workflows.
+- AC-18: Optional local semantic indexing is available in advanced mode.
