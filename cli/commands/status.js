@@ -184,6 +184,106 @@ function nextStepMessage(nextStep) {
   return `Continue SDLC flow with ${nextStep}.`;
 }
 
+function countTrue(values) {
+  return values.filter(Boolean).length;
+}
+
+function computeSpecIntegrity(report) {
+  const artifactSignals = [
+    report.approvedSpec.found,
+    report.artifacts.discovery,
+    report.artifacts.plan,
+    report.artifacts.backlog,
+    report.artifacts.tests
+  ];
+  const artifactCoverage = Math.round((countTrue(artifactSignals) / artifactSignals.length) * 100);
+
+  if (!report.approvedSpec.found) {
+    return {
+      score: 0,
+      details: {
+        artifactCoverage,
+        traceabilityScore: 0,
+        validationIssueCount: report.validation.issues.length
+      },
+      reason: "No approved spec context available yet."
+    };
+  }
+
+  const traceabilityScore = report.validation.ok
+    ? 100
+    : Math.max(0, 50 - (Math.max(1, report.validation.issues.length) - 1) * 10);
+
+  const score = Math.round((artifactCoverage * 0.4) + (traceabilityScore * 0.6));
+  return {
+    score,
+    details: {
+      artifactCoverage,
+      traceabilityScore,
+      validationIssueCount: report.validation.issues.length
+    },
+    reason: report.validation.ok
+      ? "Artifacts and traceability validation are consistent."
+      : "Traceability or persona gates are unresolved."
+  };
+}
+
+function computeRuntimeVerificationScore(verification) {
+  if (!verification || verification.required === false) {
+    return { score: 100, reason: "Runtime verification is not required." };
+  }
+
+  if (verification.ok) {
+    return { score: 100, reason: "Runtime verification passed with current evidence." };
+  }
+
+  switch (verification.status) {
+    case "stale":
+      return { score: 55, reason: "Runtime evidence is stale and must be re-verified." };
+    case "failed":
+      return { score: 25, reason: "Runtime verification failed." };
+    case "invalid":
+      return { score: 10, reason: "Runtime evidence is invalid or unreadable." };
+    case "missing":
+    default:
+      return { score: 0, reason: "Runtime verification evidence is missing." };
+  }
+}
+
+function confidenceLevel(score) {
+  if (score >= 85) return "high";
+  if (score >= 60) return "medium";
+  return "low";
+}
+
+function buildConfidenceReport(report) {
+  const spec = computeSpecIntegrity(report);
+  const runtime = computeRuntimeVerificationScore(report.verification);
+  const score = Math.round((spec.score * 0.4) + (runtime.score * 0.6));
+  const level = confidenceLevel(score);
+  return {
+    model: "v1-weighted-spec-runtime",
+    score,
+    level,
+    weights: {
+      specIntegrity: 0.4,
+      runtimeVerification: 0.6
+    },
+    components: {
+      specIntegrity: spec.score,
+      runtimeVerification: runtime.score
+    },
+    details: {
+      specIntegrity: spec.details
+    },
+    releaseReady: report.nextStep === "ready_for_human_approval" && score >= 85,
+    reasons: {
+      specIntegrity: spec.reason,
+      runtimeVerification: runtime.reason
+    }
+  };
+}
+
 function readGit(cmd, cwd) {
   try {
     return execSync(cmd, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -381,7 +481,32 @@ export function getStatusReport(options = {}) {
     },
     nextStep: null,
     recommendedCommand: null,
-    nextStepMessage: null
+    nextStepMessage: null,
+    confidence: {
+      model: "v1-weighted-spec-runtime",
+      score: 0,
+      level: "low",
+      weights: {
+        specIntegrity: 0.4,
+        runtimeVerification: 0.6
+      },
+      components: {
+        specIntegrity: 0,
+        runtimeVerification: 0
+      },
+      details: {
+        specIntegrity: {
+          artifactCoverage: 0,
+          traceabilityScore: 0,
+          validationIssueCount: 0
+        }
+      },
+      releaseReady: false,
+      reasons: {
+        specIntegrity: "No approved spec context available yet.",
+        runtimeVerification: "Runtime verification evidence is missing."
+      }
+    }
   };
 
   if (approvedSpecFile) {
@@ -456,6 +581,7 @@ export function getStatusReport(options = {}) {
 
   report.recommendedCommand = toRecommendedCommand(report.nextStep);
   report.nextStepMessage = nextStepMessage(report.nextStep);
+  report.confidence = buildConfidenceReport(report);
 
   return report;
 }
@@ -511,6 +637,11 @@ export function runStatus(options = {}) {
   } else {
     console.log("✖ Runtime verification missing");
   }
+
+  console.log("\nConfidence score:");
+  console.log(`- Score: ${report.confidence.score}% (${report.confidence.level})`);
+  console.log(`- Spec integrity: ${report.confidence.components.specIntegrity}%`);
+  console.log(`- Runtime verification: ${report.confidence.components.runtimeVerification}%`);
 
   console.log("\nNext recommended step:");
   if (report.nextStep === "ready_for_human_approval") {

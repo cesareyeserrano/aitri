@@ -52,6 +52,10 @@ test("status json works in empty project", () => {
   assert.equal(payload.nextStep, "aitri init");
   assert.equal(payload.recommendedCommand, "aitri init");
   assert.match(payload.nextStepMessage, /Continue SDLC flow/i);
+  assert.equal(payload.confidence.score, 0);
+  assert.equal(payload.confidence.level, "low");
+  assert.equal(payload.confidence.components.specIntegrity, 0);
+  assert.equal(payload.confidence.components.runtimeVerification, 0);
   assert.equal(payload.checkpoint.state.git, false);
   assert.equal(payload.checkpoint.state.detected, false);
 });
@@ -350,6 +354,13 @@ Users need to authenticate securely with email and password.
   assert.equal(verifyPayload.ok, true);
   assert.equal(verifyPayload.feature, feature);
   assert.match(verifyPayload.command, /npm run test:aitri/);
+
+  const status = runNodeOk(["status", "--json"], { cwd: tempDir });
+  const statusPayload = JSON.parse(status.stdout);
+  assert.equal(statusPayload.confidence.level, "high");
+  assert.ok(statusPayload.confidence.score >= 95);
+  assert.equal(statusPayload.confidence.components.runtimeVerification, 100);
+  assert.equal(statusPayload.confidence.releaseReady, true);
 
   const handoff = runNodeOk(["handoff", "json"], { cwd: tempDir });
   const handoffPayload = JSON.parse(handoff.stdout);
@@ -761,6 +772,9 @@ test("status requires re-verify when verification evidence is stale", () => {
   const payload = JSON.parse(status.stdout);
   assert.equal(payload.verification.status, "stale");
   assert.equal(payload.nextStep, "aitri verify");
+  assert.equal(payload.confidence.level, "medium");
+  assert.equal(payload.confidence.components.runtimeVerification, 55);
+  assert.equal(payload.confidence.releaseReady, false);
 });
 
 test("plan blocks when discovery confidence is low", () => {

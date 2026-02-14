@@ -16,7 +16,7 @@
 - Objective:
   - Increase depth and quality of generated discovery/plan artifacts.
 
-### US-3
+### US-3 [DONE]
 - As a user, I want discovery interviews to collect deeper contextual evidence, so that plan quality improves from first pass.
 - Trace: FR-2, AC-3
 
@@ -92,7 +92,7 @@
 - As a stakeholder, I want `aitri status --ui` static output, so that project health is visible without manual parsing.
 - Trace: FR-8, AC-15
 
-### US-16
+### US-16 [DONE]
 - As a maintainer, I want a weighted confidence score (spec integrity + runtime verification), so that release readiness is objectively measurable.
 - Trace: FR-8, AC-16
 
@@ -111,7 +111,7 @@
 ## Acceptance Criteria (Next Improvement Scope)
 - AC-1: Persona-required fields are machine-checked for at least Discovery/Product/Architect outputs. [DONE]
 - AC-2: `plan` blocks when critical discovery confidence is Low or required sections are missing. [DONE]
-- AC-3: Guided discovery captures users, JTBD, constraints, dependencies, success metrics, assumptions, and confidence in all flows.
+- AC-3: Guided discovery captures users, JTBD, constraints, dependencies, success metrics, assumptions, and confidence in all flows. [DONE]
 - AC-4: Generated plan/backlog/tests contain fewer unresolved placeholders and stronger traceable defaults.
 - AC-5: Explicit handoff command(s) exist (`aitri handoff` and/or `aitri go`) with clear no-go/go behavior.
 - AC-6: Resume shortcut exists and maps to checkpoint decision + next step deterministically.
@@ -124,6 +124,6 @@
 - AC-13: Managed-go mode enforces deterministic policy checks before progression. [DONE]
 - AC-14: Dependency/policy drift output is machine-readable for CI gating. [DONE]
 - AC-15: `aitri status --ui` generates static visibility output for non-technical stakeholders.
-- AC-16: Confidence score model is documented and includes runtime + spec inputs.
+- AC-16: Confidence score model is documented and includes runtime + spec inputs. [DONE]
 - AC-17: Section-level retrieval is used before raw full-document loading in large workflows.
 - AC-18: Optional local semantic indexing is available in advanced mode.

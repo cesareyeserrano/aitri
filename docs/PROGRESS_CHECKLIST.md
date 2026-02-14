@@ -80,5 +80,5 @@ Check items as they are completed to prevent context drift.
 - [x] Brownfield path mapping implemented (`aitri.config.json`)
 - [x] Managed-go policy checks implemented (dependency/policy drift)
 - [ ] Static insight UI output available (`aitri status --ui`)
-- [ ] Confidence score model integrated into status output
+- [x] Confidence score model integrated into status output
 - [ ] Large-context staged retrieval implemented (section-level + optional semantic index)

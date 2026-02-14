@@ -84,6 +84,9 @@ npm run demo:5min
 - `nextStep`: internal SDLC state (example: `aitri verify`, `ready_for_human_approval`)
 - `recommendedCommand`: exact command to run next (human-friendly)
 - `nextStepMessage` (`status`): short reason for the recommendation
+- `confidence` (`status`): weighted readiness model
+  - `score = (specIntegrity * 0.4) + (runtimeVerification * 0.6)`
+  - includes `components`, `weights`, `level`, and `releaseReady`
 
 ## Guided Modes
 - `aitri draft --guided`
@@ -209,7 +212,7 @@ JSON response includes:
 - blocks `aitri go` when policy fails
 
 ## Planned Next Capabilities
-- Static insight output (`aitri status --ui`) with confidence scoring.
+- Static insight output (`aitri status --ui`) using current confidence scoring.
 - Scalable retrieval path for large-context projects.
 
 Roadmap references:
