@@ -394,9 +394,13 @@ Users need workflow automation.
 
   runNodeOk(["approve", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
   runNodeOk(["discover", "--feature", feature, "--guided", "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["plan", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
 
   const discovery = fs.readFileSync(path.join(tempDir, "docs", "discovery", `${feature}.md`), "utf8");
+  const plan = fs.readFileSync(path.join(tempDir, "docs", "plan", `${feature}.md`), "utf8");
   assert.match(discovery, /- Interview mode:\n- quick/);
+  assert.match(plan, /Discovery interview mode: quick/);
+  assert.match(plan, /Follow-up gate:/);
 });
 
 test("end-to-end workflow supports custom mapped paths", () => {
@@ -625,6 +629,56 @@ test("discover fails fast on invalid discovery depth", () => {
   ], { cwd: tempDir });
   assert.equal(result.status, 1);
   assert.match(result.stdout, /Invalid --discovery-depth value/);
+});
+
+test("plan reflects deep discovery rigor profile when deep mode is selected", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-plan-deep-rigor-"));
+  const feature = "plan-deep-rigor";
+  runNodeOk(["init", "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["draft", "--feature", feature, "--idea", "Deep rigor planning", "--non-interactive", "--yes"], { cwd: tempDir });
+
+  const draftFile = path.join(tempDir, "specs", "drafts", `${feature}.md`);
+  fs.writeFileSync(
+    draftFile,
+    `# AF-SPEC: ${feature}
+
+STATUS: DRAFT
+
+## 1. Context
+Teams need strict execution planning.
+
+## 2. Actors
+- Delivery lead
+
+## 3. Functional Rules (traceable)
+- FR-1: Generate a plan with explicit rigor policy.
+
+## 7. Security Considerations
+- Protect planning artifacts from unauthorized edits.
+
+## 9. Acceptance Criteria
+- AC-1: Given approved input, when planning runs, then rigor policy is explicit.
+`,
+    "utf8"
+  );
+
+  runNodeOk(["approve", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk([
+    "discover",
+    "--feature", feature,
+    "--guided",
+    "--discovery-depth", "deep",
+    "--non-interactive",
+    "--yes"
+  ], { cwd: tempDir });
+  runNodeOk(["plan", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+
+  const plan = fs.readFileSync(path.join(tempDir, "docs", "plan", `${feature}.md`), "utf8");
+  const backlog = fs.readFileSync(path.join(tempDir, "backlog", feature, "backlog.md"), "utf8");
+  const tests = fs.readFileSync(path.join(tempDir, "tests", feature, "tests.md"), "utf8");
+  assert.match(plan, /Discovery interview mode: deep/);
+  assert.match(backlog, /Discovery rigor profile: deep/);
+  assert.match(tests, /Discovery rigor profile: deep/);
 });
 
 test("verify fails with explicit reason when runtime command cannot be detected", () => {

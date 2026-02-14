@@ -96,6 +96,7 @@ npm run demo:5min
   - `deep`: standard + urgency/baseline/no-go prompts.
 - `aitri plan`
   - Blocks if discovery confidence is `Low` or required discovery sections are missing.
+  - Adapts planning rigor from discovery `Interview mode` (`quick|standard|deep`) and propagates it into plan/backlog/tests guidance.
 
 ## Auto-Checkpoint and Resume
 Write commands (`init`, `draft`, `approve`, `discover`, `plan`) create auto-checkpoints in Git repositories.

@@ -115,6 +115,11 @@ aitri discover --feature user-auth --guided --discovery-depth standard
 aitri discover --feature user-auth --guided --discovery-depth deep
 ```
 
+`aitri plan` reads discovery interview mode and emits matching rigor guidance in:
+- `docs/plan/<feature>.md`
+- `backlog/<feature>/backlog.md`
+- `tests/<feature>/tests.md`
+
 Fast full demo path:
 ```bash
 npm run demo:5min
