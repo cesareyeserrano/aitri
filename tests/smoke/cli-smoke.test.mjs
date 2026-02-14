@@ -34,6 +34,7 @@ test("help and version are available", () => {
   assert.match(help.stdout, /Commands:/);
   assert.match(help.stdout, /status/);
   assert.match(help.stdout, /resume/);
+  assert.match(help.stdout, /verify/);
   assert.match(help.stdout, /--non-interactive/);
   assert.match(help.stdout, /--json, -j/);
   assert.match(help.stdout, /--format <type>/);
@@ -225,6 +226,31 @@ Users need to authenticate securely with email and password.
   assert.equal(payload.feature, feature);
   assert.deepEqual(payload.issues, []);
 
+  fs.writeFileSync(
+    path.join(tempDir, "package.json"),
+    `{
+  "name": "aitri-smoke",
+  "private": true,
+  "scripts": {
+    "test:aitri": "node -e \\"process.exit(0)\\""
+  }
+}
+`,
+    "utf8"
+  );
+
+  const verify = runNodeOk([
+    "verify",
+    "--feature",
+    feature,
+    "--non-interactive",
+    "--json"
+  ], { cwd: tempDir });
+  const verifyPayload = JSON.parse(verify.stdout);
+  assert.equal(verifyPayload.ok, true);
+  assert.equal(verifyPayload.feature, feature);
+  assert.match(verifyPayload.command, /npm run test:aitri/);
+
   const handoff = runNodeOk(["handoff", "json"], { cwd: tempDir });
   const handoffPayload = JSON.parse(handoff.stdout);
   assert.equal(handoffPayload.ok, true);
@@ -232,6 +258,123 @@ Users need to authenticate securely with email and password.
 
   const go = runNodeOk(["go", "--non-interactive", "--yes"], { cwd: tempDir });
   assert.match(go.stdout, /Implementation go\/no-go decision: GO/);
+});
+
+test("handoff is blocked when verification evidence is missing", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-missing-verify-"));
+  const feature = "missing-verify";
+
+  runNodeOk(["init", "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["draft", "--feature", feature, "--idea", "Simple auth flow", "--non-interactive", "--yes"], { cwd: tempDir });
+
+  const draftFile = path.join(tempDir, "specs", "drafts", `${feature}.md`);
+  fs.writeFileSync(
+    draftFile,
+    `# AF-SPEC: ${feature}
+
+STATUS: DRAFT
+
+## 1. Context
+Users need sign in.
+
+## 2. Actors
+- End user
+
+## 3. Functional Rules (traceable)
+- FR-1: User signs in with valid credentials.
+
+## 7. Security Considerations
+- Rate limit repeated failures.
+
+## 9. Acceptance Criteria
+- AC-1: Given valid credentials, when login is attempted, then access is granted.
+`,
+    "utf8"
+  );
+
+  runNodeOk(["approve", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["discover", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+  runNodeOk(["plan", "--feature", feature, "--non-interactive", "--yes"], { cwd: tempDir });
+
+  fs.writeFileSync(
+    path.join(tempDir, "backlog", feature, "backlog.md"),
+    `# Backlog: ${feature}
+### US-1
+- Trace: FR-1, AC-1
+`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    path.join(tempDir, "tests", feature, "tests.md"),
+    `# Test Cases: ${feature}
+### TC-1
+- Trace: US-1, FR-1, AC-1
+`,
+    "utf8"
+  );
+
+  runNodeOk(["validate", "--feature", feature, "--non-interactive", "--json"], { cwd: tempDir });
+
+  const handoff = runNode(["handoff", "json"], { cwd: tempDir });
+  assert.equal(handoff.status, 1);
+  const payload = JSON.parse(handoff.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.nextStep, "aitri verify");
+});
+
+test("verify fails with explicit reason when runtime command cannot be detected", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-verify-missing-cmd-"));
+  const feature = "verify-missing-cmd";
+  fs.mkdirSync(path.join(tempDir, "specs", "approved"), { recursive: true });
+  fs.writeFileSync(
+    path.join(tempDir, "specs", "approved", `${feature}.md`),
+    `# AF-SPEC: ${feature}\nSTATUS: APPROVED\n## 3. Functional Rules (traceable)\n- FR-1: Rule.\n`,
+    "utf8"
+  );
+
+  const result = runNode(["verify", "--feature", feature, "--non-interactive", "--json"], { cwd: tempDir });
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.reason, "no_test_command");
+  assert.match(payload.evidenceFile, /docs\/verification/);
+});
+
+test("status requires re-verify when verification evidence is stale", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-verify-stale-"));
+  const feature = "verify-stale";
+
+  fs.mkdirSync(path.join(tempDir, "specs", "approved"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "docs", "discovery"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "docs", "plan"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "docs", "verification"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "backlog", feature), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "tests", feature), { recursive: true });
+
+  fs.writeFileSync(path.join(tempDir, "specs", "approved", `${feature}.md`), `# AF-SPEC: ${feature}\nSTATUS: APPROVED\n## 3. Functional Rules (traceable)\n- FR-1: Rule one.\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "docs", "discovery", `${feature}.md`), `# Discovery: ${feature}\n\n## 2. Discovery Interview Summary (Discovery Persona)\n- Primary users:\n- Users\n- Jobs to be done:\n- Complete key flow\n- Current pain:\n- Unreliable outcomes\n- Constraints (business/technical/compliance):\n- Basic compliance\n- Dependencies:\n- Internal service\n- Success metrics:\n- Success rate > 95%\n- Assumptions:\n- Inputs remain stable\n\n## 3. Scope\n### In scope\n- Core flow\n\n### Out of scope\n- Extras\n\n## 9. Discovery Confidence\n- Confidence:\n- Medium\n\n- Reason:\n- Baseline inputs present\n\n- Evidence gaps:\n- Latency SLO pending\n\n- Handoff decision:\n- Ready for Product/Architecture\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "docs", "plan", `${feature}.md`), `# Plan: ${feature}\n\n## 4. Product Review (Product Persona)\n### Business value\n- Reduce failure rate in core flow.\n\n### Success metric\n- Success rate above 95%.\n\n### Assumptions to validate\n- User input profile stays stable.\n\n## 5. Architecture (Architect Persona)\n### Components\n- API gateway\n- Service layer\n\n### Data flow\n- Request to service and response back to caller.\n\n### Key decisions\n- Explicit contracts between layers.\n\n### Risks & mitigations\n- Retry with bounded backoff for dependency failures.\n\n### Observability (logs/metrics/tracing)\n- Logs, latency metrics, and trace IDs.\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "backlog", feature, "backlog.md"), `# Backlog: ${feature}\n### US-1\n- Trace: FR-1, AC-1\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "tests", feature, "tests.md"), `# Test Cases: ${feature}\n### TC-1\n- Trace: US-1, FR-1, AC-1\n`, "utf8");
+
+  fs.writeFileSync(
+    path.join(tempDir, "docs", "verification", `${feature}.json`),
+    JSON.stringify({
+      ok: true,
+      feature,
+      command: "npm run test:aitri",
+      exitCode: 0,
+      startedAt: "2020-01-01T00:00:00.000Z",
+      finishedAt: "2020-01-01T00:00:01.000Z",
+      reason: "passed"
+    }, null, 2),
+    "utf8"
+  );
+
+  const status = runNodeOk(["status", "--json"], { cwd: tempDir });
+  const payload = JSON.parse(status.stdout);
+  assert.equal(payload.verification.status, "stale");
+  assert.equal(payload.nextStep, "aitri verify");
 });
 
 test("plan blocks when discovery confidence is low", () => {

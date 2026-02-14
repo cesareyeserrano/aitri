@@ -53,21 +53,20 @@ Status: COMPLETE (baseline)
 - zero-to-first-run onboarding guide added (global/project/skill)
 
 ### Phase F: Strategic Feedback Intake (February 2026)
-Status: ACCEPTED / PLANNED
-- runtime verification loop accepted (`aitri verify`)
+Status: IN PROGRESS
+- runtime verification loop delivered (`aitri verify`)
 - brownfield mapping accepted (`aitri.config.json`)
 - managed-go policy checks accepted (deterministic scan model)
 - static insight UI accepted (`status --ui` + confidence score)
 - scalable retrieval accepted as staged work (metadata first, optional semantic index later)
 
 ## Next Targets (v1.0.x)
-1. Deliver runtime verification loop (`aitri verify`) and wire it into handoff/go gates.
-2. Add brownfield semantic path mapping via `aitri.config.json`.
-3. Introduce managed-go policy checks (dependency/policy drift detection).
-4. Publish `status --ui` static insight view with confidence scoring model.
-5. Deepen discovery-to-plan signal quality and reduce scaffold noise.
-6. Split docs into default quick path vs advanced operations path.
-7. Stage scalable retrieval for large contexts (section-level first, optional semantic index later).
+1. Add brownfield semantic path mapping via `aitri.config.json`.
+2. Introduce managed-go policy checks (dependency/policy drift detection).
+3. Publish `status --ui` static insight view with confidence scoring model.
+4. Deepen discovery-to-plan signal quality and reduce scaffold noise.
+5. Split docs into default quick path vs advanced operations path.
+6. Stage scalable retrieval for large contexts (section-level first, optional semantic index later).
 
 Backlog source of truth:
 - `backlog/aitri-core/backlog.md`

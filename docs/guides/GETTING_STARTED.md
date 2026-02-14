@@ -46,7 +46,7 @@ aitri help
 Expected:
 - `which aitri` points to your global npm bin path
 - `aitri --version` prints the installed version
-- `aitri help` shows core workflow commands including `resume/handoff/go`
+- `aitri help` shows core workflow commands including `resume/verify/handoff/go`
 
 ## 3) Use Aitri in a Specific Project
 
@@ -78,11 +78,19 @@ aitri approve --feature user-auth --non-interactive --yes
 aitri discover --feature user-auth --non-interactive --yes
 aitri plan --feature user-auth --non-interactive --yes
 aitri validate --feature user-auth --non-interactive --format json
+aitri verify --feature user-auth --non-interactive --format json
 ```
 
 Expected:
 - `validate` exits with code `0`
 - JSON output reports no unresolved gaps for the generated baseline
+- `verify` exits with code `0` when a runtime test command exists
+
+Runtime verification command detection order:
+1. `package.json` script `test:aitri`
+2. `package.json` script `test:smoke`
+3. `package.json` script `test`
+4. `--verify-cmd "<command>"` to force an explicit command
 
 Optional guided draft (interactive):
 ```bash

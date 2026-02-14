@@ -53,7 +53,18 @@ if [ -f "$TESTS_FILE" ]; then
   perl -0pi -e 's/US-\?/US-1, US-2/g; s/FR-\?/FR-1, FR-2/g; s/AC-\?/AC-1/g' "$TESTS_FILE"
 fi
 
+cat > package.json <<'JSON'
+{
+  "name": "aitri-demo",
+  "private": true,
+  "scripts": {
+    "test:aitri": "node -e \"process.exit(0)\""
+  }
+}
+JSON
+
 run "${AITRI_CMD[@]}" validate --feature "$FEATURE" --format json
+run "${AITRI_CMD[@]}" verify --feature "$FEATURE" --format json
 run "${AITRI_CMD[@]}" handoff
 run "${AITRI_CMD[@]}" resume --non-interactive --yes
 

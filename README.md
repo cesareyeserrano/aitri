@@ -42,6 +42,7 @@ aitri approve --feature user-login --non-interactive --yes
 aitri discover --feature user-login --non-interactive --yes
 aitri plan --feature user-login --non-interactive --yes
 aitri validate --feature user-login --format json
+aitri verify --feature user-login --format json
 ```
 
 ### 4) Run the 5-minute reproducible demo
@@ -57,6 +58,7 @@ npm run demo:5min
 | `aitri approve` | Run gates and move draft to approved spec |
 | `aitri discover [--guided]` | Create discovery artifact + backlog/tests scaffolding |
 | `aitri plan` | Create plan artifact + structured backlog/tests templates |
+| `aitri verify` | Execute runtime verification suite and persist evidence |
 | `aitri validate` | Validate artifacts, placeholders, and coverage links |
 | `aitri status` | Show state and next recommended step |
 | `aitri resume` | Resolve checkpoint decision and print deterministic next command |
@@ -66,12 +68,13 @@ npm run demo:5min
 
 ## Output Modes and Automation Flags
 - `json` shorthand: `aitri status json`, `aitri resume json`
-- `--json` or `-j`: machine-readable output (`status`, `validate`)
+- `--json` or `-j`: machine-readable output (`status`, `verify`, `validate`)
 - `--format json`: explicit format mode
 - `--non-interactive`: disable prompts
 - `--yes`: auto-approve write plans
 - `--feature <name>`: explicit feature target
 - `--idea "<text>"`: non-interactive draft input
+- `--verify-cmd "<command>"`: explicit runtime verification command
 - `--no-checkpoint`: disable auto-checkpoint for one command
 
 ## Guided Modes
@@ -156,8 +159,14 @@ JSON response includes:
 - `gapSummary`
   - includes `persona` gap category when persona-required sections are unresolved
 
+`aitri verify` checks:
+- executes runtime tests using:
+  - `--verify-cmd` (if provided), or
+  - `package.json` scripts (`test:aitri`, then `test:smoke`, then `test`)
+- writes evidence to `docs/verification/<feature>.json`
+- gates `handoff`/`go` through `status` (`nextStep = aitri verify` when missing/failing/stale)
+
 ## Planned Next Capabilities
-- Runtime verification loop (`aitri verify`) with handoff/go gating.
 - Brownfield project mapping via `aitri.config.json`.
 - Managed implementation policy checks after `go`.
 - Static insight output (`aitri status --ui`) with confidence scoring.

@@ -30,6 +30,7 @@ Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory hum
 - `aitri approve`
 - `aitri discover [--guided]`
 - `aitri plan`
+- `aitri verify`
 - `aitri validate`
 - `aitri status`
 - `aitri resume`
@@ -40,7 +41,7 @@ Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory hum
 - `--non-interactive`
 - `--yes` for write commands
 - `--feature <name>` where required
-- `json`, `-j`, or `--format json` for `status` and `validate`
+- `json`, `-j`, or `--format json` for `status`, `verify`, and `validate`
 
 ## Checkpoint Behavior
 Write commands create auto-checkpoints by default in git repositories (retained max: 10).

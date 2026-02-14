@@ -29,6 +29,7 @@ Use Aitri as the execution guardrail for spec-driven SDLC work with explicit hum
 - `aitri approve`
 - `aitri discover [--guided]`
 - `aitri plan`
+- `aitri verify`
 - `aitri validate`
 - `aitri status`
 - `aitri resume`
@@ -39,7 +40,7 @@ Use Aitri as the execution guardrail for spec-driven SDLC work with explicit hum
 - Use `--non-interactive`
 - Use `--yes` for write commands
 - Use `--feature <name>` when required
-- Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `validate`)
+- Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `verify`, `validate`)
 
 ## Default Workflow
 1. `aitri resume`
@@ -51,7 +52,8 @@ Use Aitri as the execution guardrail for spec-driven SDLC work with explicit hum
 7. `aitri plan`
 8. Refine artifacts with personas
 9. `aitri validate`
-10. Human approval before implementation/deployment assistance
+10. `aitri verify`
+11. Human approval before implementation/deployment assistance
 
 ## Persona Alignment
 Use these lenses while refining artifacts:

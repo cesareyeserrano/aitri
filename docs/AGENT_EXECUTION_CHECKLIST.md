@@ -32,8 +32,9 @@ Before any substantial action:
 7. `aitri plan`
 8. Refine artifacts using personas
 9. `aitri validate`
-10. Human approval before implementation
-11. Human approval before local/production deployment assistance
+10. `aitri verify`
+11. Human approval before implementation
+12. Human approval before local/production deployment assistance
 
 ## Mandatory Stop Conditions
 Agent must stop and ask for direction if:
@@ -67,6 +68,7 @@ Persona invocation is iterative (not one-time):
 5. FR/US/TC structure exists
 6. minimum coverage mapping is satisfied
 7. persona gates are satisfied for Discovery/Product/Architect outputs
+8. runtime verification evidence exists and is passing (not stale)
 
 ## Human Reporting Contract
 After each command, the agent reports:

@@ -20,6 +20,7 @@ Manual checkpoints are still allowed at each major phase:
 3. `discover`
 4. `plan`
 5. `validate`
+6. `verify`
 
 Recommended command:
 ```bash
@@ -59,6 +60,7 @@ Typical mapping:
 - `aitri discover` -> approved spec exists, discovery missing
 - `aitri plan` -> discovery exists, plan missing
 - `aitri validate` -> artifacts exist but validation pending/failing
+- `aitri verify` -> validation passed but runtime verification missing/failing/stale
 - `ready_for_human_approval` -> artifacts and validation baseline complete
 
 ## Abrupt Shutdown Recovery

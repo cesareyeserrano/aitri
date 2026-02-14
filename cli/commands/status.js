@@ -159,12 +159,13 @@ function collectValidationIssues(spec, backlog, tests, discovery = "", plan = ""
   return issues;
 }
 
-function computeNextStep({ missingDirs, approvedSpecFound, discoveryExists, planExists, validateOk }) {
+function computeNextStep({ missingDirs, approvedSpecFound, discoveryExists, planExists, validateOk, verifyOk }) {
   if (missingDirs.length > 0) return "aitri init";
   if (!approvedSpecFound) return "aitri draft";
   if (!discoveryExists) return "aitri discover";
   if (!planExists) return "aitri plan";
   if (!validateOk) return "aitri validate";
+  if (!verifyOk) return "aitri verify";
   return "ready_for_human_approval";
 }
 
@@ -230,6 +231,71 @@ function detectCheckpointState(root) {
   };
 }
 
+function safeStatMs(file) {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function detectVerificationState(root, feature) {
+  const verificationFile = path.join(root, "docs", "verification", `${feature}.json`);
+  if (!exists(verificationFile)) {
+    return {
+      required: true,
+      found: false,
+      ok: false,
+      stale: false,
+      status: "missing",
+      file: path.relative(root, verificationFile),
+      reason: "no_verification_evidence"
+    };
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(fs.readFileSync(verificationFile, "utf8"));
+  } catch {
+    return {
+      required: true,
+      found: true,
+      ok: false,
+      stale: false,
+      status: "invalid",
+      file: path.relative(root, verificationFile),
+      reason: "invalid_verification_evidence"
+    };
+  }
+
+  const inputs = [
+    path.join(root, "specs", "approved", `${feature}.md`),
+    path.join(root, "docs", "discovery", `${feature}.md`),
+    path.join(root, "docs", "plan", `${feature}.md`),
+    path.join(root, "backlog", feature, "backlog.md"),
+    path.join(root, "tests", feature, "tests.md")
+  ];
+  const latestInputMs = Math.max(0, ...inputs.map((file) => safeStatMs(file)));
+  const verifiedAtMs = Number.isFinite(Date.parse(payload.finishedAt || ""))
+    ? Date.parse(payload.finishedAt)
+    : safeStatMs(verificationFile);
+  const stale = latestInputMs > verifiedAtMs;
+  const ok = payload.ok === true && !stale;
+
+  return {
+    required: true,
+    found: true,
+    ok,
+    stale,
+    status: stale ? "stale" : (payload.ok ? "passed" : "failed"),
+    file: path.relative(root, verificationFile),
+    command: payload.command || null,
+    exitCode: typeof payload.exitCode === "number" ? payload.exitCode : null,
+    finishedAt: payload.finishedAt || null,
+    reason: stale ? "verification_stale" : (payload.reason || null)
+  };
+}
+
 export function getStatusReport(options = {}) {
   const { root = process.cwd() } = options;
 
@@ -260,6 +326,15 @@ export function getStatusReport(options = {}) {
     validation: {
       ok: false,
       issues: []
+    },
+    verification: {
+      required: true,
+      found: false,
+      ok: false,
+      stale: false,
+      status: "missing",
+      file: null,
+      reason: "no_feature_context"
     },
     checkpoint: {
       recommended: true,
@@ -309,12 +384,15 @@ export function getStatusReport(options = {}) {
       report.validation.ok = false;
     }
 
+    report.verification = detectVerificationState(root, feature);
+
     report.nextStep = computeNextStep({
       missingDirs,
       approvedSpecFound: true,
       discoveryExists: report.artifacts.discovery,
       planExists: report.artifacts.plan,
-      validateOk: report.validation.ok
+      validateOk: report.validation.ok,
+      verifyOk: report.verification.ok
     });
   } else {
     report.nextStep = computeNextStep({
@@ -322,7 +400,8 @@ export function getStatusReport(options = {}) {
       approvedSpecFound: false,
       discoveryExists: false,
       planExists: false,
-      validateOk: false
+      validateOk: false,
+      verifyOk: false
     });
   }
 
@@ -381,6 +460,16 @@ export function runStatus(options = {}) {
     console.log("✔ Validation likely passed");
   } else {
     console.log("✖ Validation not passed");
+  }
+
+  if (report.verification.ok) {
+    console.log("✔ Runtime verification passed");
+  } else if (report.verification.status === "stale") {
+    console.log("✖ Runtime verification is stale");
+  } else if (report.verification.status === "failed") {
+    console.log("✖ Runtime verification failed");
+  } else {
+    console.log("✖ Runtime verification missing");
   }
 
   console.log("\nNext recommended step:");

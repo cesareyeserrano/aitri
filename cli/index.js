@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getStatusReport, runStatus } from "./commands/status.js";
 
@@ -48,6 +48,7 @@ function parseArgs(argv) {
     yes: false,
     idea: null,
     feature: null,
+    verifyCmd: null,
     positional: []
   };
 
@@ -78,6 +79,11 @@ function parseArgs(argv) {
       i += 1;
     } else if (arg.startsWith("--feature=")) {
       parsed.feature = arg.slice("--feature=".length).trim();
+    } else if (arg === "--verify-cmd") {
+      parsed.verifyCmd = (argv[i + 1] || "").trim();
+      i += 1;
+    } else if (arg.startsWith("--verify-cmd=")) {
+      parsed.verifyCmd = arg.slice("--verify-cmd=".length).trim();
     } else {
       parsed.positional.push(arg);
     }
@@ -346,6 +352,85 @@ function hasMeaningfulContent(content) {
   });
 }
 
+function tailLines(content, maxLines = 40) {
+  const lines = String(content || "").split("\n");
+  return lines.slice(Math.max(0, lines.length - maxLines)).join("\n").trim();
+}
+
+function detectVerificationCommand(root) {
+  const packageJson = path.join(root, "package.json");
+  if (fs.existsSync(packageJson)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJson, "utf8"));
+      const scripts = pkg && pkg.scripts ? pkg.scripts : {};
+      if (scripts["test:aitri"]) return { command: "npm run test:aitri", source: "package.json:scripts.test:aitri" };
+      if (scripts["test:smoke"]) return { command: "npm run test:smoke", source: "package.json:scripts.test:smoke" };
+      if (scripts.test) return { command: "npm test", source: "package.json:scripts.test" };
+    } catch {
+      return { command: null, source: "package.json:invalid" };
+    }
+  }
+
+  if (fs.existsSync(path.join(root, "pytest.ini")) || fs.existsSync(path.join(root, "pyproject.toml"))) {
+    return { command: "pytest -q", source: "python:pytest" };
+  }
+  if (fs.existsSync(path.join(root, "go.mod"))) {
+    return { command: "go test ./...", source: "go:test" };
+  }
+  return { command: null, source: "none" };
+}
+
+function resolveVerifyFeature(options, root) {
+  const fromArgs = normalizeFeatureName(options.feature || options.positional[0]);
+  if (fromArgs) return fromArgs;
+  const report = getStatusReport({ root });
+  return report.approvedSpec.feature || null;
+}
+
+function runVerification({ root, feature, verifyCmd }) {
+  const detected = detectVerificationCommand(root);
+  const command = verifyCmd || detected.command;
+  const source = verifyCmd ? "flag:verify-cmd" : detected.source;
+  const startedAt = new Date();
+  const startMs = Date.now();
+
+  if (!command) {
+    return {
+      ok: false,
+      feature,
+      command: null,
+      commandSource: source,
+      exitCode: 1,
+      durationMs: Date.now() - startMs,
+      startedAt: startedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      stdoutTail: "",
+      stderrTail: "No runtime test command detected. Configure package scripts or pass --verify-cmd.",
+      reason: "no_test_command"
+    };
+  }
+
+  const run = spawnSync(command, {
+    cwd: root,
+    encoding: "utf8",
+    shell: true
+  });
+
+  return {
+    ok: run.status === 0,
+    feature,
+    command,
+    commandSource: source,
+    exitCode: run.status == null ? 1 : run.status,
+    durationMs: Date.now() - startMs,
+    startedAt: startedAt.toISOString(),
+    finishedAt: new Date().toISOString(),
+    stdoutTail: tailLines(run.stdout || ""),
+    stderrTail: tailLines(run.stderr || ""),
+    reason: run.status === 0 ? "passed" : "verification_failed"
+  };
+}
+
 function readDiscoveryField(discovery, label) {
   const pattern = new RegExp(`-\\s*${escapeRegExp(label)}:\\s*\\n-\\s*(.+)`, "i");
   const match = String(discovery).match(pattern);
@@ -425,6 +510,7 @@ Commands:
   approve    Approve a draft spec (runs gates and moves to specs/approved)
   discover   Generate discovery + artifact scaffolding from an approved spec (use --guided for discovery interview)
   plan       Generate plan doc + traceable backlog/tests from an approved spec
+  verify     Execute runtime verification suite and persist machine-readable evidence
   validate   Validate traceability placeholders are resolved (FR/AC/US/TC)
   status     Show project state and next recommended step
   handoff    Summarize validated SDLC artifacts and require explicit go/no-go decision
@@ -435,6 +521,7 @@ Options:
   --yes, -y              Auto-approve plan prompts where supported
   --feature, -f <name>   Feature name for non-interactive runs
   --idea <text>          Idea text for non-interactive draft
+  --verify-cmd <cmd>     Explicit runtime verification command (used by \`aitri verify\`)
   --non-interactive      Do not prompt; fail if required args are missing
   --json, -j             Output machine-readable JSON (status, validate)
   --format <type>        Output format (json supported)
@@ -1133,6 +1220,67 @@ if (cmd === "plan") {
     feature
   }));
   process.exit(EXIT_OK);
+}
+
+if (cmd === "verify") {
+  const verifyPositional = [...options.positional];
+  const jsonOutput = wantsJson(options, verifyPositional);
+  if (verifyPositional.length > 0 && verifyPositional[verifyPositional.length - 1].toLowerCase() === "json") {
+    verifyPositional.pop();
+  }
+
+  const feature = resolveVerifyFeature({ ...options, positional: verifyPositional }, process.cwd());
+  if (!feature) {
+    const msg = "Feature name is required. Use --feature <name> or ensure an approved spec exists.";
+    if (jsonOutput) {
+      console.log(JSON.stringify({
+        ok: false,
+        feature: null,
+        issues: [msg]
+      }, null, 2));
+    } else {
+      console.log(msg);
+    }
+    process.exit(EXIT_ERROR);
+  }
+
+  const result = runVerification({
+    root: process.cwd(),
+    feature,
+    verifyCmd: options.verifyCmd
+  });
+
+  const evidenceDir = path.join(process.cwd(), "docs", "verification");
+  const evidenceFile = path.join(evidenceDir, `${feature}.json`);
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  fs.writeFileSync(evidenceFile, JSON.stringify({
+    ...result,
+    evidenceFile: path.relative(process.cwd(), evidenceFile)
+  }, null, 2), "utf8");
+
+  const payload = {
+    ...result,
+    evidenceFile: path.relative(process.cwd(), evidenceFile)
+  };
+
+  if (jsonOutput) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else if (payload.ok) {
+    console.log("VERIFICATION PASSED ✅");
+    console.log(`- Feature: ${payload.feature}`);
+    console.log(`- Command: ${payload.command}`);
+    console.log(`- Evidence: ${payload.evidenceFile}`);
+    if (payload.stdoutTail) console.log(`- Output (tail):\n${payload.stdoutTail}`);
+  } else {
+    console.log("VERIFICATION FAILED ❌");
+    console.log(`- Feature: ${payload.feature}`);
+    console.log(`- Command: ${payload.command || "(not detected)"}`);
+    console.log(`- Evidence: ${payload.evidenceFile}`);
+    console.log(`- Reason: ${payload.reason}`);
+    if (payload.stderrTail) console.log(`- Error (tail):\n${payload.stderrTail}`);
+  }
+
+  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
 }
 
 if (cmd === "validate") {

@@ -52,11 +52,11 @@
 - Objective:
   - Close the gap between documented traceability and executable behavior.
 
-### US-9
+### US-9 [DONE]
 - As a maintainer, I want `aitri verify` to execute project tests with deterministic output, so that runtime evidence becomes part of quality gates.
 - Trace: FR-5, AC-9
 
-### US-10
+### US-10 [DONE]
 - As a reviewer, I want handoff/go to require successful verification evidence, so that implementation cannot progress on unverified runtime behavior.
 - Trace: FR-5, AC-10
 
@@ -117,8 +117,8 @@
 - AC-6: Resume shortcut exists and maps to checkpoint decision + next step deterministically.
 - AC-7: Demo script runs end-to-end in a clean repo in <= 5 minutes. [DONE]
 - AC-8: README and docs separate "default quick path" from "advanced operations path".
-- AC-9: `aitri verify` executes runtime checks and returns machine-readable verification evidence.
-- AC-10: `handoff`/`go` can be blocked when runtime verification is missing or failing.
+- AC-9: `aitri verify` executes runtime checks and returns machine-readable verification evidence. [DONE]
+- AC-10: `handoff`/`go` can be blocked when runtime verification is missing or failing. [DONE]
 - AC-11: `aitri.config.json` path mapping supports specs/backlog/tests/docs for brownfield projects.
 - AC-12: Invalid mapping configuration fails fast with explicit diagnostics and safe defaults.
 - AC-13: Managed-go mode enforces deterministic policy checks before progression.

@@ -50,6 +50,7 @@ OpenCode skill locations:
 ## Runtime Expectations
 - Start with `aitri resume` (or `aitri resume json` for automation)
 - Use non-interactive flags in automation
+- Run `aitri verify` before handoff/go decisions
 - Respect gate approvals for all write/destructive actions
 - Report each step and next action
 
@@ -59,6 +60,7 @@ Run:
 npm run test:smoke
 node cli/index.js help
 node cli/index.js resume json
+node cli/index.js verify --feature <feature> --format json
 ```
 
 ## Future Compatibility
