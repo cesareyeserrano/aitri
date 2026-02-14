@@ -4,11 +4,11 @@
 - Objective:
   - Reduce dependence on agent discipline by enforcing persona contracts through CLI behavior.
 
-### US-1
+### US-1 [DONE]
 - As a maintainer, I want persona-required sections validated in generated artifacts, so that outputs are consistent without manual policing.
 - Trace: FR-1, AC-1
 
-### US-2
+### US-2 [DONE]
 - As a maintainer, I want missing critical persona outputs to block progression to next command, so that weak artifacts do not pass silently.
 - Trace: FR-1, AC-2
 
@@ -49,8 +49,8 @@
 - Trace: FR-4, AC-8
 
 ## Acceptance Criteria (Next Improvement Scope)
-- AC-1: Persona-required fields are machine-checked for at least Discovery/Product/Architect outputs.
-- AC-2: `plan` blocks when critical discovery confidence is Low or required sections are missing.
+- AC-1: Persona-required fields are machine-checked for at least Discovery/Product/Architect outputs. [DONE]
+- AC-2: `plan` blocks when critical discovery confidence is Low or required sections are missing. [DONE]
 - AC-3: Guided discovery captures users, JTBD, constraints, dependencies, success metrics, assumptions, and confidence in all flows.
 - AC-4: Generated plan/backlog/tests contain fewer unresolved placeholders and stronger traceable defaults.
 - AC-5: Explicit handoff command(s) exist (`aitri handoff` and/or `aitri go`) with clear no-go/go behavior.

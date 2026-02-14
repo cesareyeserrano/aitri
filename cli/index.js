@@ -304,6 +304,106 @@ async function collectDiscoveryInterview(options) {
   };
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractSection(content, heading) {
+  const pattern = new RegExp(`${escapeRegExp(heading)}([\\s\\S]*?)(?=\\n##\\s+\\d+\\.|$)`, "i");
+  const match = String(content).match(pattern);
+  return match ? match[1] : "";
+}
+
+function extractSubsection(content, heading) {
+  const pattern = new RegExp(`${escapeRegExp(heading)}([\\s\\S]*?)(?=\\n###\\s+|$)`, "i");
+  const match = String(content).match(pattern);
+  return match ? match[1] : "";
+}
+
+function replaceSection(content, heading, newBody) {
+  const pattern = new RegExp(`${escapeRegExp(heading)}([\\s\\S]*?)(?=\\n##\\s+\\d+\\.|$)`, "i");
+  return String(content).replace(pattern, `${heading}\n${newBody.trim()}\n`);
+}
+
+function hasMeaningfulContent(content) {
+  const lines = String(content)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines.some((line) => {
+    if (/^###\s+/.test(line)) return false;
+    const cleaned = line
+      .replace(/^[-*]\s*/, "")
+      .replace(/^\d+\)\s*/, "")
+      .replace(/^\d+\.\s*/, "")
+      .trim();
+    if (!cleaned || cleaned === "-") return false;
+    if (cleaned.length < 6) return false;
+    if (/^<.*>$/.test(cleaned)) return false;
+    if (/\b(TBD|Not specified|pending|to be refined|to be confirmed)\b/i.test(cleaned)) return false;
+    return true;
+  });
+}
+
+function readDiscoveryField(discovery, label) {
+  const pattern = new RegExp(`-\\s*${escapeRegExp(label)}:\\s*\\n-\\s*(.+)`, "i");
+  const match = String(discovery).match(pattern);
+  return match ? match[1].trim() : "";
+}
+
+function collectPersonaValidationIssues({ discoveryContent, planContent }) {
+  const issues = [];
+
+  if (discoveryContent) {
+    const discoveryInterview = extractSection(discoveryContent, "## 2. Discovery Interview Summary (Discovery Persona)");
+    if (!discoveryInterview) {
+      issues.push("Persona gate: Discovery section is missing `## 2. Discovery Interview Summary (Discovery Persona)`.");
+    } else if (!hasMeaningfulContent(discoveryInterview)) {
+      issues.push("Persona gate: Discovery interview summary is unresolved.");
+    }
+
+    const discoveryConfidence = extractSection(discoveryContent, "## 9. Discovery Confidence");
+    if (!discoveryConfidence) {
+      issues.push("Persona gate: Discovery section is missing `## 9. Discovery Confidence`.");
+    } else if (/- Confidence:\s*\n-\s*Low\b/i.test(discoveryConfidence)) {
+      issues.push("Persona gate: Discovery confidence is Low. Resolve evidence gaps before handoff.");
+    }
+  }
+
+  if (planContent) {
+    const product = extractSection(planContent, "## 4. Product Review (Product Persona)");
+    if (!product) {
+      issues.push("Persona gate: Plan is missing `## 4. Product Review (Product Persona)`.");
+    } else {
+      const businessValue = extractSubsection(product, "### Business value");
+      const successMetric = extractSubsection(product, "### Success metric");
+      const assumptions = extractSubsection(product, "### Assumptions to validate");
+      if (!hasMeaningfulContent(businessValue)) issues.push("Persona gate: Product `Business value` is unresolved.");
+      if (!hasMeaningfulContent(successMetric)) issues.push("Persona gate: Product `Success metric` is unresolved.");
+      if (!hasMeaningfulContent(assumptions)) issues.push("Persona gate: Product `Assumptions to validate` is unresolved.");
+    }
+
+    const architecture = extractSection(planContent, "## 5. Architecture (Architect Persona)");
+    if (!architecture) {
+      issues.push("Persona gate: Plan is missing `## 5. Architecture (Architect Persona)`.");
+    } else {
+      const components = extractSubsection(architecture, "### Components");
+      const dataFlow = extractSubsection(architecture, "### Data flow");
+      const keyDecisions = extractSubsection(architecture, "### Key decisions");
+      const risks = extractSubsection(architecture, "### Risks & mitigations");
+      const observability = extractSubsection(architecture, "### Observability (logs/metrics/tracing)");
+      if (!hasMeaningfulContent(components)) issues.push("Persona gate: Architect `Components` is unresolved.");
+      if (!hasMeaningfulContent(dataFlow)) issues.push("Persona gate: Architect `Data flow` is unresolved.");
+      if (!hasMeaningfulContent(keyDecisions)) issues.push("Persona gate: Architect `Key decisions` is unresolved.");
+      if (!hasMeaningfulContent(risks)) issues.push("Persona gate: Architect `Risks & mitigations` is unresolved.");
+      if (!hasMeaningfulContent(observability)) issues.push("Persona gate: Architect `Observability` is unresolved.");
+    }
+  }
+
+  return issues;
+}
+
 const cmd = process.argv[2];
 const options = parseArgs(process.argv.slice(3));
 
@@ -862,6 +962,7 @@ if (cmd === "plan") {
   fs.mkdirSync(path.dirname(testsFile), { recursive: true });
 
   const approvedSpec = fs.readFileSync(approvedFile, "utf8");
+  const discoveryDoc = fs.readFileSync(discoveryFile, "utf8");
   let planDoc = fs.readFileSync(templatePath, "utf8");
 
   // Inject feature name and include approved spec for traceability
@@ -869,6 +970,78 @@ if (cmd === "plan") {
   planDoc = planDoc.replace(
     "## 1. Intent (from approved spec)",
     `## 1. Intent (from approved spec)\n\n---\n\n${approvedSpec}\n\n---\n`
+  );
+
+  const frList = [...approvedSpec.matchAll(/- FR-\d+:\s*(.+)/g)].map((m) => m[1].trim());
+  const coreRule = frList[0] || "Deliver the approved feature scope with traceability.";
+  const supportingRule = frList[1] || coreRule;
+  const discoveryPain = readDiscoveryField(discoveryDoc, "Current pain") || "Pain evidence must be validated in discovery refinement.";
+  const discoveryMetric = readDiscoveryField(discoveryDoc, "Success metrics") || "Define baseline and target KPI before implementation.";
+  const discoveryAssumptions = readDiscoveryField(discoveryDoc, "Assumptions") || "Explicit assumptions pending validation with product and architecture.";
+  const discoveryDependencies = readDiscoveryField(discoveryDoc, "Dependencies") || "External dependencies to be confirmed.";
+  const discoveryConstraints = readDiscoveryField(discoveryDoc, "Constraints (business/technical/compliance)") || "Constraints to be confirmed.";
+
+  planDoc = replaceSection(
+    planDoc,
+    "## 2. Discovery Review (Discovery Persona)",
+    `### Problem framing
+- ${discoveryPain}
+- Core rule to preserve: ${coreRule}
+
+### Constraints and dependencies
+- Constraints: ${discoveryConstraints}
+- Dependencies: ${discoveryDependencies}
+
+### Success metrics
+- ${discoveryMetric}
+
+### Key assumptions
+- ${discoveryAssumptions}`
+  );
+
+  planDoc = replaceSection(
+    planDoc,
+    "## 4. Product Review (Product Persona)",
+    `### Business value
+- Address user pain by enforcing: ${coreRule}
+- Secondary value from supporting rule: ${supportingRule}
+
+### Success metric
+- Primary KPI: ${discoveryMetric}
+- Ship only if metric has baseline and target.
+
+### Assumptions to validate
+- ${discoveryAssumptions}
+- Validate dependency and constraint impact before implementation start.`
+  );
+
+  planDoc = replaceSection(
+    planDoc,
+    "## 5. Architecture (Architect Persona)",
+    `### Components
+- Client or entry interface for ${feature}.
+- Application service implementing FR traceability.
+- Persistence/integration boundary for state and external dependencies.
+
+### Data flow
+- Request enters through interface layer.
+- Application service validates input, enforces rules, and coordinates dependencies.
+- Results are persisted and returned with deterministic error handling.
+
+### Key decisions
+- Preserve spec traceability from FR/AC to backlog/tests.
+- Keep interfaces explicit to reduce hidden coupling.
+- Prefer observable failure modes over silent degradation.
+
+### Risks & mitigations
+- Dependency instability risk: add timeouts/retries and fallback behavior.
+- Constraint mismatch risk: validate assumptions before rollout.
+- Scope drift risk: block changes outside approved spec.
+
+### Observability (logs/metrics/tracing)
+- Logs: authentication and error events with correlation IDs.
+- Metrics: success rate, latency, and failure-rate by endpoint/use case.
+- Tracing: end-to-end request trace across internal and external calls.`
   );
 
   fs.writeFileSync(outPlanFile, planDoc, "utf8");
@@ -994,12 +1167,15 @@ if (cmd === "validate") {
   const approvedFile = path.join(process.cwd(), "specs", "approved", `${feature}.md`);
   const backlogFile = path.join(process.cwd(), "backlog", feature, "backlog.md");
   const testsFile = path.join(process.cwd(), "tests", feature, "tests.md");
+  const discoveryFile = path.join(process.cwd(), "docs", "discovery", `${feature}.md`);
+  const planFile = path.join(process.cwd(), "docs", "plan", `${feature}.md`);
 
   const issues = [];
   const gapTypes = {
     missing_artifact: [],
     structure: [],
     placeholder: [],
+    persona: [],
     coverage_fr_us: [],
     coverage_fr_tc: [],
     coverage_us_tc: []
@@ -1014,7 +1190,9 @@ if (cmd === "validate") {
     files: {
       spec: path.relative(process.cwd(), approvedFile),
       backlog: path.relative(process.cwd(), backlogFile),
-      tests: path.relative(process.cwd(), testsFile)
+      tests: path.relative(process.cwd(), testsFile),
+      discovery: path.relative(process.cwd(), discoveryFile),
+      plan: path.relative(process.cwd(), planFile)
     },
     coverage: {
       specFr: 0,
@@ -1122,6 +1300,14 @@ if (cmd === "validate") {
   result.coverage.testsFr = testsFRs.size;
   result.coverage.backlogUs = new Set(backlogUS).size;
   result.coverage.testsUs = testsUS.size;
+
+  if (fs.existsSync(discoveryFile) && fs.existsSync(planFile)) {
+    const discoveryContent = fs.readFileSync(discoveryFile, "utf8");
+    const planContent = fs.readFileSync(planFile, "utf8");
+    const personaIssues = collectPersonaValidationIssues({ discoveryContent, planContent });
+    personaIssues.forEach((issue) => addIssue("persona", issue));
+  }
+
   result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
 
   if (issues.length > 0) {

@@ -304,6 +304,136 @@ Context.
   assert.match(result.stdout, /PLAN BLOCKED: Discovery confidence is Low/);
 });
 
+test("validate and handoff block when persona outputs are unresolved", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-persona-gate-"));
+  const feature = "persona-gate";
+
+  fs.mkdirSync(path.join(tempDir, "specs", "approved"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "backlog", feature), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "tests", feature), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "docs", "discovery"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "docs", "plan"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "specs", "drafts"), { recursive: true });
+
+  fs.writeFileSync(
+    path.join(tempDir, "specs", "approved", `${feature}.md`),
+    `# AF-SPEC: ${feature}
+STATUS: APPROVED
+## 3. Functional Rules (traceable)
+- FR-1: Authenticate the user with valid credentials.
+`,
+    "utf8"
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, "backlog", feature, "backlog.md"),
+    `# Backlog: ${feature}
+### US-1
+- Trace: FR-1, AC-1
+`,
+    "utf8"
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, "tests", feature, "tests.md"),
+    `# Test Cases: ${feature}
+### TC-1
+- Trace: US-1, FR-1, AC-1
+`,
+    "utf8"
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, "docs", "discovery", `${feature}.md`),
+    `# Discovery: ${feature}
+
+## 2. Discovery Interview Summary (Discovery Persona)
+- Primary users:
+- Registered users
+- Jobs to be done:
+- Sign in quickly and securely
+- Current pain:
+- Failed authentication flow is inconsistent
+- Constraints (business/technical/compliance):
+- Must preserve account security controls
+- Dependencies:
+- Identity provider API
+- Success metrics:
+- Login success rate above 98%
+- Assumptions:
+- Users already have verified email accounts
+
+## 3. Scope
+### In scope
+- Login and rejected-login handling
+
+### Out of scope
+- Social login
+
+## 9. Discovery Confidence
+- Confidence:
+- Medium
+
+- Reason:
+- Inputs are enough for planning baseline
+
+- Evidence gaps:
+- Precise latency target still pending
+
+- Handoff decision:
+- Ready for Product/Architecture
+`,
+    "utf8"
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, "docs", "plan", `${feature}.md`),
+    `# Plan: ${feature}
+STATUS: DRAFT
+
+## 4. Product Review (Product Persona)
+### Business value
+-
+
+### Success metric
+-
+
+### Assumptions to validate
+-
+
+## 5. Architecture (Architect Persona)
+### Components
+-
+
+### Data flow
+-
+
+### Key decisions
+-
+
+### Risks & mitigations
+-
+
+### Observability (logs/metrics/tracing)
+-
+`,
+    "utf8"
+  );
+
+  const validate = runNode(["validate", "--feature", feature, "--non-interactive", "--json"], { cwd: tempDir });
+  assert.equal(validate.status, 1);
+  const payload = JSON.parse(validate.stdout);
+  assert.equal(payload.ok, false);
+  assert.ok(payload.gapSummary.persona >= 2);
+  assert.match(payload.gaps.persona[0], /Persona gate:/);
+
+  const handoff = runNode(["handoff", "json"], { cwd: tempDir });
+  assert.equal(handoff.status, 1);
+  const handoffPayload = JSON.parse(handoff.stdout);
+  assert.equal(handoffPayload.ok, false);
+  assert.equal(handoffPayload.nextStep, "aitri validate");
+});
+
 test("validate fails in non-interactive mode without --feature", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-missing-feature-"));
   const result = runNode(["validate", "--non-interactive", "--json"], { cwd: tempDir });

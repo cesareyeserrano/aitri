@@ -144,6 +144,7 @@ docs/plan/<feature>.md
 - required artifacts
 - placeholder leakage (`FR-?`, `AC-?`, `US-?`)
 - structure (`### US-*`, `### TC-*`)
+- persona gates (Discovery/Product/Architect required outputs)
 - coverage links:
   - `FR -> US`
   - `FR -> TC`
@@ -153,6 +154,7 @@ JSON response includes:
 - `issues`
 - `gaps`
 - `gapSummary`
+  - includes `persona` gap category when persona-required sections are unresolved
 
 ## Exit Codes
 - `0` success

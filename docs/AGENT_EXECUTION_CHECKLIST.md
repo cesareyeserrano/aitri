@@ -66,6 +66,7 @@ Persona invocation is iterative (not one-time):
 4. no unresolved placeholders
 5. FR/US/TC structure exists
 6. minimum coverage mapping is satisfied
+7. persona gates are satisfied for Discovery/Product/Architect outputs
 
 ## Human Reporting Contract
 After each command, the agent reports:
