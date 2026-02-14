@@ -573,6 +573,33 @@ test("verify fails with explicit reason when runtime command cannot be detected"
   assert.equal(payload.ok, false);
   assert.equal(payload.reason, "no_test_command");
   assert.match(payload.evidenceFile, /docs\/verification/);
+  assert.equal(Array.isArray(payload.suggestions), true);
+  assert.ok(payload.suggestions.length >= 1);
+});
+
+test("verify auto-detects node test file without package scripts", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-verify-node-fallback-"));
+  const feature = "verify-node-fallback";
+
+  fs.mkdirSync(path.join(tempDir, "specs", "approved"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "tests", "web"), { recursive: true });
+  fs.writeFileSync(
+    path.join(tempDir, "specs", "approved", `${feature}.md`),
+    `# AF-SPEC: ${feature}\nSTATUS: APPROVED\n## 3. Functional Rules (traceable)\n- FR-1: Rule.\n`,
+    "utf8"
+  );
+  fs.writeFileSync(
+    path.join(tempDir, "tests", "web", "zombite-smoke.test.mjs"),
+    "import test from 'node:test';\nimport assert from 'node:assert/strict';\n\ntest('smoke', () => {\n  assert.equal(1, 1);\n});\n",
+    "utf8"
+  );
+
+  const result = runNode(["verify", "--feature", feature, "--json"], { cwd: tempDir });
+  assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.commandSource, "node:test:file");
+  assert.match(payload.command, /node --test/);
 });
 
 test("status requires re-verify when verification evidence is stale", () => {

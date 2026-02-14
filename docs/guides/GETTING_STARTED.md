@@ -91,8 +91,11 @@ Expected:
 Runtime verification command detection order:
 1. `package.json` script `test:aitri`
 2. `package.json` script `test:smoke`
-3. `package.json` script `test`
-4. `--verify-cmd "<command>"` to force an explicit command
+3. `package.json` script `test:ci`
+4. `package.json` script `test:unit`
+5. `package.json` script `test`
+6. Node fallback from test files in `tests/`, `test/`, or `__tests__/` (`node --test <picked-file>`)
+7. `--verify-cmd "<command>"` to force an explicit command
 
 Optional guided draft (interactive):
 ```bash

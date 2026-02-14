@@ -186,7 +186,8 @@ JSON response includes:
 `aitri verify` checks:
 - executes runtime tests using:
   - `--verify-cmd` (if provided), or
-  - `package.json` scripts (`test:aitri`, then `test:smoke`, then `test`)
+  - `package.json` scripts (`test:aitri`, then `test:smoke`, then `test:ci`, then `test:unit`, then `test`)
+  - Node fallback when test files are found under `tests/`, `test/`, or `__tests__/` (`node --test <picked-file>`)
 - writes evidence to `docs/verification/<feature>.json`
 - gates `handoff`/`go` through `status` (`nextStep = aitri verify` when missing/failing/stale)
 
@@ -222,6 +223,9 @@ Roadmap references:
 - New repo missing structure:
   - run `aitri resume json`
   - if `nextStep = aitri init`, run `aitri init --non-interactive --yes`
+- Verify fails with `no_test_command`:
+  - add `package.json` script `test:aitri`
+  - or run `aitri verify --verify-cmd "<your-test-command>"`
 
 ## Documentation Index
 - `docs/README.md`

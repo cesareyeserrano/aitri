@@ -472,6 +472,81 @@ function isDependencyManifest(file) {
   return false;
 }
 
+function detectPackageRunner(pkg) {
+  const raw = String(pkg?.packageManager || "").toLowerCase();
+  if (raw.startsWith("pnpm@")) return "pnpm";
+  if (raw.startsWith("yarn@")) return "yarn";
+  if (raw.startsWith("bun@")) return "bun";
+  return "npm";
+}
+
+function scriptCommand(runner, scriptName) {
+  if (scriptName === "test") {
+    if (runner === "yarn") return "yarn test";
+    if (runner === "pnpm") return "pnpm test";
+    if (runner === "bun") return "bun run test";
+    return "npm test";
+  }
+  if (runner === "yarn") return `yarn ${scriptName}`;
+  if (runner === "bun") return `bun run ${scriptName}`;
+  return `${runner} run ${scriptName}`;
+}
+
+function findNodeTestFiles(root) {
+  const MAX_SCAN = 200;
+  const roots = ["tests", "test", "__tests__"]
+    .map((dir) => path.join(root, dir))
+    .filter((dir) => fs.existsSync(dir) && fs.statSync(dir).isDirectory());
+
+  if (roots.length === 0) return [];
+
+  const files = [];
+  const stack = [...roots];
+  while (stack.length > 0 && files.length < MAX_SCAN) {
+    const current = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    entries.forEach((entry) => {
+      if (entry.name.startsWith(".")) return;
+      const abs = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(abs);
+        return;
+      }
+      if (!entry.isFile()) return;
+      if (!/\.(test|spec)\.(mjs|cjs|js)$/i.test(entry.name)) return;
+      files.push(toPosixPath(path.relative(root, abs)));
+    });
+  }
+
+  return [...new Set(files)].sort();
+}
+
+function pickNodeVerifyCommand(root) {
+  const files = findNodeTestFiles(root);
+  if (files.length === 0) return null;
+  const ranked = [...files].sort((a, b) => {
+    const score = (value) => {
+      if (/smoke/i.test(value)) return 0;
+      if (/e2e/i.test(value)) return 1;
+      return 2;
+    };
+    const diff = score(a) - score(b);
+    if (diff !== 0) return diff;
+    return a.localeCompare(b);
+  });
+  const file = ranked[0];
+  return {
+    command: `node --test '${shellEscapeSingle(file)}'`,
+    source: "node:test:file"
+  };
+}
+
 function evaluatePolicyChecks({ root, feature, project }) {
   const changed = parseGitChangedFiles(root);
   const policy = project.config.policy || {
@@ -571,12 +646,31 @@ function detectVerificationCommand(root) {
     try {
       const pkg = JSON.parse(fs.readFileSync(packageJson, "utf8"));
       const scripts = pkg && pkg.scripts ? pkg.scripts : {};
-      if (scripts["test:aitri"]) return { command: "npm run test:aitri", source: "package.json:scripts.test:aitri" };
-      if (scripts["test:smoke"]) return { command: "npm run test:smoke", source: "package.json:scripts.test:smoke" };
-      if (scripts.test) return { command: "npm test", source: "package.json:scripts.test" };
+      const runner = detectPackageRunner(pkg);
+      const priorities = ["test:aitri", "test:smoke", "test:ci", "test:unit", "test"];
+      const selected = priorities.find((name) => typeof scripts[name] === "string" && scripts[name].trim() !== "");
+      if (selected) {
+        return {
+          command: scriptCommand(runner, selected),
+          source: `package.json:scripts.${selected}`
+        };
+      }
     } catch {
-      return { command: null, source: "package.json:invalid" };
+      return {
+        command: null,
+        source: "package.json:invalid",
+        suggestions: [
+          "Fix package.json JSON syntax.",
+          "Add script `test:aitri` and rerun `aitri verify`.",
+          "Or pass an explicit command: aitri verify --verify-cmd \"<command>\"."
+        ]
+      };
     }
+  }
+
+  const nodeFallback = pickNodeVerifyCommand(root);
+  if (nodeFallback) {
+    return nodeFallback;
   }
 
   if (fs.existsSync(path.join(root, "pytest.ini")) || fs.existsSync(path.join(root, "pyproject.toml"))) {
@@ -585,7 +679,14 @@ function detectVerificationCommand(root) {
   if (fs.existsSync(path.join(root, "go.mod"))) {
     return { command: "go test ./...", source: "go:test" };
   }
-  return { command: null, source: "none" };
+  return {
+    command: null,
+    source: "none",
+    suggestions: [
+      "Add package.json script `test:aitri` (recommended).",
+      "Or pass an explicit command: aitri verify --verify-cmd \"<command>\"."
+    ]
+  };
 }
 
 function resolveVerifyFeature(options, root) {
@@ -603,6 +704,7 @@ function runVerification({ root, feature, verifyCmd }) {
   const startMs = Date.now();
 
   if (!command) {
+    const suggestions = Array.isArray(detected.suggestions) ? detected.suggestions : [];
     return {
       ok: false,
       feature,
@@ -614,7 +716,8 @@ function runVerification({ root, feature, verifyCmd }) {
       finishedAt: new Date().toISOString(),
       stdoutTail: "",
       stderrTail: "No runtime test command detected. Configure package scripts or pass --verify-cmd.",
-      reason: "no_test_command"
+      reason: "no_test_command",
+      suggestions
     };
   }
 
@@ -1504,6 +1607,10 @@ if (cmd === "verify") {
     console.log(`- Evidence: ${payload.evidenceFile}`);
     console.log(`- Reason: ${payload.reason}`);
     if (payload.stderrTail) console.log(`- Error (tail):\n${payload.stderrTail}`);
+    if (Array.isArray(payload.suggestions) && payload.suggestions.length > 0) {
+      console.log("- Suggested fixes:");
+      payload.suggestions.forEach((item) => console.log(`  - ${item}`));
+    }
   }
 
   process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
