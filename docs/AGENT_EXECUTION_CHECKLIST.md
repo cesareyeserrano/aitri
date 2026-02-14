@@ -33,8 +33,9 @@ Before any substantial action:
 8. Refine artifacts using personas
 9. `aitri validate`
 10. `aitri verify`
-11. Human approval before implementation
-12. Human approval before local/production deployment assistance
+11. `aitri policy`
+12. Human approval before implementation
+13. Human approval before local/production deployment assistance
 
 ## Mandatory Stop Conditions
 Agent must stop and ask for direction if:
@@ -69,6 +70,7 @@ Persona invocation is iterative (not one-time):
 6. minimum coverage mapping is satisfied
 7. persona gates are satisfied for Discovery/Product/Architect outputs
 8. runtime verification evidence exists and is passing (not stale)
+9. managed-go policy checks pass (dependency drift + forbidden imports/paths)
 
 ## Human Reporting Contract
 After each command, the agent reports:

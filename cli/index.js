@@ -148,6 +148,20 @@ function runGit(cmd, cwd) {
   }
 }
 
+function runGitRaw(cmd, cwd) {
+  try {
+    const out = execSync(cmd, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    return { ok: true, out };
+  } catch (error) {
+    const stderr = error && error.stderr ? String(error.stderr).trim() : "";
+    return { ok: false, out: "", err: stderr || "git command failed" };
+  }
+}
+
 function sanitizeTagPart(value) {
   return String(value || "")
     .toLowerCase()
@@ -380,6 +394,177 @@ function tailLines(content, maxLines = 40) {
   return lines.slice(Math.max(0, lines.length - maxLines)).join("\n").trim();
 }
 
+function toPosixPath(value) {
+  return String(value || "").replace(/\\/g, "/");
+}
+
+function globPatternToRegex(pattern) {
+  const normalized = toPosixPath(pattern).trim();
+  const escaped = normalized
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*\*/g, "__DOUBLE_STAR__")
+    .replace(/\*/g, "[^/]*")
+    .replace(/__DOUBLE_STAR__/g, ".*");
+  return new RegExp(`^${escaped}$`);
+}
+
+function wildcardToRegex(pattern) {
+  const escaped = String(pattern || "")
+    .trim()
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`);
+}
+
+function parseGitChangedFiles(root) {
+  const inside = runGit("git rev-parse --is-inside-work-tree", root);
+  if (!inside.ok || inside.out !== "true") return { git: false, files: [] };
+
+  const status = runGitRaw("git status --porcelain", root);
+  if (!status.ok) return { git: true, files: [] };
+
+  const files = String(status.out)
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      const body = line.length > 3 ? line.slice(3).trim() : "";
+      if (!body) return "";
+      if (body.includes(" -> ")) {
+        return body.split(" -> ").pop();
+      }
+      return body;
+    })
+    .map((value) => toPosixPath(value))
+    .filter(Boolean);
+
+  return { git: true, files: [...new Set(files)] };
+}
+
+function extractImports(content) {
+  const imports = new Set();
+  const text = String(content || "");
+
+  const jsImport = /\bimport\s+(?:[^'"]+from\s+)?["']([^"']+)["']/g;
+  const jsRequire = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
+  const pyImport = /^\s*import\s+([a-zA-Z0-9_\.]+)/gm;
+  const pyFrom = /^\s*from\s+([a-zA-Z0-9_\.]+)\s+import\s+/gm;
+  const goImport = /^\s*"([^"]+)"/gm;
+
+  for (const regex of [jsImport, jsRequire, pyImport, pyFrom, goImport]) {
+    let match = regex.exec(text);
+    while (match) {
+      imports.add(match[1]);
+      match = regex.exec(text);
+    }
+  }
+  return [...imports];
+}
+
+function isSourceFile(file) {
+  return /\.(js|mjs|cjs|ts|tsx|jsx|py|go|java|kt|rb)$/i.test(file);
+}
+
+function isDependencyManifest(file) {
+  const base = path.basename(file);
+  if (/^(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$/i.test(base)) return true;
+  if (/^(requirements(\..+)?\.txt|pyproject\.toml|poetry\.lock|Pipfile|Pipfile\.lock)$/i.test(base)) return true;
+  if (/^(go\.mod|go\.sum|Cargo\.toml|Cargo\.lock)$/i.test(base)) return true;
+  return false;
+}
+
+function evaluatePolicyChecks({ root, feature, project }) {
+  const changed = parseGitChangedFiles(root);
+  const policy = project.config.policy || {
+    allowDependencyChanges: false,
+    blockedImports: [],
+    blockedPaths: []
+  };
+  const blockedPathRegex = (policy.blockedPaths || []).map((pattern) => ({
+    pattern,
+    regex: globPatternToRegex(pattern)
+  }));
+  const blockedImportRegex = (policy.blockedImports || []).map((pattern) => ({
+    pattern,
+    regex: wildcardToRegex(pattern)
+  }));
+
+  const issues = [];
+  const gaps = {
+    dependency_drift: [],
+    forbidden_path: [],
+    forbidden_import: []
+  };
+  const warnings = [];
+  const changedFiles = changed.files;
+
+  if (!changed.git) {
+    warnings.push("Policy checks are limited outside git repositories (dependency drift and changed-file scope unavailable).");
+  }
+
+  const dependencyChanges = changedFiles.filter((file) => isDependencyManifest(file));
+  if (!policy.allowDependencyChanges && dependencyChanges.length > 0) {
+    dependencyChanges.forEach((file) => {
+      const msg = `Dependency drift: ${file} changed while dependency changes are blocked by policy.`;
+      gaps.dependency_drift.push(msg);
+      issues.push(msg);
+    });
+  }
+
+  if (blockedPathRegex.length > 0) {
+    changedFiles.forEach((file) => {
+      const matched = blockedPathRegex.find((entry) => entry.regex.test(file));
+      if (matched) {
+        const msg = `Forbidden path: ${file} matches blocked path rule '${matched.pattern}'.`;
+        gaps.forbidden_path.push(msg);
+        issues.push(msg);
+      }
+    });
+  }
+
+  if (blockedImportRegex.length > 0) {
+    changedFiles.filter((file) => isSourceFile(file)).forEach((file) => {
+      const abs = path.join(root, file);
+      if (!fs.existsSync(abs)) return;
+      const imports = extractImports(fs.readFileSync(abs, "utf8"));
+      imports.forEach((imp) => {
+        const matched = blockedImportRegex.find((entry) => entry.regex.test(imp));
+        if (matched) {
+          const msg = `Forbidden import: ${imp} in ${file} matches blocked import rule '${matched.pattern}'.`;
+          gaps.forbidden_import.push(msg);
+          issues.push(msg);
+        }
+      });
+    });
+  }
+
+  const evidenceDir = path.join(project.paths.docsRoot, "policy");
+  const evidenceFile = path.join(evidenceDir, `${feature}.json`);
+  fs.mkdirSync(evidenceDir, { recursive: true });
+
+  const payload = {
+    ok: issues.length === 0,
+    feature,
+    evaluatedAt: new Date().toISOString(),
+    policy: {
+      allowDependencyChanges: policy.allowDependencyChanges,
+      blockedImports: [...(policy.blockedImports || [])],
+      blockedPaths: [...(policy.blockedPaths || [])]
+    },
+    files: {
+      changed: changedFiles,
+      dependencyChanged: dependencyChanges
+    },
+    gaps,
+    gapSummary: Object.fromEntries(Object.entries(gaps).map(([k, v]) => [k, v.length])),
+    issues,
+    warnings,
+    evidenceFile: path.relative(root, evidenceFile)
+  };
+
+  fs.writeFileSync(evidenceFile, JSON.stringify(payload, null, 2), "utf8");
+  return payload;
+}
+
 function detectVerificationCommand(root) {
   const packageJson = path.join(root, "package.json");
   if (fs.existsSync(packageJson)) {
@@ -534,6 +719,7 @@ Commands:
   discover   Generate discovery + artifact scaffolding from an approved spec (use --guided for discovery interview)
   plan       Generate plan doc + traceable backlog/tests from an approved spec
   verify     Execute runtime verification suite and persist machine-readable evidence
+  policy     Run managed-go policy checks (dependency drift, forbidden imports/paths)
   validate   Validate traceability placeholders are resolved (FR/AC/US/TC)
   status     Show project state and next recommended step
   handoff    Summarize validated SDLC artifacts and require explicit go/no-go decision
@@ -1323,6 +1509,55 @@ if (cmd === "verify") {
   process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
 }
 
+if (cmd === "policy") {
+  const policyPositional = [...options.positional];
+  const jsonOutput = wantsJson(options, policyPositional);
+  if (policyPositional.length > 0 && policyPositional[policyPositional.length - 1].toLowerCase() === "json") {
+    policyPositional.pop();
+  }
+
+  const project = getProjectContextOrExit();
+  let feature = normalizeFeatureName(options.feature || policyPositional[0]);
+  if (!feature) {
+    const report = getStatusReportOrExit();
+    feature = report.approvedSpec.feature || null;
+  }
+
+  if (!feature) {
+    const msg = "Feature name is required. Use --feature <name> or ensure an approved spec exists.";
+    if (jsonOutput) {
+      console.log(JSON.stringify({ ok: false, feature: null, issues: [msg] }, null, 2));
+    } else {
+      console.log(msg);
+    }
+    process.exit(EXIT_ERROR);
+  }
+
+  const payload = evaluatePolicyChecks({
+    root: process.cwd(),
+    feature,
+    project
+  });
+
+  if (jsonOutput) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else if (payload.ok) {
+    console.log("POLICY PASSED ✅");
+    console.log(`- Feature: ${payload.feature}`);
+    console.log(`- Evidence: ${payload.evidenceFile}`);
+    if (payload.warnings.length > 0) {
+      payload.warnings.forEach((warning) => console.log(`- Warning: ${warning}`));
+    }
+  } else {
+    console.log("POLICY FAILED ❌");
+    console.log(`- Feature: ${payload.feature}`);
+    console.log(`- Evidence: ${payload.evidenceFile}`);
+    payload.issues.forEach((issue) => console.log(`- ${issue}`));
+  }
+
+  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
+}
+
 if (cmd === "validate") {
   const project = getProjectContextOrExit();
   const validatePositional = [...options.positional];
@@ -1607,6 +1842,19 @@ if (cmd === "go") {
     process.exit(EXIT_ERROR);
   }
 
+  const project = getProjectContextOrExit();
+  const policy = evaluatePolicyChecks({
+    root: process.cwd(),
+    feature: report.approvedSpec.feature,
+    project
+  });
+  if (!policy.ok) {
+    console.log("GO BLOCKED: managed-go policy checks failed.");
+    policy.issues.forEach((issue) => console.log(`- ${issue}`));
+    console.log(`Policy evidence: ${policy.evidenceFile}`);
+    process.exit(EXIT_ERROR);
+  }
+
   const proceed = await confirmProceed(options);
   if (proceed === null) {
     console.log("Non-interactive mode requires --yes for go/no-go confirmation.");
@@ -1617,7 +1865,6 @@ if (cmd === "go") {
     process.exit(EXIT_ABORTED);
   }
 
-  const project = getProjectContextOrExit();
   const feature = report.approvedSpec.feature;
 
   console.log("Implementation go/no-go decision: GO.");

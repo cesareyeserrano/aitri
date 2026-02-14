@@ -8,6 +8,11 @@ export const DEFAULT_PATHS = Object.freeze({
   tests: "tests",
   docs: "docs"
 });
+export const DEFAULT_POLICY = Object.freeze({
+  allowDependencyChanges: false,
+  blockedImports: [],
+  blockedPaths: []
+});
 
 function normalizePathLike(value) {
   return String(value || "").replace(/\\/g, "/").replace(/\/+$/g, "").trim();
@@ -53,6 +58,30 @@ function validateConfig(raw) {
     }
   }
 
+  if (raw.policy !== undefined) {
+    if (raw.policy === null || typeof raw.policy !== "object" || Array.isArray(raw.policy)) {
+      issues.push("`policy` must be an object when provided.");
+    } else {
+      if (raw.policy.allowDependencyChanges !== undefined && typeof raw.policy.allowDependencyChanges !== "boolean") {
+        issues.push("policy.allowDependencyChanges must be a boolean.");
+      }
+      if (raw.policy.blockedImports !== undefined) {
+        if (!Array.isArray(raw.policy.blockedImports)) {
+          issues.push("policy.blockedImports must be an array of strings.");
+        } else if (raw.policy.blockedImports.some((v) => typeof v !== "string" || v.trim() === "")) {
+          issues.push("policy.blockedImports must contain only non-empty strings.");
+        }
+      }
+      if (raw.policy.blockedPaths !== undefined) {
+        if (!Array.isArray(raw.policy.blockedPaths)) {
+          issues.push("policy.blockedPaths must be an array of strings.");
+        } else if (raw.policy.blockedPaths.some((v) => typeof v !== "string" || v.trim() === "")) {
+          issues.push("policy.blockedPaths must contain only non-empty strings.");
+        }
+      }
+    }
+  }
+
   return issues;
 }
 
@@ -62,7 +91,8 @@ export function loadAitriConfig(root = process.cwd()) {
     return {
       loaded: false,
       file: CONFIG_FILE,
-      paths: { ...DEFAULT_PATHS }
+      paths: { ...DEFAULT_PATHS },
+      policy: { ...DEFAULT_POLICY }
     };
   }
 
@@ -87,7 +117,13 @@ export function loadAitriConfig(root = process.cwd()) {
   return {
     loaded: true,
     file: CONFIG_FILE,
-    paths: mapped
+    paths: mapped,
+    policy: {
+      ...DEFAULT_POLICY,
+      ...(raw.policy || {}),
+      blockedImports: [...(raw.policy?.blockedImports || DEFAULT_POLICY.blockedImports)],
+      blockedPaths: [...(raw.policy?.blockedPaths || DEFAULT_POLICY.blockedPaths)]
+    }
   };
 }
 

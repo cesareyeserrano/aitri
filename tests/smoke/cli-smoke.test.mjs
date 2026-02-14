@@ -35,6 +35,7 @@ test("help and version are available", () => {
   assert.match(help.stdout, /status/);
   assert.match(help.stdout, /resume/);
   assert.match(help.stdout, /verify/);
+  assert.match(help.stdout, /policy/);
   assert.match(help.stdout, /--non-interactive/);
   assert.match(help.stdout, /--json, -j/);
   assert.match(help.stdout, /--format <type>/);
@@ -130,6 +131,60 @@ test("status detects git checkpoint commit", () => {
   assert.match(payload.checkpoint.state.latestCommit.message, /^checkpoint:/);
   assert.equal(payload.checkpoint.state.mode, "git_commit+tag");
   assert.equal(payload.checkpoint.state.maxRetained, 10);
+});
+
+test("policy detects dependency drift in git workspace", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-policy-deps-"));
+  const feature = "policy-deps";
+  spawnSync("git", ["init"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["config", "user.name", "Aitri Test"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["config", "user.email", "aitri@example.com"], { cwd: tempDir, encoding: "utf8" });
+
+  fs.writeFileSync(path.join(tempDir, "package.json"), `{"name":"policy-deps","private":true}\n`, "utf8");
+  spawnSync("git", ["add", "package.json"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["commit", "-m", "baseline"], { cwd: tempDir, encoding: "utf8" });
+
+  fs.writeFileSync(path.join(tempDir, "package.json"), `{"name":"policy-deps","private":true,"dependencies":{"left-pad":"1.3.0"}}\n`, "utf8");
+
+  const result = runNode(["policy", "--feature", feature, "--json"], { cwd: tempDir });
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.gapSummary.dependency_drift, 1);
+});
+
+test("policy detects forbidden imports and paths", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-policy-rules-"));
+  const feature = "policy-rules";
+  spawnSync("git", ["init"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["config", "user.name", "Aitri Test"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["config", "user.email", "aitri@example.com"], { cwd: tempDir, encoding: "utf8" });
+
+  fs.writeFileSync(
+    path.join(tempDir, "aitri.config.json"),
+    JSON.stringify({
+      policy: {
+        blockedImports: ["left-pad"],
+        blockedPaths: ["infra/**"]
+      }
+    }, null, 2),
+    "utf8"
+  );
+
+  fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "infra"), { recursive: true });
+  fs.writeFileSync(path.join(tempDir, "src", "app.js"), "export const x = 1;\n", "utf8");
+  spawnSync("git", ["add", "aitri.config.json", "src/app.js"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["commit", "-m", "baseline"], { cwd: tempDir, encoding: "utf8" });
+
+  fs.writeFileSync(path.join(tempDir, "src", "app.js"), "import lp from 'left-pad';\nexport const x = lp('1', 2, '0');\n", "utf8");
+  fs.writeFileSync(path.join(tempDir, "infra", "deploy.sh"), "#!/usr/bin/env bash\necho deploy\n", "utf8");
+
+  const result = runNode(["policy", "--feature", feature, "--json"], { cwd: tempDir });
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.gapSummary.forbidden_import, 1);
+  assert.equal(payload.gapSummary.forbidden_path, 1);
 });
 
 test("resume requires explicit confirmation in non-interactive mode when checkpoint is detected", () => {
@@ -461,6 +516,45 @@ Users need sign in.
   const payload = JSON.parse(handoff.stdout);
   assert.equal(payload.ok, false);
   assert.equal(payload.nextStep, "aitri verify");
+});
+
+test("go is blocked when managed-go policy detects dependency drift", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aitri-smoke-go-policy-block-"));
+  const feature = "go-policy-block";
+  spawnSync("git", ["init"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["config", "user.name", "Aitri Test"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["config", "user.email", "aitri@example.com"], { cwd: tempDir, encoding: "utf8" });
+
+  fs.mkdirSync(path.join(tempDir, "specs", "approved"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "backlog", feature), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "tests", feature), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "docs", "discovery"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "docs", "plan"), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, "docs", "verification"), { recursive: true });
+
+  fs.writeFileSync(path.join(tempDir, "specs", "approved", `${feature}.md`), `# AF-SPEC: ${feature}\nSTATUS: APPROVED\n## 3. Functional Rules (traceable)\n- FR-1: Rule one.\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "backlog", feature, "backlog.md"), `# Backlog: ${feature}\n### US-1\n- Trace: FR-1, AC-1\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "tests", feature, "tests.md"), `# Test Cases: ${feature}\n### TC-1\n- Trace: US-1, FR-1, AC-1\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "docs", "discovery", `${feature}.md`), `# Discovery: ${feature}\n\n## 2. Discovery Interview Summary (Discovery Persona)\n- Primary users:\n- Users\n- Jobs to be done:\n- Complete flow\n- Current pain:\n- Inconsistent outcomes\n- Constraints (business/technical/compliance):\n- Constraints valid\n- Dependencies:\n- Internal dependency\n- Success metrics:\n- Success rate > 95%\n- Assumptions:\n- Stable inputs\n\n## 3. Scope\n### In scope\n- Core flow\n\n### Out of scope\n- Extras\n\n## 9. Discovery Confidence\n- Confidence:\n- Medium\n\n- Reason:\n- Sufficient baseline\n\n- Evidence gaps:\n- Latency target refinement\n\n- Handoff decision:\n- Ready for Product/Architecture\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "docs", "plan", `${feature}.md`), `# Plan: ${feature}\n\n## 4. Product Review (Product Persona)\n### Business value\n- Reduce failure and increase reliability.\n\n### Success metric\n- Success rate above 95%.\n\n### Assumptions to validate\n- Input patterns remain stable.\n\n## 5. Architecture (Architect Persona)\n### Components\n- API gateway\n- Service layer\n\n### Data flow\n- Request to service and response.\n\n### Key decisions\n- Explicit service contracts.\n\n### Risks & mitigations\n- Retry with backoff for dependency errors.\n\n### Observability (logs/metrics/tracing)\n- Logs, metrics, traces.\n`, "utf8");
+  fs.writeFileSync(path.join(tempDir, "docs", "verification", `${feature}.json`), JSON.stringify({
+    ok: true,
+    feature,
+    command: "npm run test:aitri",
+    exitCode: 0,
+    startedAt: "2099-01-01T00:00:00.000Z",
+    finishedAt: "2099-01-01T00:00:01.000Z",
+    reason: "passed"
+  }, null, 2), "utf8");
+  fs.writeFileSync(path.join(tempDir, "package.json"), `{"name":"go-policy","private":true}\n`, "utf8");
+  spawnSync("git", ["add", "."], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["commit", "-m", "baseline"], { cwd: tempDir, encoding: "utf8" });
+
+  fs.writeFileSync(path.join(tempDir, "package.json"), `{"name":"go-policy","private":true,"dependencies":{"left-pad":"1.3.0"}}\n`, "utf8");
+
+  const result = runNode(["go", "--non-interactive", "--yes"], { cwd: tempDir });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /GO BLOCKED: managed-go policy checks failed/);
 });
 
 test("verify fails with explicit reason when runtime command cannot be detected", () => {

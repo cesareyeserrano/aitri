@@ -78,7 +78,7 @@ Check items as they are completed to prevent context drift.
 - [x] Runtime verification command implemented (`aitri verify`)
 - [x] Handoff/go runtime verification gates implemented
 - [x] Brownfield path mapping implemented (`aitri.config.json`)
-- [ ] Managed-go policy checks implemented (dependency/policy drift)
+- [x] Managed-go policy checks implemented (dependency/policy drift)
 - [ ] Static insight UI output available (`aitri status --ui`)
 - [ ] Confidence score model integrated into status output
 - [ ] Large-context staged retrieval implemented (section-level + optional semantic index)

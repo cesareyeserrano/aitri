@@ -35,6 +35,7 @@ Aitri execution model:
 - `aitri discover [--guided]`
 - `aitri plan`
 - `aitri verify`
+- `aitri policy`
 - `aitri validate`
 - `aitri status`
 - `aitri resume`
@@ -46,7 +47,7 @@ For non-interactive execution:
 - Use `--non-interactive`
 - For write commands (`init`, `draft`, `approve`, `discover`, `plan`) also use `--yes`
 - Pass feature explicitly where needed: `--feature <name>`
-- Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `verify`, `validate`)
+- Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `verify`, `policy`, `validate`)
 
 ## Recommended Workflow
 1. `aitri resume`
@@ -59,7 +60,8 @@ For non-interactive execution:
 8. Refine artifacts with personas
 9. `aitri validate`
 10. `aitri verify`
-11. Human approval before implementation/deployment assistance
+11. `aitri policy`
+12. Human approval before implementation/deployment assistance
 
 ## Persona Usage
 When refining artifacts, apply:

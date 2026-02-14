@@ -79,12 +79,14 @@ aitri discover --feature user-auth --non-interactive --yes
 aitri plan --feature user-auth --non-interactive --yes
 aitri validate --feature user-auth --non-interactive --format json
 aitri verify --feature user-auth --non-interactive --format json
+aitri policy --feature user-auth --non-interactive --format json
 ```
 
 Expected:
 - `validate` exits with code `0`
 - JSON output reports no unresolved gaps for the generated baseline
 - `verify` exits with code `0` when a runtime test command exists
+- `policy` exits with code `0` when managed-go checks pass
 
 Runtime verification command detection order:
 1. `package.json` script `test:aitri`
@@ -234,6 +236,11 @@ If your repository already uses custom folders, create `aitri.config.json` at pr
     "backlog": "workspace/backlog",
     "tests": "quality/tests",
     "docs": "knowledge/docs"
+  },
+  "policy": {
+    "allowDependencyChanges": false,
+    "blockedImports": ["left-pad", "@aws-sdk/*"],
+    "blockedPaths": ["infra/**", "scripts/deploy/**"]
   }
 }
 ```

@@ -28,8 +28,9 @@ FEATURE=user-auth bash scripts/demo-5min.sh
 6. `plan`
 7. `validate --format json`
 8. `verify --format json`
-9. `handoff`
-10. `resume`
+9. `policy --format json`
+10. `handoff`
+11. `resume`
 
 ## Expected Result
 - Script exits with code `0`.

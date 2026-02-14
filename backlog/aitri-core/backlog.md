@@ -76,11 +76,11 @@
 - Objective:
   - Reduce implementation drift after `go` with lightweight deterministic controls.
 
-### US-13
+### US-13 [DONE]
 - As a maintainer, I want a managed-go mode with policy checks, so that forbidden architectural/dependency drift is caught before commit/handoff.
 - Trace: FR-7, AC-13
 
-### US-14
+### US-14 [DONE]
 - As a reviewer, I want dependency drift and policy violations surfaced in machine-readable output, so that CI and humans can block unsafe progression.
 - Trace: FR-7, AC-14
 
@@ -121,8 +121,8 @@
 - AC-10: `handoff`/`go` can be blocked when runtime verification is missing or failing. [DONE]
 - AC-11: `aitri.config.json` path mapping supports specs/backlog/tests/docs for brownfield projects. [DONE]
 - AC-12: Invalid mapping configuration fails fast with explicit diagnostics and safe defaults. [DONE]
-- AC-13: Managed-go mode enforces deterministic policy checks before progression.
-- AC-14: Dependency/policy drift output is machine-readable for CI gating.
+- AC-13: Managed-go mode enforces deterministic policy checks before progression. [DONE]
+- AC-14: Dependency/policy drift output is machine-readable for CI gating. [DONE]
 - AC-15: `aitri status --ui` generates static visibility output for non-technical stakeholders.
 - AC-16: Confidence score model is documented and includes runtime + spec inputs.
 - AC-17: Section-level retrieval is used before raw full-document loading in large workflows.

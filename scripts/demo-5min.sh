@@ -63,8 +63,12 @@ cat > package.json <<'JSON'
 }
 JSON
 
+run git add package.json
+run git commit -m "checkpoint: ${FEATURE} dependency-manifest"
+
 run "${AITRI_CMD[@]}" validate --feature "$FEATURE" --format json
 run "${AITRI_CMD[@]}" verify --feature "$FEATURE" --format json
+run "${AITRI_CMD[@]}" policy --feature "$FEATURE" --format json
 run "${AITRI_CMD[@]}" handoff
 run "${AITRI_CMD[@]}" resume --non-interactive --yes
 
