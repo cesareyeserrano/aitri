@@ -61,16 +61,17 @@ Status: IN PROGRESS
 - static insight UI delivered (`status --ui`)
 - section-level retrieval delivered for discover/plan
 - optional semantic-lite retrieval delivered for advanced mode
+- command modularization delivered for discovery/plan/validate/runtime/persona flows
 
 ## Next Targets (v1.0.x)
 1. Deepen discovery-to-plan signal quality and reduce scaffold noise.
 2. Split docs into default quick path vs advanced operations path.
 3. Improve semantic retrieval quality beyond heuristic matching (optional advanced mode).
-4. Control monolith growth in CLI/runtime reporting modules through bounded modularization.
+4. Continue modularization for remaining heavy command paths (`verify`, `policy`, `handoff`, `go`, `resume`) to reduce `cli/index.js` below soft budget.
 5. Add file-size budgets and CI alerts for uncontrolled growth in core files.
 
 ## Maintainability Watchlist (Baseline: 2026-02-15)
-- `cli/index.js`: 2409 lines
+- `cli/index.js`: 963 lines
 - `cli/commands/status.js`: 854 lines
 - `tests/smoke/cli-smoke.test.mjs`: 1244 lines
 

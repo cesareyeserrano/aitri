@@ -85,7 +85,8 @@ Check items as they are completed to prevent context drift.
 - [x] Optional semantic-lite retrieval implemented for advanced large-context workflows
 
 ## 11) Maintainability Growth Control
-- [ ] Split `cli/index.js` into command-level modules with clear boundaries
+- [x] Split high-complexity `cli/index.js` paths into command-level modules (`discover`, `plan`, `validate`, runtime/persona helper modules)
+- [ ] Continue modularization for remaining `cli/index.js` command paths (`verify`, `policy`, `handoff`, `go`, `resume`)
 - [ ] Split `tests/smoke/cli-smoke.test.mjs` into domain-focused smoke suites
 - [ ] Define and enforce line-count budgets for core source/test files
 - [ ] Add CI warning/block policy for files over growth thresholds
