@@ -121,6 +121,7 @@ aitri discover --feature user-auth --guided --discovery-depth deep
 - `docs/plan/<feature>.md`
 - `backlog/<feature>/backlog.md`
 - `tests/<feature>/tests.md`
+- `discover` and `plan` use section-level retrieval snapshots from the approved spec by default.
 
 Fast full demo path:
 ```bash

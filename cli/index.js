@@ -464,6 +464,67 @@ function replaceSection(content, heading, newBody) {
   return String(content).replace(pattern, `${heading}\n${newBody.trim()}\n`);
 }
 
+function extractFirstSection(content, headings) {
+  for (const heading of headings) {
+    const section = extractSection(content, heading).trim();
+    if (section) return section;
+  }
+  return "";
+}
+
+function compactSectionLines(content, maxLines = 4, fallback = "Not specified in spec.") {
+  const lines = String(content || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^###\s+/.test(line))
+    .filter((line) => !/^<.*>$/.test(line))
+    .filter((line) => line !== "-");
+
+  if (lines.length === 0) return `- ${fallback}`;
+  return lines
+    .slice(0, maxLines)
+    .map((line) => (/^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line) ? line : `- ${line}`))
+    .join("\n");
+}
+
+function extractListById(content, idPrefix, fallback = "Not specified in spec.", maxItems = 6) {
+  const pattern = new RegExp(`-\\s*${idPrefix}-\\d+\\s*:\\s*([^\\n]+)`, "gi");
+  const items = [...String(content || "").matchAll(pattern)]
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+
+  if (items.length === 0) return `- ${fallback}`;
+  return items.slice(0, maxItems).map((item) => `- ${item}`).join("\n");
+}
+
+function buildSpecSectionSnapshot(specContent) {
+  return {
+    context: compactSectionLines(
+      extractFirstSection(specContent, ["## 1. Context"]),
+      3,
+      "Context is missing."
+    ),
+    actors: compactSectionLines(
+      extractFirstSection(specContent, ["## 2. Actors"]),
+      3,
+      "Actors are missing."
+    ),
+    functionalRules: extractListById(specContent, "FR", "Functional rules are missing."),
+    acceptanceCriteria: extractListById(specContent, "AC", "Acceptance criteria are missing."),
+    security: compactSectionLines(
+      extractFirstSection(specContent, ["## 7. Security Considerations"]),
+      3,
+      "Security considerations are missing."
+    ),
+    outOfScope: compactSectionLines(
+      extractFirstSection(specContent, ["## 8. Out of Scope"]),
+      3,
+      "Out-of-scope items are missing."
+    )
+  };
+}
+
 function hasMeaningfulContent(content) {
   const lines = String(content)
     .split("\n")
@@ -1308,6 +1369,7 @@ if (cmd === "discover") {
   fs.mkdirSync(testsDir, { recursive: true });
 
   const approvedSpec = fs.readFileSync(approvedFile, "utf8");
+  const specSnapshot = buildSpecSectionSnapshot(approvedSpec);
   let discoveryInterview;
   try {
     discoveryInterview = await collectDiscoveryInterview(options);
@@ -1351,7 +1413,28 @@ if (cmd === "discover") {
   discovery = discovery.replace("# Discovery: <feature>", `# Discovery: ${feature}`);
   discovery = discovery.replace(
     "## 1. Problem Statement\n- What problem are we solving?\n- Why now?",
-    `## 1. Problem Statement\nDerived from approved spec:\n\n---\n\n${approvedSpec}\n\n---\n\nRefined problem framing:\n- What problem are we solving? ${discoveryInterview.currentPain}\n- Why now? ${discoveryInterview.successMetrics}`
+    `## 1. Problem Statement
+Derived from approved spec (section-level retrieval):
+- Retrieval mode: section-level
+
+### Context snapshot
+${specSnapshot.context}
+
+### Actors snapshot
+${specSnapshot.actors}
+
+### Functional rules snapshot
+${specSnapshot.functionalRules}
+
+### Security snapshot
+${specSnapshot.security}
+
+### Out-of-scope snapshot
+${specSnapshot.outOfScope}
+
+Refined problem framing:
+- What problem are we solving? ${discoveryInterview.currentPain}
+- Why now? ${discoveryInterview.successMetrics}`
   );
   discovery = discovery.replace(
     "## 2. Discovery Interview Summary (Discovery Persona)\n- Primary users:\n-\n- Jobs to be done:\n-\n- Current pain:\n-\n- Constraints (business/technical/compliance):\n-\n- Dependencies:\n-\n- Success metrics:\n-\n- Assumptions:\n-",
@@ -1501,6 +1584,7 @@ if (cmd === "plan") {
   fs.mkdirSync(path.dirname(testsFile), { recursive: true });
 
   const approvedSpec = fs.readFileSync(approvedFile, "utf8");
+  const specSnapshot = buildSpecSectionSnapshot(approvedSpec);
   const discoveryDoc = fs.readFileSync(discoveryFile, "utf8");
   let planDoc = fs.readFileSync(templatePath, "utf8");
 
@@ -1508,7 +1592,26 @@ if (cmd === "plan") {
   planDoc = planDoc.replace("# Plan: <feature>", `# Plan: ${feature}`);
   planDoc = planDoc.replace(
     "## 1. Intent (from approved spec)",
-    `## 1. Intent (from approved spec)\n\n---\n\n${approvedSpec}\n\n---\n`
+    `## 1. Intent (from approved spec)
+- Retrieval mode: section-level
+
+### Context snapshot
+${specSnapshot.context}
+
+### Actors snapshot
+${specSnapshot.actors}
+
+### Functional rules snapshot
+${specSnapshot.functionalRules}
+
+### Acceptance criteria snapshot
+${specSnapshot.acceptanceCriteria}
+
+### Security snapshot
+${specSnapshot.security}
+
+### Out-of-scope snapshot
+${specSnapshot.outOfScope}`
   );
 
   const frList = [...approvedSpec.matchAll(/- FR-\d+:\s*(.+)/g)].map((m) => m[1].trim());

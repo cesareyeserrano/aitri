@@ -59,12 +59,13 @@ Status: IN PROGRESS
 - managed-go policy checks delivered (deterministic scan model)
 - confidence score delivered in `status` output (weighted spec/runtime model)
 - static insight UI delivered (`status --ui`)
-- scalable retrieval accepted as staged work (metadata first, optional semantic index later)
+- section-level retrieval delivered for discover/plan
+- optional semantic retrieval remains staged work for advanced mode
 
 ## Next Targets (v1.0.x)
 1. Deepen discovery-to-plan signal quality and reduce scaffold noise.
 2. Split docs into default quick path vs advanced operations path.
-3. Stage scalable retrieval for large contexts (section-level first, optional semantic index later).
+3. Implement optional semantic retrieval for advanced large-context workflows.
 
 Backlog source of truth:
 - `backlog/aitri-core/backlog.md`

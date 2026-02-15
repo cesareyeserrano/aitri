@@ -443,8 +443,11 @@ Users need workflow automation.
   const discovery = fs.readFileSync(path.join(tempDir, "docs", "discovery", `${feature}.md`), "utf8");
   const plan = fs.readFileSync(path.join(tempDir, "docs", "plan", `${feature}.md`), "utf8");
   assert.match(discovery, /- Interview mode:\n- quick/);
+  assert.match(discovery, /Retrieval mode: section-level/);
+  assert.match(plan, /Retrieval mode: section-level/);
   assert.match(plan, /Discovery interview mode: quick/);
   assert.match(plan, /Follow-up gate:/);
+  assert.doesNotMatch(plan, /# AF-SPEC:/);
 });
 
 test("end-to-end workflow supports custom mapped paths", () => {

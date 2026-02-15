@@ -100,7 +100,7 @@
 - Objective:
   - Improve artifact quality in large projects while controlling complexity.
 
-### US-17
+### US-17 [DONE]
 - As an agent operator, I want section-level retrieval before full-file loading, so that planning and refinement stay coherent in large scopes.
 - Trace: FR-9, AC-17
 
@@ -125,5 +125,5 @@
 - AC-14: Dependency/policy drift output is machine-readable for CI gating. [DONE]
 - AC-15: `aitri status --ui` generates static visibility output for non-technical stakeholders. [DONE]
 - AC-16: Confidence score model is documented and includes runtime + spec inputs. [DONE]
-- AC-17: Section-level retrieval is used before raw full-document loading in large workflows.
+- AC-17: Section-level retrieval is used before raw full-document loading in large workflows. [DONE]
 - AC-18: Optional local semantic indexing is available in advanced mode.

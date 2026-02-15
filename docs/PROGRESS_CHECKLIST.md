@@ -81,4 +81,5 @@ Check items as they are completed to prevent context drift.
 - [x] Managed-go policy checks implemented (dependency/policy drift)
 - [x] Static insight UI output available (`aitri status --ui`)
 - [x] Confidence score model integrated into status output
-- [ ] Large-context staged retrieval implemented (section-level + optional semantic index)
+- [x] Section-level staged retrieval implemented for discover/plan
+- [ ] Optional semantic indexing implemented for advanced large-context workflows

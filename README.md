@@ -98,9 +98,11 @@ npm run demo:5min
   - `quick` (default): core decision inputs only.
   - `standard`: quick + scope/journey/assumptions.
   - `deep`: standard + urgency/baseline/no-go prompts.
+  - Uses section-level spec retrieval for context snapshots (avoids full-spec dumps).
 - `aitri plan`
   - Blocks if discovery confidence is `Low` or required discovery sections are missing.
   - Adapts planning rigor from discovery `Interview mode` (`quick|standard|deep`) and propagates it into plan/backlog/tests guidance.
+  - Uses section-level retrieval from approved spec before any full-context fallback.
 
 ## Auto-Checkpoint and Resume
 Write commands (`init`, `draft`, `approve`, `discover`, `plan`) create auto-checkpoints in Git repositories.
@@ -213,7 +215,7 @@ JSON response includes:
 - blocks `aitri go` when policy fails
 
 ## Planned Next Capabilities
-- Scalable retrieval path for large-context projects.
+- Optional semantic retrieval mode for large-context projects.
 
 Roadmap references:
 - `backlog/aitri-core/backlog.md`
