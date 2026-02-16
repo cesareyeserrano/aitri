@@ -24,18 +24,26 @@ Use Aitri as the execution guardrail for spec-driven SDLC work with explicit hum
 5. Keep changes minimal and traceable.
 
 ## Aitri Commands
+
+### Pre-Go (Governance and Planning)
 - `aitri init`
 - `aitri draft [--guided]`
 - `aitri approve`
 - `aitri discover [--guided]`
 - `aitri plan`
+- `aitri validate`
 - `aitri verify`
 - `aitri policy`
-- `aitri validate`
 - `aitri status`
 - `aitri resume`
 - `aitri handoff`
 - `aitri go`
+
+### Post-Go (Factory Execution)
+- `aitri scaffold` — generate project skeleton, executable test stubs, interface contracts
+- `aitri implement` — generate ordered implementation briefs for AI agents
+- `aitri verify` — (enhanced) map test results to TC-*, report FR/US coverage
+- `aitri deliver` — final delivery gate: all FRs covered, all TCs passing
 
 ## Non-Interactive Agent/CI Mode
 - Use `--non-interactive`
@@ -44,6 +52,8 @@ Use Aitri as the execution guardrail for spec-driven SDLC work with explicit hum
 - Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `verify`, `policy`, `validate`)
 
 ## Default Workflow
+
+### Pre-Go Phase
 1. `aitri resume`
 2. `aitri init` when needed
 3. `aitri draft`
@@ -55,7 +65,17 @@ Use Aitri as the execution guardrail for spec-driven SDLC work with explicit hum
 9. `aitri validate`
 10. `aitri verify`
 11. `aitri policy`
-12. Human approval before implementation/deployment assistance
+12. `aitri handoff`
+13. Human GO/NO-GO decision
+14. `aitri go`
+
+### Post-Go Phase (Factory Execution)
+15. `aitri scaffold` — generate project skeleton
+16. `aitri implement` — receive implementation briefs
+17. Implement each US-* brief in order from IMPLEMENTATION_ORDER.md
+18. After each US-*: `aitri verify` to confirm TC-* pass
+19. Repeat 17-18 until all stories pass
+20. `aitri deliver` — final delivery gate
 
 ## Persona Alignment
 Use these lenses while refining artifacts:

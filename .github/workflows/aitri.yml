@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -20,8 +22,27 @@ jobs:
       - name: Install dependencies
         run: npm install --ignore-scripts
 
+      - name: File-growth report (warn-only)
+        run: npm run check:file-growth
+
+      - name: File-growth gate (strict)
+        run: npm run check:file-growth:strict
+
       - name: Run smoke tests
         run: npm run test:smoke
+
+      - name: Critical findings gate (AC-33)
+        run: node scripts/check-critical-gate.mjs
+
+      - name: Stabilization gate snapshot (non-blocking visibility)
+        run: |
+          if [ -f docs/quality/STABILIZATION_RELEASE_GATE_2026-02-16.md ]; then
+            echo "Stabilization gate snapshot:"
+            grep -nE "Critical Gate|Feature Freeze|CI Critical Findings Gate" docs/quality/STABILIZATION_RELEASE_GATE_2026-02-16.md || true
+            echo "Note: blocking CI enforcement is tracked in backlog as AC-33."
+          else
+            echo "No stabilization gate file found."
+          fi
 
       - name: Install Aitri (local package)
         run: npm i -g .

@@ -71,3 +71,8 @@ Accepted items in this document are now tracked in:
 - `backlog/aitri-core/backlog.md`
 - `docs/STRATEGY_EXECUTION.md`
 - `docs/PROGRESS_CHECKLIST.md`
+
+Update note (2026-02-16):
+- Production-quality feedback extension and closure plan are documented in:
+  - `docs/feedback/PRODUCTION_QUALITY_FEEDBACK_ASSESSMENT_2026-02-16.md`
+  - `docs/quality/STABILIZATION_RELEASE_GATE_2026-02-16.md`

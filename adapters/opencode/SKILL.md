@@ -25,18 +25,34 @@ Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory hum
 - Discovery persona should be applied before planning when requirements are ambiguous.
 
 ## Commands
+
+### Pre-Go (Governance and Planning)
 - `aitri init`
 - `aitri draft [--guided]`
 - `aitri approve`
 - `aitri discover [--guided]`
 - `aitri plan`
+- `aitri validate`
 - `aitri verify`
 - `aitri policy`
-- `aitri validate`
 - `aitri status`
 - `aitri resume`
 - `aitri handoff`
 - `aitri go`
+
+### Post-Go (Factory Execution)
+- `aitri scaffold` — generate project skeleton, executable test stubs, interface contracts
+- `aitri implement` — generate ordered implementation briefs for AI agents
+- `aitri verify` — (enhanced) map test results to TC-*, report FR/US coverage
+- `aitri deliver` — final delivery gate: all FRs covered, all TCs passing
+
+## Factory Workflow (Post-Go)
+1. `aitri scaffold` — generate project skeleton
+2. `aitri implement` — receive implementation briefs
+3. Implement each US-* brief in order from IMPLEMENTATION_ORDER.md
+4. After each US-*: `aitri verify` to confirm TC-* pass
+5. Repeat 3-4 until all stories pass
+6. `aitri deliver` — final delivery gate
 
 ## CI/Automation Mode
 - `--non-interactive`

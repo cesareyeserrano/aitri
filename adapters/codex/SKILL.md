@@ -29,18 +29,26 @@ Aitri execution model:
 5. Keep output deterministic and minimal.
 
 ## Commands
+
+### Pre-Go (Governance and Planning)
 - `aitri init`
 - `aitri draft [--guided]`
 - `aitri approve`
 - `aitri discover [--guided]`
 - `aitri plan`
+- `aitri validate`
 - `aitri verify`
 - `aitri policy`
-- `aitri validate`
 - `aitri status`
 - `aitri resume`
 - `aitri handoff`
 - `aitri go`
+
+### Post-Go (Factory Execution)
+- `aitri scaffold` — generate project skeleton, executable test stubs, interface contracts
+- `aitri implement` — generate ordered implementation briefs for AI agents
+- `aitri verify` — (enhanced) map test results to TC-*, report FR/US coverage
+- `aitri deliver` — final delivery gate: all FRs covered, all TCs passing
 
 ## CI/Agent Mode
 For non-interactive execution:
@@ -50,6 +58,8 @@ For non-interactive execution:
 - Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `verify`, `policy`, `validate`)
 
 ## Recommended Workflow
+
+### Pre-Go Phase
 1. `aitri resume`
 2. `aitri init` (if structure missing)
 3. `aitri draft`
@@ -61,7 +71,17 @@ For non-interactive execution:
 9. `aitri validate`
 10. `aitri verify`
 11. `aitri policy`
-12. Human approval before implementation/deployment assistance
+12. `aitri handoff`
+13. Human GO/NO-GO decision
+14. `aitri go`
+
+### Post-Go Phase (Factory Execution)
+15. `aitri scaffold` — generate project skeleton
+16. `aitri implement` — receive implementation briefs
+17. Implement each US-* brief in order from IMPLEMENTATION_ORDER.md
+18. After each US-*: `aitri verify` to confirm TC-* pass
+19. Repeat 17-18 until all stories pass
+20. `aitri deliver` — final delivery gate
 
 ## Persona Usage
 When refining artifacts, apply:

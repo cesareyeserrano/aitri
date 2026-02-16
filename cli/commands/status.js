@@ -2,6 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { loadAitriConfig, resolveProjectPaths } from "../config.js";
+import {
+  normalizeFeatureName,
+  extractSection as getSection,
+  extractSubsection as getSubsection
+} from "../lib.js";
 
 function exists(p) {
   return fs.existsSync(p);
@@ -9,27 +14,7 @@ function exists(p) {
 
 function listMd(dir) {
   if (!exists(dir)) return [];
-  return fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
-}
-
-function firstOrNull(arr) {
-  return arr.length > 0 ? arr[0] : null;
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function getSection(content, heading) {
-  const pattern = new RegExp(`${escapeRegExp(heading)}([\\s\\S]*?)(?=\\n##\\s+\\d+\\.|$)`, "i");
-  const match = content.match(pattern);
-  return match ? match[1] : "";
-}
-
-function getSubsection(content, heading) {
-  const pattern = new RegExp(`${escapeRegExp(heading)}([\\s\\S]*?)(?=\\n###\\s+|$)`, "i");
-  const match = content.match(pattern);
-  return match ? match[1] : "";
+  return fs.readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
 }
 
 function hasMeaningfulContent(content) {
@@ -160,7 +145,34 @@ function collectValidationIssues(spec, backlog, tests, discovery = "", plan = ""
   return issues;
 }
 
-function computeNextStep({ missingDirs, approvedSpecFound, discoveryExists, planExists, validateOk, verifyOk }) {
+function hasPostGoVerificationReady(verification) {
+  if (!verification || verification.ok !== true) return false;
+  const tcCoverage = verification.tcCoverage;
+  if (!tcCoverage || tcCoverage.mode !== "scaffold") return false;
+  if (typeof tcCoverage.declared !== "number" || tcCoverage.declared <= 0) return false;
+  return tcCoverage.passing === tcCoverage.declared;
+}
+
+function computeNextStep({
+  missingDirs,
+  approvedSpecFound,
+  discoveryExists,
+  planExists,
+  validateOk,
+  verifyOk,
+  goCompleted,
+  scaffoldReady,
+  implementReady,
+  deliveryReady,
+  verification
+}) {
+  if (goCompleted) {
+    if (!scaffoldReady) return "scaffold_pending";
+    if (!implementReady) return "implement_pending";
+    if (!hasPostGoVerificationReady(verification)) return "verify_pending";
+    if (!deliveryReady) return "deliver_pending";
+    return "delivery_complete";
+  }
   if (missingDirs.length > 0) return "aitri init";
   if (!approvedSpecFound) return "aitri draft";
   if (!discoveryExists) return "aitri discover";
@@ -170,9 +182,66 @@ function computeNextStep({ missingDirs, approvedSpecFound, discoveryExists, plan
   return "ready_for_human_approval";
 }
 
+function resolveFeatureSelection({ requestedFeature, hasFeatureFilter, approvedFeatures, draftFeatures }) {
+  let selectedFeature = null;
+  let selectedContext = null;
+  let selectionIssue = null;
+
+  if (requestedFeature) {
+    if (approvedFeatures.includes(requestedFeature)) {
+      selectedFeature = requestedFeature;
+      selectedContext = "approved";
+    } else if (draftFeatures.includes(requestedFeature)) {
+      selectedFeature = requestedFeature;
+      selectedContext = "draft";
+    } else {
+      selectionIssue = {
+        code: "feature_not_found",
+        message: `Feature not found in approved or draft specs: ${requestedFeature}.`,
+        requestedFeature
+      };
+    }
+  } else if (hasFeatureFilter) {
+    selectionIssue = {
+      code: "invalid_feature_name",
+      message: "Invalid feature name. Use kebab-case (example: user-login).",
+      requestedFeature: String(requestedFeature || "").trim()
+    };
+  } else if (approvedFeatures.length > 1) {
+    selectionIssue = {
+      code: "feature_required",
+      message: "Multiple approved specs found. Use --feature <name> to select context.",
+      requestedFeature: null
+    };
+  } else if (approvedFeatures.length === 1) {
+    selectedFeature = approvedFeatures[0];
+    selectedContext = "approved";
+  } else if (draftFeatures.length > 1) {
+    selectionIssue = {
+      code: "feature_required_draft",
+      message: "Multiple draft specs found. Use --feature <name> to select context.",
+      requestedFeature: null
+    };
+  } else if (draftFeatures.length === 1) {
+    selectedFeature = draftFeatures[0];
+    selectedContext = "draft";
+  }
+
+  return {
+    selectedFeature,
+    selectedContext,
+    selectionIssue
+  };
+}
+
 function toRecommendedCommand(nextStep) {
   if (!nextStep) return null;
   if (nextStep === "ready_for_human_approval") return "aitri handoff";
+  if (nextStep === "scaffold_pending") return "aitri scaffold";
+  if (nextStep === "implement_pending") return "aitri implement";
+  if (nextStep === "verify_pending") return "aitri verify";
+  if (nextStep === "deliver_pending") return "aitri deliver";
+  if (nextStep === "delivery_complete") return "aitri status --ui";
   return nextStep;
 }
 
@@ -180,6 +249,21 @@ function nextStepMessage(nextStep) {
   if (!nextStep) return "No next step detected.";
   if (nextStep === "ready_for_human_approval") {
     return "SDLC artifacts are complete. Human go/no-go approval is required.";
+  }
+  if (nextStep === "scaffold_pending") {
+    return "Post-go execution started. Generate scaffold artifacts next.";
+  }
+  if (nextStep === "implement_pending") {
+    return "Scaffold is ready. Generate ordered implementation briefs.";
+  }
+  if (nextStep === "verify_pending") {
+    return "Implementation artifacts changed. Re-run verify until all TC coverage passes.";
+  }
+  if (nextStep === "deliver_pending") {
+    return "Verification coverage is green. Run deliver gate for final readiness.";
+  }
+  if (nextStep === "delivery_complete") {
+    return "Delivery gate is complete with a SHIP decision. Optional: review local dashboard output.";
   }
   return `Continue SDLC flow with ${nextStep}.`;
 }
@@ -246,6 +330,20 @@ function computeRuntimeVerificationScore(verification) {
     if (source === "flag:verify-cmd") {
       score -= 15;
       notes.push("Verification command was provided manually with --verify-cmd.");
+    }
+    if (
+      verification.tcCoverage &&
+      verification.tcCoverage.mode === "scaffold" &&
+      typeof verification.tcCoverage.declared === "number" &&
+      verification.tcCoverage.declared > 0
+    ) {
+      const passing = Number(verification.tcCoverage.passing || 0);
+      const declared = Number(verification.tcCoverage.declared || 0);
+      const tcScore = Math.max(0, Math.min(100, Math.round((passing / declared) * 100)));
+      score = Math.min(score, tcScore);
+      if (tcScore < 100) {
+        notes.push(`TC coverage ratio is below 100% (${passing}/${declared}).`);
+      }
     }
 
     score = Math.max(60, score);
@@ -503,6 +601,14 @@ function safeStatMs(file) {
   }
 }
 
+function readJsonSafe(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function detectVerificationState(root, paths, feature) {
   const verificationFile = paths.verificationFile(feature);
   if (!exists(verificationFile)) {
@@ -557,12 +663,18 @@ function detectVerificationState(root, paths, feature) {
     commandSource: payload.commandSource || null,
     exitCode: typeof payload.exitCode === "number" ? payload.exitCode : null,
     finishedAt: payload.finishedAt || null,
-    reason: stale ? "verification_stale" : (payload.reason || null)
+    reason: stale ? "verification_stale" : (payload.reason || null),
+    tcCoverage: payload.tcCoverage || null,
+    frCoverage: payload.frCoverage || null,
+    usCoverage: payload.usCoverage || null,
+    coverageConfidence: payload.coverageConfidence || null
   };
 }
 
 export function getStatusReport(options = {}) {
   const { root = process.cwd() } = options;
+  const rawFeature = String(options.feature || "").trim();
+  const requestedFeature = normalizeFeatureName(rawFeature);
   const config = loadAitriConfig(root);
   const paths = resolveProjectPaths(root, config.paths);
 
@@ -576,7 +688,23 @@ export function getStatusReport(options = {}) {
 
   const approvedDir = paths.specsApprovedDir;
   const approvedSpecs = listMd(approvedDir);
-  const approvedSpecFile = firstOrNull(approvedSpecs);
+  const approvedFeatures = approvedSpecs.map((name) => name.replace(/\.md$/i, ""));
+  const draftDir = paths.specsDraftsDir;
+  const draftSpecs = listMd(draftDir);
+  const draftFeatures = draftSpecs.map((name) => name.replace(/\.md$/i, ""));
+  const hasFeatureFilter = rawFeature !== "";
+  const {
+    selectedFeature,
+    selectedContext,
+    selectionIssue
+  } = resolveFeatureSelection({
+    requestedFeature,
+    hasFeatureFilter,
+    approvedFeatures,
+    draftFeatures
+  });
+  const approvedSpecFile = selectedContext === "approved" && selectedFeature ? `${selectedFeature}.md` : null;
+  const draftSpecFile = selectedContext === "draft" && selectedFeature ? `${selectedFeature}.md` : null;
 
   const report = {
     root,
@@ -591,8 +719,20 @@ export function getStatusReport(options = {}) {
     },
     approvedSpec: {
       found: !!approvedSpecFile,
-      feature: approvedSpecFile ? approvedSpecFile.replace(".md", "") : null,
+      feature: approvedSpecFile ? selectedFeature : null,
       file: approvedSpecFile ? path.relative(root, path.join(approvedDir, approvedSpecFile)) : null
+    },
+    draftSpec: {
+      found: !!draftSpecFile,
+      feature: draftSpecFile ? selectedFeature : null,
+      file: draftSpecFile ? path.relative(root, path.join(draftDir, draftSpecFile)) : null
+    },
+    selection: {
+      issue: selectionIssue ? selectionIssue.code : null,
+      message: selectionIssue ? selectionIssue.message : null,
+      requestedFeature: selectionIssue ? selectionIssue.requestedFeature : (requestedFeature || null),
+      availableFeatures: approvedFeatures,
+      availableDraftFeatures: draftFeatures
     },
     artifacts: {
       discovery: false,
@@ -629,6 +769,17 @@ export function getStatusReport(options = {}) {
       message: "Continue with nextStep.",
       nextActions: []
     },
+    factory: {
+      goCompleted: false,
+      scaffoldReady: false,
+      implementReady: false,
+      deliveryReady: false,
+      goMarker: null,
+      scaffoldManifest: null,
+      implementManifest: null,
+      deliveryReport: null,
+      deliveryDecision: null
+    },
     nextStep: null,
     recommendedCommand: null,
     nextStepMessage: null,
@@ -659,7 +810,23 @@ export function getStatusReport(options = {}) {
     }
   };
 
-  if (approvedSpecFile) {
+  if (selectionIssue) {
+    report.validation.ok = false;
+    report.validation.issues.push(selectionIssue.message);
+    report.nextStep = "aitri status --feature <name>";
+    report.recommendedCommand = "aitri status --feature <name>";
+    report.nextStepMessage = selectionIssue.message;
+    report.handoff = {
+      required: false,
+      state: "selection_required",
+      message: selectionIssue.message,
+      nextActions: ["Select feature context with --feature <name>."]
+    };
+    report.confidence = buildConfidenceReport(report);
+    return report;
+  }
+
+  if (selectedContext === "approved" && approvedSpecFile) {
     const feature = report.approvedSpec.feature;
     const discoveryFile = paths.discoveryFile(feature);
     const planFile = paths.planFile(feature);
@@ -690,14 +857,40 @@ export function getStatusReport(options = {}) {
 
     report.verification = detectVerificationState(root, paths, feature);
 
+    const goMarkerFile = paths.goMarkerFile(feature);
+    const scaffoldManifestFile = path.join(paths.implementationFeatureDir(feature), "scaffold-manifest.json");
+    const implementManifestFile = path.join(paths.implementationFeatureDir(feature), "implement-manifest.json");
+    const deliveryReportFile = paths.deliveryJsonFile(feature);
+    const deliveryPayload = exists(deliveryReportFile) ? readJsonSafe(deliveryReportFile) : null;
+    report.factory = {
+      goCompleted: exists(goMarkerFile),
+      scaffoldReady: exists(scaffoldManifestFile),
+      implementReady: exists(implementManifestFile),
+      deliveryReady: deliveryPayload?.decision === "SHIP",
+      goMarker: exists(goMarkerFile) ? path.relative(root, goMarkerFile) : null,
+      scaffoldManifest: exists(scaffoldManifestFile) ? path.relative(root, scaffoldManifestFile) : null,
+      implementManifest: exists(implementManifestFile) ? path.relative(root, implementManifestFile) : null,
+      deliveryReport: exists(deliveryReportFile) ? path.relative(root, deliveryReportFile) : null,
+      deliveryDecision: deliveryPayload?.decision || null
+    };
+
     report.nextStep = computeNextStep({
       missingDirs,
       approvedSpecFound: true,
       discoveryExists: report.artifacts.discovery,
       planExists: report.artifacts.plan,
       validateOk: report.validation.ok,
-      verifyOk: report.verification.ok
+      verifyOk: report.verification.ok,
+      goCompleted: report.factory.goCompleted,
+      scaffoldReady: report.factory.scaffoldReady,
+      implementReady: report.factory.implementReady,
+      deliveryReady: report.factory.deliveryReady,
+      verification: report.verification
     });
+  } else if (selectedContext === "draft" && selectedFeature) {
+    report.nextStep = "aitri approve";
+    report.recommendedCommand = `aitri approve --feature ${selectedFeature}`;
+    report.nextStepMessage = "A draft spec is available. Run approve to pass gates and move it to approved specs.";
   } else {
     report.nextStep = computeNextStep({
       missingDirs,
@@ -705,7 +898,12 @@ export function getStatusReport(options = {}) {
       discoveryExists: false,
       planExists: false,
       validateOk: false,
-      verifyOk: false
+      verifyOk: false,
+      goCompleted: false,
+      scaffoldReady: false,
+      implementReady: false,
+      deliveryReady: false,
+      verification: null
     });
   }
 
@@ -729,21 +927,23 @@ export function getStatusReport(options = {}) {
     };
   }
 
-  report.recommendedCommand = toRecommendedCommand(report.nextStep);
-  report.nextStepMessage = nextStepMessage(report.nextStep);
+  report.recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
+  report.nextStepMessage = report.nextStepMessage || nextStepMessage(report.nextStep);
   report.confidence = buildConfidenceReport(report);
 
   return report;
 }
 
 export function runStatus(options = {}) {
-  const { json = false, ui = false, openUi = true, root = process.cwd() } = options;
-  const report = getStatusReport({ root });
+  const { json = false, ui = false, openUi = true, root = process.cwd(), feature = null } = options;
+  const report = getStatusReport({ root, feature });
+  const ok = !report.selection.issue;
 
   if (ui) {
     const uiInfo = writeStatusInsight(report);
     if (json) {
       console.log(JSON.stringify({
+        ok,
         ...report,
         ui: {
           enabled: true,
@@ -751,7 +951,7 @@ export function runStatus(options = {}) {
           generatedAt: uiInfo.generatedAt
         }
       }, null, 2));
-      return;
+      return ok;
     }
     console.log("Aitri Status UI generated ✅");
     console.log(`- File: ${uiInfo.file}`);
@@ -763,12 +963,18 @@ export function runStatus(options = {}) {
         console.log("- Browser auto-open failed. Open the file manually from the path above.");
       }
     }
-    return;
+    if (!ok) {
+      console.log(`- Status blocked: ${report.selection.message}`);
+      if (report.selection.availableFeatures.length > 0) {
+        console.log(`- Available features: ${report.selection.availableFeatures.join(", ")}`);
+      }
+    }
+    return ok;
   }
 
   if (json) {
-    console.log(JSON.stringify(report, null, 2));
-    return;
+    console.log(JSON.stringify({ ok, ...report }, null, 2));
+    return ok;
   }
 
   console.log("Aitri Project Status ⚒️\n");
@@ -786,12 +992,26 @@ export function runStatus(options = {}) {
   }
 
   if (!report.approvedSpec.found) {
-    console.log("✖ No approved specs found");
+    if (report.selection.issue) {
+      console.log(`✖ ${report.selection.message}`);
+      if (report.selection.availableFeatures.length > 0) {
+        console.log(`- Available features: ${report.selection.availableFeatures.join(", ")}`);
+      }
+      if (report.selection.availableDraftFeatures.length > 0) {
+        console.log(`- Available draft features: ${report.selection.availableDraftFeatures.join(", ")}`);
+      }
+      return false;
+    }
+    if (report.draftSpec.found) {
+      console.log(`⚠ Draft spec found (not approved): ${report.draftSpec.feature}`);
+    } else {
+      console.log("✖ No approved specs found");
+    }
     console.log("\nNext recommended step:");
     console.log(`- State: ${report.nextStep}`);
     console.log(`- Run: ${report.recommendedCommand}`);
     console.log(`- Why: ${report.nextStepMessage}`);
-    return;
+    return ok;
   }
 
   console.log(`✔ Approved spec found: ${report.approvedSpec.feature}`);
@@ -851,4 +1071,6 @@ export function runStatus(options = {}) {
       console.log("- No existing checkpoint detected in git history/stash.");
     }
   }
+
+  return ok;
 }

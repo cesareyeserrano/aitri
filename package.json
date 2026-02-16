@@ -1,6 +1,6 @@
 {
   "name": "aitri",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "author": "César Augusto Reyes",
   "license": "Apache-2.0",
   "private": false,
@@ -28,7 +28,9 @@
     "url": "https://github.com/cesareyeserrano/aitri/issues"
   },
   "scripts": {
-    "test:smoke": "node --test tests/smoke/cli-smoke.test.mjs",
+    "test:smoke": "node --test tests/smoke/cli-smoke-*.test.mjs",
+    "check:file-growth": "node scripts/check-file-growth.mjs",
+    "check:file-growth:strict": "node scripts/check-file-growth.mjs --strict",
     "demo:5min": "bash scripts/demo-5min.sh"
   }
 }

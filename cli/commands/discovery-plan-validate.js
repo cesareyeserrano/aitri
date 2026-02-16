@@ -5,25 +5,22 @@ import { collectPersonaValidationIssues } from "./persona-validation.js";
 import {
   buildSpecSnapshot,
   collectDiscoveryInterview,
+  detectQualityDomain,
   detectRetrievalModeFromDiscovery,
+  getQualityProfile,
   getDiscoveryRigorProfile,
   normalizeDiscoveryDepth,
   normalizeRetrievalMode,
   readDiscoveryField
 } from "./discovery-plan-helpers.js";
-
-function normalizeFeatureName(value) {
-  return (value || "").replace(/\s+/g, "-").trim();
-}
+import { parseApprovedSpec } from "./spec-parser.js";
+import { generatePlanArtifacts } from "./content-generator.js";
+import { normalizeFeatureName, escapeRegExp } from "../lib.js";
 
 function wantsJson(options, positional = []) {
   if (options.json) return true;
   if ((options.format || "").toLowerCase() === "json") return true;
   return positional.some((p) => p.toLowerCase() === "json");
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function replaceSection(content, heading, newBody) {
@@ -42,9 +39,19 @@ export async function runDiscoverCommand({
 }) {
   const { OK, ERROR, ABORTED } = exitCodes;
   const project = getProjectContextOrExit();
-  let feature = normalizeFeatureName(options.feature || options.positional[0]);
+  const rawFeatureInput = String(options.feature || options.positional[0] || "").trim();
+  let feature = normalizeFeatureName(rawFeatureInput);
+  if (rawFeatureInput && !feature) {
+    console.log("Invalid feature name. Use kebab-case (example: user-login).");
+    return ERROR;
+  }
   if (!feature && !options.nonInteractive) {
-    feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
+    const prompted = await ask("Feature name (kebab-case, e.g. user-login): ");
+    feature = normalizeFeatureName(prompted);
+    if (!feature && String(prompted || "").trim()) {
+      console.log("Invalid feature name. Use kebab-case (example: user-login).");
+      return ERROR;
+    }
   }
 
   if (!feature) {
@@ -190,32 +197,19 @@ Refined problem framing:
   );
 
   fs.writeFileSync(outFile, discovery, "utf8");
-  const backlog = `# Backlog: ${feature}
+  const parsedSpec = parseApprovedSpec(approvedSpec, { feature });
+  const qualityDomain = detectQualityDomain(approvedSpec, feature);
+  const qualityProfile = getQualityProfile(qualityDomain);
+  const rigor = getDiscoveryRigorProfile(discoveryInterview.interviewMode);
+  const generated = generatePlanArtifacts({
+    feature,
+    parsedSpec,
+    rigor,
+    qualityProfile
+  });
 
-## Epic
-- <one epic statement>
-
-## User Stories
-1. As a <actor>, I want <capability>, so that <benefit>.
-2. As a <actor>, I want <capability>, so that <benefit>.
-3. As a <actor>, I want <capability>, so that <benefit>.
-`;
-
-  const tests = `# Test Cases: ${feature}
-
-## Functional
-1. Given <context>, when <action>, then <expected>.
-
-## Security
-1. Input validation: reject invalid/unsafe inputs.
-2. Abuse prevention: rate limit critical endpoints (if any).
-
-## Edge Cases
-1. <edge case> -> <expected behavior>
-`;
-
-  fs.writeFileSync(backlogFile, backlog, "utf8");
-  fs.writeFileSync(testsFile, tests, "utf8");
+  fs.writeFileSync(backlogFile, generated.backlog, "utf8");
+  fs.writeFileSync(testsFile, generated.tests, "utf8");
 
   console.log("Discovery created: " + path.relative(process.cwd(), outFile));
   printCheckpointSummary(runAutoCheckpoint({
@@ -237,9 +231,19 @@ export async function runPlanCommand({
 }) {
   const { OK, ERROR, ABORTED } = exitCodes;
   const project = getProjectContextOrExit();
-  let feature = normalizeFeatureName(options.feature || options.positional[0]);
+  const rawFeatureInput = String(options.feature || options.positional[0] || "").trim();
+  let feature = normalizeFeatureName(rawFeatureInput);
+  if (rawFeatureInput && !feature) {
+    console.log("Invalid feature name. Use kebab-case (example: user-login).");
+    return ERROR;
+  }
   if (!feature && !options.nonInteractive) {
-    feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
+    const prompted = await ask("Feature name (kebab-case, e.g. user-login): ");
+    feature = normalizeFeatureName(prompted);
+    if (!feature && String(prompted || "").trim()) {
+      console.log("Invalid feature name. Use kebab-case (example: user-login).");
+      return ERROR;
+    }
   }
 
   if (!feature) {
@@ -335,16 +339,19 @@ export async function runPlanCommand({
 
   const approvedSpec = fs.readFileSync(approvedFile, "utf8");
   const discoveryDoc = fs.readFileSync(discoveryFile, "utf8");
+  const parsedSpec = parseApprovedSpec(approvedSpec, { feature });
   const inheritedRetrievalMode = detectRetrievalModeFromDiscovery(discoveryDoc);
   const retrievalMode = requestedRetrievalMode || inheritedRetrievalMode || "section-level";
   const specSnapshot = buildSpecSnapshot(approvedSpec, retrievalMode);
+  const qualityDomain = detectQualityDomain(approvedSpec, discoveryDoc, feature);
+  const qualityProfile = getQualityProfile(qualityDomain);
   let planDoc = fs.readFileSync(templatePath, "utf8");
 
   planDoc = planDoc.replace("# Plan: <feature>", `# Plan: ${feature}`);
   planDoc = planDoc.replace(
     "## 1. Intent (from approved spec)",
     `## 1. Intent (from approved spec)
-- Retrieval mode: section-level
+- Retrieval mode: ${specSnapshot.mode}
 
 ### Context snapshot
 ${specSnapshot.context}
@@ -369,7 +376,7 @@ ${specSnapshot.outOfScope}
 - Retrieved sections: ${specSnapshot.retrievalEvidence.length > 0 ? specSnapshot.retrievalEvidence.join(", ") : "none"}`
   );
 
-  const frList = [...approvedSpec.matchAll(/- FR-\d+:\s*(.+)/g)].map((m) => m[1].trim());
+  const frList = parsedSpec.functionalRules.map((rule) => rule.text);
   const coreRule = frList[0] || "Deliver the approved feature scope with traceability.";
   const supportingRule = frList[1] || coreRule;
   const discoveryPain = readDiscoveryField(discoveryDoc, "Current pain") || "Pain evidence must be validated in discovery refinement.";
@@ -379,6 +386,12 @@ ${specSnapshot.outOfScope}
   const discoveryConstraints = readDiscoveryField(discoveryDoc, "Constraints (business/technical/compliance)") || "Constraints to be confirmed.";
   const discoveryInterviewMode = normalizeDiscoveryDepth(readDiscoveryField(discoveryDoc, "Interview mode")) || "quick";
   const rigor = getDiscoveryRigorProfile(discoveryInterviewMode);
+  const generated = generatePlanArtifacts({
+    feature,
+    parsedSpec,
+    rigor,
+    qualityProfile
+  });
 
   planDoc = replaceSection(
     planDoc,
@@ -423,116 +436,30 @@ ${specSnapshot.outOfScope}
   planDoc = replaceSection(
     planDoc,
     "## 5. Architecture (Architect Persona)",
-    `### Components
-- Client or entry interface for ${feature}.
-- Application service implementing FR traceability.
-- Persistence/integration boundary for state and external dependencies.
+    generated.architecture
+  );
 
-### Data flow
-- Request enters through interface layer.
-- Application service validates input, enforces rules, and coordinates dependencies.
-- Results are persisted and returned with deterministic error handling.
+  planDoc = replaceSection(
+    planDoc,
+    "## 7. UX/UI Review (UX/UI Persona, if user-facing)",
+    `### Primary user flow
+- ${discoveryInterviewMode === "deep" ? "Flow must include complete state coverage and fallback paths." : "Flow must be explicit and testable."}
 
-### Key decisions
-- Preserve spec traceability from FR/AC to backlog/tests.
-- Keep interfaces explicit to reduce hidden coupling.
-- Prefer observable failure modes over silent degradation.
+### Key states (empty/loading/error/success)
+- Define deterministic behavior for empty/loading/error/success states.
 
-### Risks & mitigations
-- Dependency instability risk: add timeouts/retries and fallback behavior.
-- Constraint mismatch risk: validate assumptions before rollout.
-- Scope drift risk: block changes outside approved spec.
+### Accessibility baseline
+- Keyboard and screen-reader baseline for user-facing interactions.
 
-### Observability (logs/metrics/tracing)
-- Logs: authentication and error events with correlation IDs.
-- Metrics: success rate, latency, and failure-rate by endpoint/use case.
-- Tracing: end-to-end request trace across internal and external calls.`
+### Asset and placeholder strategy
+- ${qualityProfile.assetStrategy}
+- Avoid default primitive-only output when domain requires visual fidelity.`
   );
 
   fs.writeFileSync(outPlanFile, planDoc, "utf8");
 
-  const backlog = `# Backlog: ${feature}
-
-> Generated by \`aitri plan\`.
-> Spec-driven rule: every story MUST reference one or more Functional Rules (FR-*) and, when applicable, Acceptance Criteria (AC-*).
-> Discovery rigor profile: ${rigor.mode}.
-> Planning rule: ${rigor.backlogPolicy}
-
-## Epics
-- EP-1: <epic outcome>
-  - Notes:
-  - Trace: FR-?, FR-?
-- EP-2: <epic outcome>
-  - Notes:
-  - Trace: FR-?, FR-?
-
-## User Stories
-
-### US-1
-- As a <actor>, I want <capability>, so that <benefit>.
-- Trace: FR-?, AC-?
-- Acceptance Criteria:
-  - Given ..., when ..., then ...
-  - Given ..., when ..., then ...
-
-### US-2
-- As a <actor>, I want <capability>, so that <benefit>.
-- Trace: FR-?, AC-?
-- Acceptance Criteria:
-  - Given ..., when ..., then ...
-
-(repeat as needed)
-`;
-  const tests = `# Test Cases: ${feature}
-
-> Generated by \`aitri plan\`.
-> Spec-driven rule: every test MUST trace to a User Story (US-*) and one or more Functional Rules (FR-*). Include AC-* when applicable.
-> Discovery rigor profile: ${rigor.mode}.
-> QA rule: ${rigor.qaPolicy}
-
-## Functional
-
-### TC-1
-- Title: <what is being validated>
-- Trace: US-?, FR-?, AC-?
-- Steps:
-  1) Given <context>
-  2) When <action>
-  3) Then <expected>
-
-## Negative / Abuse
-
-### TC-2
-- Title: <invalid input or abuse scenario>
-- Trace: US-?, FR-?
-- Steps:
-  1) Given <invalid context>
-  2) When <action>
-  3) Then <rejected with clear error>
-
-## Security
-
-### TC-3
-- Title: <security control validation>
-- Trace: US-?, FR-?
-- Steps:
-  1) Given <threat scenario>
-  2) When <attempt>
-  3) Then <blocked/logged/limited>
-
-## Edge Cases
-
-### TC-4
-- Title: <edge case>
-- Trace: US-?, FR-?
-- Steps:
-  1) Given <edge context>
-  2) When <action>
-  3) Then <expected>
-`;
-
-  fs.writeFileSync(backlogFile, backlog, "utf8");
-  fs.writeFileSync(testsFile, tests, "utf8");
+  fs.writeFileSync(backlogFile, generated.backlog, "utf8");
+  fs.writeFileSync(testsFile, generated.tests, "utf8");
 
   console.log("Plan created: " + path.relative(process.cwd(), outPlanFile));
   printCheckpointSummary(runAutoCheckpoint({
@@ -557,9 +484,43 @@ export async function runValidateCommand({
     validatePositional.pop();
   }
 
-  let feature = normalizeFeatureName(options.feature || validatePositional[0]);
+  const rawFeatureInput = String(options.feature || validatePositional[0] || "").trim();
+  let feature = normalizeFeatureName(rawFeatureInput);
+  if (rawFeatureInput && !feature) {
+    const msg = "Invalid feature name. Use kebab-case (example: user-login).";
+    if (jsonOutput) {
+      console.log(JSON.stringify({
+        ok: false,
+        feature: null,
+        issues: [msg],
+        gaps: {
+          usage: [msg]
+        }
+      }, null, 2));
+    } else {
+      console.log(msg);
+    }
+    return ERROR;
+  }
   if (!feature && !options.nonInteractive) {
-    feature = normalizeFeatureName(await ask("Feature name (kebab-case, e.g. user-login): "));
+    const prompted = await ask("Feature name (kebab-case, e.g. user-login): ");
+    feature = normalizeFeatureName(prompted);
+    if (!feature && String(prompted || "").trim()) {
+      const msg = "Invalid feature name. Use kebab-case (example: user-login).";
+      if (jsonOutput) {
+        console.log(JSON.stringify({
+          ok: false,
+          feature: null,
+          issues: [msg],
+          gaps: {
+            usage: [msg]
+          }
+        }, null, 2));
+      } else {
+        console.log(msg);
+      }
+      return ERROR;
+    }
   }
 
   if (!feature) {
@@ -590,6 +551,7 @@ export async function runValidateCommand({
     missing_artifact: [],
     structure: [],
     placeholder: [],
+    story_contract: [],
     persona: [],
     coverage_fr_us: [],
     coverage_fr_tc: [],
@@ -630,6 +592,12 @@ export async function runValidateCommand({
   if (!fs.existsSync(testsFile)) {
     addIssue("missing_artifact", `Missing tests: ${path.relative(process.cwd(), testsFile)}`);
   }
+  if (!fs.existsSync(discoveryFile)) {
+    addIssue("missing_artifact", `Missing discovery: ${path.relative(process.cwd(), discoveryFile)}`);
+  }
+  if (!fs.existsSync(planFile)) {
+    addIssue("missing_artifact", `Missing plan: ${path.relative(process.cwd(), planFile)}`);
+  }
 
   result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
 
@@ -668,6 +636,37 @@ export async function runValidateCommand({
   }
   if (tests.includes("AC-?")) {
     addIssue("placeholder", "Tests contain placeholder `AC-?`. Replace with real Acceptance Criteria IDs (AC-1, AC-2...).");
+  }
+
+  const backlogGeneratedByPlan = /> Generated by `aitri plan`\./.test(backlog);
+  if (backlogGeneratedByPlan) {
+    const storyActors = [...backlog.matchAll(/- As an?\s+([^,]+),\s*I want\b/gi)]
+      .map((match) => match[1].trim())
+      .filter(Boolean);
+    if (storyActors.length === 0) {
+      addIssue(
+        "story_contract",
+        "Story contract: backlog generated by `aitri plan` must include story sentences in the form `As a <actor>, I want ...`."
+      );
+    } else {
+      const genericActorPattern = /^(user|users|customer|customers|client|clients|person|people)$/i;
+      storyActors
+        .filter((actor) => genericActorPattern.test(actor))
+        .forEach((actor) => {
+          addIssue(
+            "story_contract",
+            `Story contract: actor '${actor}' is too generic. Use a specific role (for example 'Admin', 'Level 1 Player', 'Support Agent').`
+          );
+        });
+    }
+
+    const hasGherkinCriteria = /\bGiven\b[\s\S]{0,200}\bWhen\b[\s\S]{0,200}\bThen\b/i.test(backlog);
+    if (!hasGherkinCriteria) {
+      addIssue(
+        "story_contract",
+        "Story contract: backlog generated by `aitri plan` must include at least one acceptance criterion in Given/When/Then format."
+      );
+    }
   }
 
   result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
@@ -710,12 +709,10 @@ export async function runValidateCommand({
   result.coverage.backlogUs = new Set(backlogUS).size;
   result.coverage.testsUs = testsUS.size;
 
-  if (fs.existsSync(discoveryFile) && fs.existsSync(planFile)) {
-    const discoveryContent = fs.readFileSync(discoveryFile, "utf8");
-    const planContent = fs.readFileSync(planFile, "utf8");
-    const personaIssues = collectPersonaValidationIssues({ discoveryContent, planContent });
-    personaIssues.forEach((issue) => addIssue("persona", issue));
-  }
+  const discoveryContent = fs.readFileSync(discoveryFile, "utf8");
+  const planContent = fs.readFileSync(planFile, "utf8");
+  const personaIssues = collectPersonaValidationIssues({ discoveryContent, planContent });
+  personaIssues.forEach((issue) => addIssue("persona", issue));
 
   result.gapSummary = Object.fromEntries(Object.entries(gapTypes).map(([k, v]) => [k, v.length]));
 

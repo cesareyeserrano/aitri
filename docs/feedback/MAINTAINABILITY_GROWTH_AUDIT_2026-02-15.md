@@ -31,6 +31,20 @@ This audit identifies files with uncontrolled growth risk and records baseline m
 - Split smoke tests by domain (`status`, `verify`, `policy`, `workflow`).
 - Add growth budgets and CI checks.
 
+## Current Control State (Updated 2026-02-15)
+- Command modularization completed for `verify`, `policy`, `resume`, `handoff`, and `go`.
+- Smoke suite split completed into domain files:
+  - `tests/smoke/cli-smoke-foundation.test.mjs`
+  - `tests/smoke/cli-smoke-workflow.test.mjs`
+  - `tests/smoke/cli-smoke-runtime-policy.test.mjs`
+  - `tests/smoke/cli-smoke-validation.test.mjs`
+- Budget source of truth defined: `docs/quality/file-size-budgets.json`
+- Growth check commands defined:
+  - `npm run check:file-growth`
+  - `npm run check:file-growth:strict`
+- Contributor workflow and CI policy definition documented in:
+  - `docs/guides/FILE_GROWTH_POLICY.md`
+
 Traceability:
 - `backlog/aitri-core/backlog.md` -> Epic 10 (`US-19`, `US-20`, `US-21`)
 - `docs/PROGRESS_CHECKLIST.md` -> Section 11

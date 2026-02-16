@@ -1,12 +1,4 @@
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function extractSection(content, heading) {
-  const pattern = new RegExp(`${escapeRegExp(heading)}([\\s\\S]*?)(?=\\n##\\s+\\d+\\.|$)`, "i");
-  const match = String(content).match(pattern);
-  return match ? match[1] : "";
-}
+import { escapeRegExp, extractSection } from "../lib.js";
 
 function extractFirstSection(content, headings) {
   for (const heading of headings) {
@@ -316,6 +308,64 @@ export function detectRetrievalModeFromDiscovery(discoveryContent) {
   const mode = String(discoveryContent || "").match(/Retrieval mode:\s*(section-level|semantic-lite)/i);
   if (!mode) return null;
   return mode[1].toLowerCase();
+}
+
+export function detectQualityDomain(...sources) {
+  const text = sources
+    .map((value) => String(value || ""))
+    .join("\n")
+    .toLowerCase();
+
+  if (/\b(game|gaming|phaser|three\.?js|sprite|sprites|canvas|3d|rendering engine)\b/.test(text)) {
+    return "game";
+  }
+  if (/\b(cli|command line|terminal|console app|shell tool)\b/.test(text)) {
+    return "cli";
+  }
+  if (/\b(web|saas|dashboard|portal|frontend|react|next\.?js|ui)\b/.test(text)) {
+    return "web";
+  }
+  return "general";
+}
+
+export function getQualityProfile(domain) {
+  const key = String(domain || "general");
+  const profiles = {
+    web: {
+      id: "web",
+      label: "Web/SaaS",
+      stackConstraint: "Use a component-based UI stack (for example React + Tailwind/shadcn or equivalent). Avoid raw static HTML/CSS-only scaffolds.",
+      forbiddenDefaults: "Raw HTML tables, default browser typography, and layout-only placeholders as final UI baseline.",
+      assetStrategy: "Use credible placeholder/image/icon sources (for example placehold.co, Lucide/Heroicons) and define an explicit fallback strategy.",
+      storyContract: "Stories must declare a specific actor role (avoid generic \"user\") and acceptance criteria should follow Given/When/Then."
+    },
+    game: {
+      id: "game",
+      label: "Game/Interactive",
+      stackConstraint: "Use a rendering/game engine (for example Phaser or Three.js). Avoid raw primitive-only canvas logic as architecture baseline.",
+      forbiddenDefaults: "Rectangle-only or geometry-only output without asset pipeline.",
+      assetStrategy: "Use external asset loading (sprites/GLTF/audio) with public-domain packs or placeholders and document fallback behavior.",
+      storyContract: "Stories must specify concrete player/system actors and acceptance criteria should follow Given/When/Then."
+    },
+    cli: {
+      id: "cli",
+      label: "CLI/Automation",
+      stackConstraint: "Use structured command modules and formatted terminal output (for example chalk/ora or equivalent patterns).",
+      forbiddenDefaults: "Unstructured raw console output as final UX baseline.",
+      assetStrategy: "Define output templates/examples and fallback text for non-interactive logs.",
+      storyContract: "Stories must specify concrete operator roles and acceptance criteria should follow Given/When/Then."
+    },
+    general: {
+      id: "general",
+      label: "General Product",
+      stackConstraint: "Use modular architecture with explicit boundaries and avoid monolithic scaffolds.",
+      forbiddenDefaults: "Single-file toy scaffolds without clear component/service boundaries.",
+      assetStrategy: "Define credible placeholder strategy for user-facing artifacts and deterministic textual fallback for non-visual flows.",
+      storyContract: "Stories should avoid generic actors and acceptance criteria should follow Given/When/Then where behavior matters."
+    }
+  };
+
+  return profiles[key] || profiles.general;
 }
 
 export function readDiscoveryField(discovery, label) {

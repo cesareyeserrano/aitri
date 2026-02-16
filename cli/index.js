@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getStatusReport, runStatus } from "./commands/status.js";
 import {
@@ -10,8 +10,19 @@ import {
   runPlanCommand,
   runValidateCommand
 } from "./commands/discovery-plan-validate.js";
-import { evaluatePolicyChecks, resolveVerifyFeature, runVerification } from "./commands/runtime.js";
+import { runDeliverCommand } from "./commands/deliver.js";
+import { runImplementCommand } from "./commands/implement.js";
+import { runCompletionGuide } from "./commands/post-delivery.js";
+import {
+  runGoCommand,
+  runHandoffCommand,
+  runPolicyCommand,
+  runResumeCommand,
+  runVerifyCommand
+} from "./commands/runtime-flow.js";
+import { runScaffoldCommand } from "./commands/scaffold.js";
 import { CONFIG_FILE, loadAitriConfig, resolveProjectPaths } from "./config.js";
+import { normalizeFeatureName } from "./lib.js";
 
 function showBanner() {
   const iron = "\x1b[38;5;24m";      // dark iron gray
@@ -52,7 +63,9 @@ function parseArgs(argv) {
     openUi: true,
     format: null,
     autoCheckpoint: true,
+    autoAdvance: true,
     nonInteractive: false,
+    strictPolicy: false,
     guided: false,
     yes: false,
     idea: null,
@@ -71,6 +84,8 @@ function parseArgs(argv) {
       parsed.ui = true;
     } else if (arg === "--no-open") {
       parsed.openUi = false;
+    } else if (arg === "--no-auto-advance") {
+      parsed.autoAdvance = false;
     } else if (arg === "--no-checkpoint") {
       parsed.autoCheckpoint = false;
     } else if (arg === "--format") {
@@ -80,6 +95,8 @@ function parseArgs(argv) {
       parsed.format = arg.slice("--format=".length).trim().toLowerCase();
     } else if (arg === "--non-interactive") {
       parsed.nonInteractive = true;
+    } else if (arg === "--strict-policy") {
+      parsed.strictPolicy = true;
     } else if (arg === "--guided") {
       parsed.guided = true;
     } else if (arg === "--yes" || arg === "-y") {
@@ -127,10 +144,6 @@ function wantsUi(options, positional = []) {
   if (options.ui) return true;
   if ((options.format || "").toLowerCase() === "ui") return true;
   return positional.some((p) => p.toLowerCase() === "ui");
-}
-
-function normalizeFeatureName(value) {
-  return (value || "").replace(/\s+/g, "-").trim();
 }
 
 function toRecommendedCommand(nextStep) {
@@ -214,7 +227,10 @@ function runAutoCheckpoint({ enabled, phase, feature }) {
     return { performed: false, reason: "not_git_repo" };
   }
 
-  const add = runGit("git add -A", cwd);
+  const project = getProjectContextOrExit();
+  const managed = Object.values(project.config.paths).map((p) => shellEscapeSingle(p));
+  const addPaths = managed.join(" ");
+  const add = runGit(`git add -- ${addPaths}`, cwd);
   if (!add.ok) return { performed: false, reason: "git_add_failed", detail: add.err };
 
   const hasChanges = runGit("git diff --cached --name-only", cwd);
@@ -259,6 +275,7 @@ function printCheckpointSummary(result) {
   }
   if (result.reason === "not_git_repo") {
     console.log("Auto-checkpoint skipped: not a git repository.");
+    console.log("Tip: initialize git to enable checkpoints (`git init && git add -A && git commit -m \"baseline\"`).");
     return;
   }
   if (result.reason !== "no_changes") {
@@ -286,6 +303,135 @@ async function confirmResume(opts) {
     if (answer === "n" || answer === "no") return false;
     console.log("Invalid input. Please type 'y' or 'n'.");
   }
+}
+
+async function confirmYesNo(question, defaultYes = true) {
+  while (true) {
+    const answer = (await ask(question)).trim().toLowerCase();
+    if (!answer) return defaultYes;
+    if (answer === "y" || answer === "yes") return true;
+    if (answer === "n" || answer === "no") return false;
+    console.log("Invalid input. Please type 'y' or 'n'.");
+  }
+}
+
+function parseRecommendedCommandTokens(recommendedCommand) {
+  const raw = String(recommendedCommand || "").trim();
+  if (!raw || /<[^>]+>/.test(raw)) return null;
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  if (tokens[0] === "aitri") {
+    tokens.shift();
+  }
+  if (tokens.length === 0) return null;
+  return tokens;
+}
+
+function shouldOfferAutoAdvance({ code, command, options }) {
+  if (code !== EXIT_OK) return false;
+  if (!options || options.autoAdvance === false) return false;
+  if (options.nonInteractive || options.yes) return false;
+  if (wantsJson(options, options.positional) || wantsUi(options, options.positional)) return false;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return false;
+  if (command === "help") return false;
+  return true;
+}
+
+async function maybePromptAndAdvance({ code, command, options, feature = null }) {
+  if (!shouldOfferAutoAdvance({ code, command, options })) {
+    return code;
+  }
+
+  let report;
+  try {
+    report = getStatusReport({
+      root: process.cwd(),
+      feature: feature || options.feature || null
+    });
+  } catch {
+    return code;
+  }
+
+  let recommended = report.recommendedCommand || toRecommendedCommand(report.nextStep);
+  if (command === "handoff" && report.nextStep === "ready_for_human_approval") {
+    // handoff already confirmed readiness; next operational step is explicit go/no-go.
+    recommended = "aitri go";
+  }
+  if (!recommended) return code;
+
+  const nextTokens = parseRecommendedCommandTokens(recommended);
+  const isSameCommand = Boolean(nextTokens && nextTokens[0] === command);
+
+  console.log("\nAitri guide:");
+  console.log(`- Current state: ${report.nextStep || "unknown"}`);
+  console.log(`- Recommended next step: ${recommended}`);
+  if (report.nextStepMessage) {
+    console.log(`- Why: ${report.nextStepMessage}`);
+  }
+
+  if (report.nextStep === "delivery_complete") {
+    return runCompletionGuide({
+      report,
+      root: process.cwd(),
+      cliPath: fileURLToPath(import.meta.url),
+      confirmYesNo,
+      baseCode: code
+    });
+  }
+
+  if (!nextTokens) {
+    console.log(`- Continue manually with: ${recommended}`);
+    return code;
+  }
+
+  if (isSameCommand) {
+    console.log(`- Continue manually with: ${recommended}`);
+    return code;
+  }
+
+  // After implement, the agent/human must write actual code before verify can pass.
+  // Do NOT auto-advance past this point — the test stubs fail by design.
+  if (command === "implement") {
+    console.log("\n⚒ IMPLEMENTATION REQUIRED:");
+    console.log("- Aitri generated implementation briefs. Now YOU (or your AI agent) must write the actual code.");
+    console.log("- Read: docs/implementation/<feature>/IMPLEMENTATION_ORDER.md");
+    console.log("- For each US-* brief, implement the code that satisfies the acceptance criteria.");
+    console.log("- Test stubs are in tests/<feature>/generated/ — they FAIL until you write real logic.");
+    console.log("- After implementing each story, run: aitri verify");
+    return code;
+  }
+
+  const proceed = await confirmYesNo("Run this next step now? (Y/n): ", true);
+  if (!proceed) {
+    console.log(`Stopped. Continue later with: ${recommended}`);
+    return code;
+  }
+
+  const cliPath = fileURLToPath(import.meta.url);
+  const printable = `aitri ${nextTokens.join(" ")}`;
+  console.log(`Running next step: ${printable}`);
+
+  const run = spawnSync(process.execPath, [cliPath, ...nextTokens], {
+    cwd: process.cwd(),
+    stdio: "inherit",
+    env: { ...process.env }
+  });
+
+  if (typeof run.status === "number") {
+    return run.status;
+  }
+
+  if (run.error instanceof Error) {
+    console.log(`Auto-advance failed: ${run.error.message}`);
+  } else {
+    console.log("Auto-advance failed.");
+  }
+  return EXIT_ERROR;
+}
+
+async function exitWithFlow({ code, command, options, feature = null }) {
+  const finalCode = await maybePromptAndAdvance({ code, command, options, feature });
+  process.exit(finalCode);
 }
 
 function printGuidedDraftWizard() {
@@ -353,6 +499,9 @@ Commands:
   approve    Approve a draft spec (runs gates and moves draft into approved specs)
   discover   Generate discovery + artifact scaffolding from an approved spec (use --guided for discovery interview)
   plan       Generate plan doc + traceable backlog/tests from an approved spec
+  scaffold   Generate post-go project skeleton, executable TC stubs, and FR interfaces
+  implement  Generate ordered implementation briefs per US-* after scaffold
+  deliver    Run final delivery gate (FR coverage + TC pass + confidence threshold)
   verify     Execute runtime verification suite and persist machine-readable evidence
   policy     Run managed-go policy checks (dependency drift, forbidden imports/paths)
   validate   Validate traceability placeholders are resolved (FR/AC/US/TC)
@@ -370,6 +519,8 @@ Options:
   --retrieval-mode <m>   Retrieval mode for discover/plan: section | semantic
   --ui                   Generate static status insight page (status command)
   --no-open              Do not auto-open generated status UI page
+  --no-auto-advance      Disable guided yes/no auto-advance to the next step
+  --strict-policy        Require full git-based managed-go policy checks (blocks go outside git)
   --non-interactive      Do not prompt; fail if required args are missing
   --json, -j             Output machine-readable JSON (status, validate)
   --format <type>        Output format (json supported)
@@ -418,15 +569,25 @@ if (cmd === "init") {
     phase: "init",
     feature: "project"
   }));
-  process.exit(EXIT_OK);
+  await exitWithFlow({ code: EXIT_OK, command: cmd, options });
 }
  
 if (cmd === "draft") {
   const project = getProjectContextOrExit();
   // We expect to run this from a project repo, not from the Aitri repo
-  let feature = normalizeFeatureName(options.feature || options.positional[0]);
+  const rawFeatureInput = String(options.feature || options.positional[0] || "").trim();
+  let feature = normalizeFeatureName(rawFeatureInput);
+  if (rawFeatureInput && !feature) {
+    console.log("Invalid feature name. Use kebab-case (example: user-login).");
+    process.exit(EXIT_ERROR);
+  }
   if (!feature && !options.nonInteractive) {
-    feature = normalizeFeatureName(await ask("Feature name in kebab-case (example: user-login): "));
+    const prompted = await ask("Feature name in kebab-case (example: user-login): ");
+    feature = normalizeFeatureName(prompted);
+    if (!feature && String(prompted || "").trim()) {
+      console.log("Invalid feature name. Use kebab-case (example: user-login).");
+      process.exit(EXIT_ERROR);
+    }
   }
   if (!feature) {
     console.log("Feature name is required. Use kebab-case (example: user-login).");
@@ -532,14 +693,25 @@ if (cmd === "draft") {
     phase: "draft",
     feature
   }));
-  process.exit(EXIT_OK);
+  console.log(`Next recommended command: aitri approve --feature ${feature}`);
+  await exitWithFlow({ code: EXIT_OK, command: cmd, options, feature });
 }
 
 if (cmd === "approve") {
   const project = getProjectContextOrExit();
-  let feature = normalizeFeatureName(options.feature || options.positional[0]);
+  const rawFeatureInput = String(options.feature || options.positional[0] || "").trim();
+  let feature = normalizeFeatureName(rawFeatureInput);
+  if (rawFeatureInput && !feature) {
+    console.log("Invalid feature name. Use kebab-case (example: user-login).");
+    process.exit(EXIT_ERROR);
+  }
   if (!feature && !options.nonInteractive) {
-    feature = normalizeFeatureName(await ask("Feature name to approve (kebab-case): "));
+    const prompted = await ask("Feature name to approve (kebab-case): ");
+    feature = normalizeFeatureName(prompted);
+    if (!feature && String(prompted || "").trim()) {
+      console.log("Invalid feature name. Use kebab-case (example: user-login).");
+      process.exit(EXIT_ERROR);
+    }
   }
   if (!feature) {
     console.log("Feature name is required. Use --feature <name> in non-interactive mode.");
@@ -583,11 +755,15 @@ if (cmd === "approve") {
         .replace(/^FR-\d+\s*:\s*/i, "")
         .replace(/^\d+\.\s+/, "")
         .trim();
-      return cleaned.length >= 8 && !/^<.*>$/.test(cleaned);
+      if (cleaned.length < 8) return false;
+      if (/^<.*>$/.test(cleaned)) return false;
+      if (/<verifiable rule>/i.test(cleaned)) return false;
+      if (/<[a-z\s]+>/i.test(cleaned) && cleaned.replace(/<[^>]+>/g, "").trim().length < 8) return false;
+      return true;
     });
 
     if (!(hasFR || hasLegacyNumbered) || !meaningful) {
-      issues.push("Functional Rules must include at least one meaningful rule using `- FR-1: ...` (preferred) or legacy `1. ...` format.");
+      issues.push("Functional Rules must include at least one meaningful rule using `- FR-1: ...` (preferred) or legacy `1. ...` format. Replace all <placeholder> tokens with real content.");
     }
   }
 
@@ -613,18 +789,83 @@ if (cmd === "approve") {
   if (!acMatch) {
     issues.push("Missing section: `## 9. Acceptance Criteria`.");
   } else {
-    const lines = acMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
-    const meaningful = lines.some(l =>
-      l !== "-" && !/^<.*>$/.test(l) && l.replace(/^[-*]\s*/, "").trim().length >= 8
-    );
-    if (!meaningful) {
-      issues.push("Acceptance Criteria must include at least one meaningful bullet.");
+    const acLines = acMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
+    const acMeaningful = acLines.some(l => {
+      const cleaned = l
+        .replace(/^[-*]\s*/, "")
+        .replace(/^AC-\d+\s*:\s*/i, "")
+        .trim();
+      if (cleaned.length < 8) return false;
+      if (/^<.*>$/.test(cleaned)) return false;
+      if (/<context>/i.test(cleaned) || /<action>/i.test(cleaned) || /<expected>/i.test(cleaned)) return false;
+      if (/<[a-z\s]+>/i.test(cleaned) && cleaned.replace(/<[^>]+>/g, "").trim().length < 8) return false;
+      return true;
+    });
+    if (!acMeaningful) {
+      issues.push("Acceptance Criteria must include at least one meaningful criterion. Replace all <placeholder> tokens (e.g. <context>, <action>, <expected>) with real content.");
+    }
+  }
+
+  // Actors check (section 2)
+  const actorsMatch = content.match(/## 2\. Actors([\s\S]*?)(\n##\s|\s*$)/);
+  if (!actorsMatch) {
+    issues.push("Missing section: `## 2. Actors`.");
+  } else {
+    const actorLines = actorsMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
+    const actorMeaningful = actorLines.some(l => {
+      const cleaned = l.replace(/^[-*]\s*/, "").trim();
+      if (cleaned.length < 3) return false;
+      if (/^<.*>$/.test(cleaned)) return false;
+      if (/<actor>/i.test(cleaned) || /<role>/i.test(cleaned)) return false;
+      return true;
+    });
+    if (!actorMeaningful) {
+      issues.push("Actors section must list at least one real actor/role. Replace all <placeholder> tokens with real content.");
+    }
+  }
+
+  // Edge Cases check (section 4)
+  const edgeMatch = content.match(/## 4\. Edge Cases([\s\S]*?)(\n##\s|\s*$)/);
+  if (!edgeMatch) {
+    issues.push("Missing section: `## 4. Edge Cases`.");
+  } else {
+    const edgeLines = edgeMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
+    const edgeMeaningful = edgeLines.some(l => {
+      const cleaned = l.replace(/^[-*]\s*/, "").trim();
+      if (cleaned.length < 8) return false;
+      if (/^<.*>$/.test(cleaned)) return false;
+      if (/<[a-z\s]+>/i.test(cleaned) && cleaned.replace(/<[^>]+>/g, "").trim().length < 8) return false;
+      return true;
+    });
+    if (!edgeMeaningful) {
+      issues.push("Edge Cases must include at least one meaningful scenario. Replace all <placeholder> tokens with real content.");
+    }
+  }
+
+  // Asset strategy check for visual/game/web domains
+  const contextMatch = content.match(/## 1\. Context([\s\S]*?)(\n##\s|\s*$)/);
+  const contextText = contextMatch ? contextMatch[1].toLowerCase() : "";
+  const fullLower = content.toLowerCase();
+  const isVisualDomain = /\b(game|juego|sprite|canvas|webgl|three\.?js|phaser|godot|unity|animation|visual|graphic|ui\s*design|web\s*app|frontend|pixel|tilemap|asset|artwork|render)\b/.test(contextText) ||
+    /\b(game|juego|sprite|canvas|webgl|three\.?js|phaser)\b/.test(fullLower);
+
+  if (isVisualDomain) {
+    const hasAssetSection = /##\s*\d*\.?\s*(Assets|Asset Strategy|Visual Assets|Art Direction|Resource Requirements)/i.test(content);
+    const hasAssetMention = /\b(sprite|texture|image|sound|audio|music|font|tileset|asset|artwork|art\s*style|resolution|pixel\s*art|3d\s*model)\b/i.test(content);
+    if (!hasAssetSection && !hasAssetMention) {
+      issues.push("This spec describes a visual/game project but has no asset strategy. Add a section describing required assets (sprites, sounds, art style, etc.) or reference them in Functional Rules.");
     }
   }
 
   if (issues.length > 0) {
     console.log("GATE FAILED:");
     issues.forEach(i => console.log("- " + i));
+    console.log("\nNext recommended step:");
+    console.log(`- Fix: ${path.relative(process.cwd(), draftsFile)}`);
+    if (issues.some((issue) => issue.includes("Security Considerations"))) {
+      console.log("- Tip: add at least one concrete bullet under `## 7. Security Considerations`.");
+    }
+    console.log(`- Run: aitri approve --feature ${feature}`);
     process.exit(EXIT_ERROR);
   }
 
@@ -657,7 +898,7 @@ if (cmd === "approve") {
     phase: "approve",
     feature
   }));
-  process.exit(EXIT_OK);
+  await exitWithFlow({ code: EXIT_OK, command: cmd, options, feature });
 }
 
 if (cmd === "discover") {
@@ -670,7 +911,7 @@ if (cmd === "discover") {
     runAutoCheckpoint,
     exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
   });
-  process.exit(code);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "plan") {
@@ -683,133 +924,64 @@ if (cmd === "plan") {
     runAutoCheckpoint,
     exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
   });
-  process.exit(code);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "verify") {
-  const project = getProjectContextOrExit();
-  const verifyPositional = [...options.positional];
-  const jsonOutput = wantsJson(options, verifyPositional);
-  if (verifyPositional.length > 0 && verifyPositional[verifyPositional.length - 1].toLowerCase() === "json") {
-    verifyPositional.pop();
-  }
-
-  let feature = null;
-  try {
-    feature = resolveVerifyFeature({ ...options, positional: verifyPositional }, process.cwd());
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
-    if (jsonOutput) {
-      console.log(JSON.stringify({ ok: false, feature: null, issues: [msg] }, null, 2));
-    } else {
-      console.log(msg);
-    }
-    process.exit(EXIT_ERROR);
-  }
-  if (!feature) {
-    const msg = "Feature name is required. Use --feature <name> or ensure an approved spec exists.";
-    if (jsonOutput) {
-      console.log(JSON.stringify({
-        ok: false,
-        feature: null,
-        issues: [msg]
-      }, null, 2));
-    } else {
-      console.log(msg);
-    }
-    process.exit(EXIT_ERROR);
-  }
-
-  const result = runVerification({
-    root: process.cwd(),
-    feature,
-    verifyCmd: options.verifyCmd
+  const code = await runVerifyCommand({
+    options,
+    getProjectContextOrExit,
+    ask,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
   });
+  await exitWithFlow({ code, command: cmd, options });
+}
 
-  const evidenceDir = project.paths.docsVerificationDir;
-  const evidenceFile = project.paths.verificationFile(feature);
-  fs.mkdirSync(evidenceDir, { recursive: true });
-  fs.writeFileSync(evidenceFile, JSON.stringify({
-    ...result,
-    evidenceFile: path.relative(process.cwd(), evidenceFile)
-  }, null, 2), "utf8");
+if (cmd === "scaffold") {
+  const code = await runScaffoldCommand({
+    options,
+    getProjectContextOrExit,
+    getStatusReportOrExit,
+    confirmProceed,
+    printCheckpointSummary,
+    runAutoCheckpoint,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
+}
 
-  const payload = {
-    ...result,
-    evidenceFile: path.relative(process.cwd(), evidenceFile)
-  };
+if (cmd === "implement") {
+  const code = await runImplementCommand({
+    options,
+    getProjectContextOrExit,
+    getStatusReportOrExit,
+    confirmProceed,
+    printCheckpointSummary,
+    runAutoCheckpoint,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
+}
 
-  if (jsonOutput) {
-    console.log(JSON.stringify(payload, null, 2));
-  } else if (payload.ok) {
-    console.log("VERIFICATION PASSED ✅");
-    console.log(`- Feature: ${payload.feature}`);
-    console.log(`- Command: ${payload.command}`);
-    console.log(`- Evidence: ${payload.evidenceFile}`);
-    if (payload.stdoutTail) console.log(`- Output (tail):\n${payload.stdoutTail}`);
-  } else {
-    console.log("VERIFICATION FAILED ❌");
-    console.log(`- Feature: ${payload.feature}`);
-    console.log(`- Command: ${payload.command || "(not detected)"}`);
-    console.log(`- Evidence: ${payload.evidenceFile}`);
-    console.log(`- Reason: ${payload.reason}`);
-    if (payload.stderrTail) console.log(`- Error (tail):\n${payload.stderrTail}`);
-    if (Array.isArray(payload.suggestions) && payload.suggestions.length > 0) {
-      console.log("- Suggested fixes:");
-      payload.suggestions.forEach((item) => console.log(`  - ${item}`));
-    }
-  }
-
-  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
+if (cmd === "deliver") {
+  const code = await runDeliverCommand({
+    options,
+    getProjectContextOrExit,
+    getStatusReportOrExit,
+    confirmProceed,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "policy") {
-  const policyPositional = [...options.positional];
-  const jsonOutput = wantsJson(options, policyPositional);
-  if (policyPositional.length > 0 && policyPositional[policyPositional.length - 1].toLowerCase() === "json") {
-    policyPositional.pop();
-  }
-
-  const project = getProjectContextOrExit();
-  let feature = normalizeFeatureName(options.feature || policyPositional[0]);
-  if (!feature) {
-    const report = getStatusReportOrExit();
-    feature = report.approvedSpec.feature || null;
-  }
-
-  if (!feature) {
-    const msg = "Feature name is required. Use --feature <name> or ensure an approved spec exists.";
-    if (jsonOutput) {
-      console.log(JSON.stringify({ ok: false, feature: null, issues: [msg] }, null, 2));
-    } else {
-      console.log(msg);
-    }
-    process.exit(EXIT_ERROR);
-  }
-
-  const payload = evaluatePolicyChecks({
-    root: process.cwd(),
-    feature,
-    project
+  const code = runPolicyCommand({
+    options,
+    getProjectContextOrExit,
+    getStatusReportOrExit,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
   });
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(payload, null, 2));
-  } else if (payload.ok) {
-    console.log("POLICY PASSED ✅");
-    console.log(`- Feature: ${payload.feature}`);
-    console.log(`- Evidence: ${payload.evidenceFile}`);
-    if (payload.warnings.length > 0) {
-      payload.warnings.forEach((warning) => console.log(`- Warning: ${warning}`));
-    }
-  } else {
-    console.log("POLICY FAILED ❌");
-    console.log(`- Feature: ${payload.feature}`);
-    console.log(`- Evidence: ${payload.evidenceFile}`);
-    payload.issues.forEach((issue) => console.log(`- ${issue}`));
-  }
-
-  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "validate") {
@@ -819,144 +991,58 @@ if (cmd === "validate") {
     getProjectContextOrExit,
     exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
   });
-  process.exit(code);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "status") {
   try {
-    runStatus({
+    const ok = runStatus({
       json: wantsJson(options, options.positional),
       ui: wantsUi(options, options.positional),
       openUi: options.openUi,
-      root: process.cwd()
+      root: process.cwd(),
+      feature: options.feature
     });
+    if (!ok) process.exit(EXIT_ERROR);
   } catch (error) {
     const message = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
     console.log(message);
     process.exit(EXIT_ERROR);
   }
-  process.exit(EXIT_OK);
+  await exitWithFlow({ code: EXIT_OK, command: cmd, options });
 }
 
 if (cmd === "resume") {
-  const report = getStatusReportOrExit();
-  const jsonOutput = wantsJson(options, options.positional);
-  const checkpointDetected = report.checkpoint.state.detected;
-  const needsResumeDecision = report.checkpoint.state.resumeDecision === "ask_user_resume_from_checkpoint";
-  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
-
-  const payload = {
-    ok: true,
-    checkpointDetected,
-    resumeDecision: report.checkpoint.state.resumeDecision,
-    nextStep: report.nextStep,
-    recommendedCommand,
-    message: needsResumeDecision
-      ? "Checkpoint detected. Explicit user confirmation is required to continue."
-      : "No checkpoint decision required. Continue with recommended command."
-  };
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(payload, null, 2));
-    process.exit(EXIT_OK);
-  }
-
-  if (needsResumeDecision) {
-    const proceed = await confirmResume(options);
-    if (proceed === null) {
-      console.log("Non-interactive mode requires --yes to confirm resume from checkpoint.");
-      process.exit(EXIT_ERROR);
-    }
-    if (!proceed) {
-      console.log("Resume decision: STOP.");
-      process.exit(EXIT_ABORTED);
-    }
-  }
-
-  console.log("Resume decision: CONTINUE.");
-  console.log(`Current state: ${report.nextStep}`);
-  console.log(`Recommended next command: ${recommendedCommand}`);
-  process.exit(EXIT_OK);
+  const code = await runResumeCommand({
+    options,
+    getStatusReportOrExit,
+    toRecommendedCommand,
+    confirmResume,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "handoff") {
-  const report = getStatusReportOrExit();
-  const jsonOutput = wantsJson(options, options.positional);
-  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
-  const payload = {
-    ok: report.nextStep === "ready_for_human_approval",
-    feature: report.approvedSpec.feature,
-    nextStep: report.nextStep,
-    recommendedCommand,
-    handoff: report.handoff
-  };
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(payload, null, 2));
-  } else if (payload.ok) {
-    console.log("HANDOFF READY ✅");
-    console.log(`Feature: ${payload.feature}`);
-    console.log("Human decision required: GO or NO-GO for implementation.");
-    console.log("Recommended next command: aitri go");
-  } else {
-    console.log("HANDOFF NOT READY ❌");
-    console.log(`Current state: ${payload.nextStep}`);
-    if (payload.recommendedCommand) {
-      console.log(`Run next command: ${payload.recommendedCommand}`);
-    }
-    console.log("Complete the SDLC flow first, then run handoff again.");
-  }
-
-  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
+  const code = runHandoffCommand({
+    options,
+    getStatusReportOrExit,
+    toRecommendedCommand,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
+  });
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "go") {
-  const report = getStatusReportOrExit();
-  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
-  const ready = report.nextStep === "ready_for_human_approval";
-  if (!ready) {
-    console.log("GO BLOCKED: SDLC flow is not ready for implementation handoff.");
-    console.log(`Current state: ${report.nextStep}`);
-    if (recommendedCommand) {
-      console.log(`Run next command: ${recommendedCommand}`);
-    }
-    process.exit(EXIT_ERROR);
-  }
-
-  const project = getProjectContextOrExit();
-  const policy = evaluatePolicyChecks({
-    root: process.cwd(),
-    feature: report.approvedSpec.feature,
-    project
+  const code = await runGoCommand({
+    options,
+    getStatusReportOrExit,
+    toRecommendedCommand,
+    getProjectContextOrExit,
+    confirmProceed,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
   });
-  if (!policy.ok) {
-    console.log("GO BLOCKED: managed-go policy checks failed.");
-    policy.issues.forEach((issue) => console.log(`- ${issue}`));
-    console.log(`Policy evidence: ${policy.evidenceFile}`);
-    process.exit(EXIT_ERROR);
-  }
-
-  const proceed = await confirmProceed(options);
-  if (proceed === null) {
-    console.log("Non-interactive mode requires --yes for go/no-go confirmation.");
-    process.exit(EXIT_ERROR);
-  }
-  if (!proceed) {
-    console.log("Implementation go/no-go decision: NO-GO.");
-    process.exit(EXIT_ABORTED);
-  }
-
-  const feature = report.approvedSpec.feature;
-
-  console.log("Implementation go/no-go decision: GO.");
-  console.log("Use approved artifacts as source of truth:");
-  console.log(`- ${report.approvedSpec.file}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.discoveryFile(feature))}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.planFile(feature))}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.backlogFile(feature))}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.testsFile(feature))}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.verificationFile(feature))}`);
-  process.exit(EXIT_OK);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 console.log("Unknown command.");

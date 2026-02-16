@@ -119,12 +119,15 @@ Primary references:
 - Execution rules: `docs/EXECUTION_GUARDRAILS.md`
 - Strategy: `docs/STRATEGY_EXECUTION.md`
 - Progress checklist: `docs/PROGRESS_CHECKLIST.md`
+- File growth policy: `docs/guides/FILE_GROWTH_POLICY.md`
 - Checkpoint/resume runbook: `docs/runbook/SESSION_CHECKPOINT_AND_RESUME.md`
 - Skill packaging guide: `docs/guides/SKILL_PACKAGING_AND_INSTALL.md`
 
 ## Contributor Validation
 ```bash
 npm run test:smoke
+npm run check:file-growth
+npm run check:file-growth:strict
 npm run demo:5min
 ```
 

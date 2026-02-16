@@ -19,6 +19,13 @@ When rules conflict, use this order:
 4. No silent quality downgrade (tests, validation, traceability, docs).
 5. No destructive action without explicit human approval.
 
+## Stabilization Freeze Rule (Closed 2026-02-16)
+Historical rule (now closed):
+- No new feature work until critical closure of H-001/H-002/H-003.
+- Closure status and evidence are tracked in:
+  - `docs/quality/STABILIZATION_RELEASE_GATE_2026-02-16.md`
+  - `docs/feedback/AUDITORIA_E2E_2026-02-16.md`
+
 ## Caprice Firewall (Anti-Impulsive Change Protocol)
 Any request that changes scope, quality bar, or architecture direction must pass all steps below before implementation:
 1. State the requested change in one sentence.
@@ -55,6 +62,24 @@ Required docs update:
 - Add a note in `docs/STRATEGY_EXECUTION.md` under risks/decisions.
 - Update `docs/PROGRESS_CHECKLIST.md` with a follow-up item.
 
+## Quality Profile Override Protocol (Phase G)
+When domain quality profiles are introduced (web/game/cli), overrides must remain controlled.
+
+Required format:
+- Profile selected and profile overridden
+- Reason and scope (feature-only or project-wide)
+- Duration (temporary/permanent)
+- Risks accepted
+- Rollback condition
+
+Required docs update:
+- Add override record in `docs/quality/STABILIZATION_RELEASE_GATE_2026-02-16.md` (or successor gate file).
+- Mirror follow-up item in `docs/PROGRESS_CHECKLIST.md`.
+
+Anti-bloat condition:
+- Overrides cannot introduce ROI/business-management layers in this cycle.
+- Scope stays in Spec/Execution quality.
+
 ## Session Start Contract (for agents)
 At the start of every session:
 1. Read `docs/README.md`
@@ -65,6 +90,8 @@ At the start of every session:
 
 ## Runtime Sequence Contract (for agents)
 Use the following sequence and do not skip gates:
+
+### Pre-Go Phase (Governance)
 1. `aitri resume`
 2. `aitri init` (if structure is missing)
 3. `aitri draft`
@@ -76,11 +103,28 @@ Use the following sequence and do not skip gates:
 9. `aitri validate`
 10. `aitri verify`
 11. `aitri policy`
-12. human approval before implementation
-13. human approval before deployment assistance
+12. `aitri handoff`
+13. human GO/NO-GO decision
+14. `aitri go` (only after GO)
+
+### Post-Go Phase (Factory Execution)
+15. `aitri scaffold` — generate project skeleton and executable test stubs
+16. `aitri implement` — receive ordered implementation briefs
+17. Implement each US-* brief in order specified by IMPLEMENTATION_ORDER.md
+18. After each US-*: `aitri verify` to confirm TC-* coverage
+19. Repeat 17-18 until all stories are implemented
+20. `aitri deliver` — final delivery gate (all FRs covered, all TCs passing)
+
+Post-go rules:
+- Do not change implementation order without spec update
+- Do not modify scaffold interface signatures without spec update
+- Run `aitri verify` after every story implementation, not just at the end
+- If `aitri deliver` fails, fix the issues and re-run — do not bypass
 
 ## Mandatory Stop Conditions
 Stop and ask for direction when any of these is true:
+
+### Pre-Go Conditions
 - approved spec is missing
 - `validate` fails
 - unresolved placeholders exist
@@ -89,14 +133,32 @@ Stop and ask for direction when any of these is true:
 - deployment target or risk is ambiguous
 - `verify` or `policy` fails
 
+### Post-Go Conditions (Factory)
+- `scaffold` has not been run before attempting `implement`
+- `implement` has not been run before attempting story implementation
+- `verify` fails after implementing a story — stop and fix before next story
+- implementation order differs from IMPLEMENTATION_ORDER.md without spec update
+- interface contract from scaffold has been changed without spec approval
+- `deliver` gate fails — do not ship, resolve issues first
+
 ## Validation Floor Contract
 `validate`/`verify`/`policy` must guarantee at minimum:
+
+### Pre-Go Validation
 - approved spec, backlog, and tests exist
 - placeholder blocking stays enforced
 - FR/US/TC structure and coverage are checked
 - persona gates remain enforced for Discovery/Product/Architect outputs
 - runtime verification evidence exists, is passing, and not stale
 - managed-go policy checks pass (dependency drift + forbidden imports/paths)
+
+### Post-Go Validation (Factory)
+- `verify` (enhanced) maps executed tests to TC-* declarations
+- every TC-* in tests.md must have a corresponding executable test file
+- FR coverage: every FR-* from spec has at least one passing TC
+- US coverage: every US-* from backlog has all associated TCs passing
+- `deliver` enforces configurable confidence threshold (default 0.85)
+- delivery gate blocks when any FR is uncovered or any TC is failing
 
 ## Session End Contract (for agents)
 Before ending a substantial work block:
@@ -109,6 +171,8 @@ Before ending a substantial work block:
 ## Checkpoint Discipline
 Checkpoint frequency:
 - After each major phase (`draft`, `approve`, `discover`, `plan`, `validate`)
+- After `scaffold` and `implement` (post-go phases)
+- After each US-* story implementation completes and `verify` passes
 - Before stopping a session with unmerged progress
 
 Checkpoint command:

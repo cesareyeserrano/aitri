@@ -86,8 +86,92 @@ Check items as they are completed to prevent context drift.
 
 ## 11) Maintainability Growth Control
 - [x] Split high-complexity `cli/index.js` paths into command-level modules (`discover`, `plan`, `validate`, runtime/persona helper modules)
-- [ ] Continue modularization for remaining `cli/index.js` command paths (`verify`, `policy`, `handoff`, `go`, `resume`)
-- [ ] Split `tests/smoke/cli-smoke.test.mjs` into domain-focused smoke suites
-- [ ] Define and enforce line-count budgets for core source/test files
-- [ ] Add CI warning/block policy for files over growth thresholds
-- [ ] Document file-growth dashboard/check report in contributor workflow
+- [x] Continue modularization for remaining `cli/index.js` command paths (`verify`, `policy`, `handoff`, `go`, `resume`)
+- [x] Split `tests/smoke/cli-smoke.test.mjs` into domain-focused smoke suites
+- [x] Define and enforce line-count budgets for core source/test files
+- [x] Add CI warning/block policy for files over growth thresholds
+- [x] Document file-growth dashboard/check report in contributor workflow
+
+## 12) E2E Audit Stabilization (2026-02-16)
+- [x] Audit report published with Impacto/Severidad/Valor/Riesgo (`docs/feedback/AUDITORIA_E2E_2026-02-16.md`)
+- [x] Strategy updated with stabilization window and no-feature rule (`docs/STRATEGY_EXECUTION.md`)
+- [x] Docs index updated with E2E audit reference (`docs/README.md`)
+- [x] H-001 closed: block path traversal via `--feature` and enforce write containment
+- [x] H-002 closed: `validate` enforces `discovery` + `plan` presence for persona gates
+- [x] H-003 closed: `go` blocks or requires explicit override when policy drift checks are limited (non-git)
+- [x] H-004 closed: `status --feature` deterministic in multi-feature repositories
+- [x] H-005 closed: `verify` execution hardened (timeout/command controls)
+- [x] H-006 closed: plan retrieval mode output is consistent
+- [x] Critical closure gate complete (H-001/H-002/H-003)
+- [x] Post-remediation verification rerun complete (`npm run test:smoke`, `npm run demo:5min`)
+
+## 13) Production Quality Feedback Integration (2026-02-16)
+- [x] Feedback assessment documented (`docs/feedback/PRODUCTION_QUALITY_FEEDBACK_ASSESSMENT_2026-02-16.md`)
+- [x] Strategy synchronized with post-stabilization quality-hardening phase (`docs/STRATEGY_EXECUTION.md`)
+- [x] Backlog synchronized with domain-quality scope (`backlog/aitri-core/backlog.md`)
+- [x] Q-001 ready: domain-aware quality profiles defined and testable
+- [x] Q-002 ready: asset strategy baseline enforced in planning outputs
+- [x] Q-003 ready: story/AC quality contract (specific actor + Gherkin) enforced in validation
+- [x] Q-004 ready: `verify` runtime hardening complete
+- [x] Q-005 decision closed: brownfield extension accepted/deferred with rationale
+- [x] Phase G can start (only after Critical Stabilization Window gate is complete)
+
+## 14) Gate Ownership and CI Closure Controls (2026-02-16)
+- [x] Single release gate file published (`docs/quality/STABILIZATION_RELEASE_GATE_2026-02-16.md`)
+- [x] Owner and target date assigned for H-001..H-006
+- [x] Owner and target date assigned for Q-001..Q-005
+- [x] CI workflow publishes stabilization-gate snapshot for visibility
+- [x] CI blocker for critical findings active (not only smoke/file-growth)
+- [x] Release gate status moved from OPEN to CLOSED with evidence
+
+## 15) Software Factory Transformation (Phase H)
+
+### H.1: Real Content Generation
+- [x] `cli/commands/spec-parser.js` created: extracts actors, FRs, ACs, edge cases, tech stack from spec
+- [x] `cli/commands/content-generator.js` created: generates concrete backlogs and tests from parsed spec
+- [x] `cli/commands/discovery-plan-validate.js` modified: uses content-generator instead of placeholder templates
+- [x] `aitri plan` backlog output has zero `FR-?`, `AC-?`, `<actor>` placeholders
+- [x] Generated test cases have concrete Given/When/Then from spec ACs
+- [x] Architecture section uses detected tech stack for specific component names
+- [x] Smoke tests verify real content generation
+
+### H.2: Scaffold Post-Go
+- [x] `cli/commands/scaffold.js` created: generates project skeleton and test stubs
+- [x] `core/templates/scaffold/` created with per-stack templates
+- [x] `aitri scaffold` command routed in `cli/index.js`
+- [x] `cli/config.js` extended with scaffold output paths
+- [x] Scaffold generates executable test stubs for each TC-* with TC header comments
+- [x] Scaffold generates interface stubs for each FR with traceability
+- [x] Scaffold generates stack-appropriate config files
+- [x] `scaffold` blocked if `go` has not been completed
+- [x] Smoke tests verify scaffold generation
+- [x] File-growth budgets added for new files
+
+### H.3: Implementation Orchestration
+- [x] `cli/commands/implement.js` created: generates per-story briefs
+- [x] `aitri implement` command routed in `cli/index.js`
+- [x] Implementation briefs include complete context per US-*
+- [x] IMPLEMENTATION_ORDER.md generated with dependency-ordered stories
+- [x] `adapters/claude/SKILL.md` updated with post-go workflow
+- [x] `adapters/codex/SKILL.md` updated with post-go workflow
+- [x] `adapters/opencode/SKILL.md` updated with post-go workflow
+- [x] Smoke tests verify implementation brief generation
+
+### H.4: Closed-Loop Verification
+- [x] `cli/commands/tc-scanner.js` created: maps TC-* markers to test files
+- [x] `cli/commands/runtime.js` enhanced: TC mapping, FR/US coverage reporting
+- [x] Enhanced verify reports tcCoverage, frCoverage, usCoverage
+- [x] Confidence score incorporates TC coverage
+- [x] Backward compatible: existing verify unchanged for pre-scaffold projects
+- [x] Smoke tests verify TC mapping and coverage reporting
+
+### H.5: Delivery Gate
+- [x] `cli/commands/deliver.js` created: final delivery gate
+- [x] `aitri deliver` command routed in `cli/index.js`
+- [x] `cli/config.js` extended with delivery threshold config
+- [x] `cli/commands/status.js` extended with post-go states
+- [x] `deliver` blocks when FRs are uncovered or TCs failing
+- [x] Delivery report generated (JSON + markdown)
+- [x] Status reports post-go states correctly
+- [x] Smoke tests verify delivery gate behavior
+- [x] Full E2E test: draft → approve → discover → plan → validate → verify → go → scaffold → implement → verify → deliver
