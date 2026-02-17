@@ -196,3 +196,13 @@ Check items as they are completed to prevent context drift.
 - [x] Regression coverage added for security/path validation, multi-feature flow, and init project profile
 - [x] Feedback closure report published (`docs/feedback/AITRI_0.2.24_FEEDBACK_CLOSURE_2026-02-17.md`)
 - [x] Interactive-first guidance restored in onboarding docs; `--non-interactive --yes` reserved for CI/automation only
+
+## 18) Backlog: Post-Delivery Lifecycle (2026-02-17)
+- [ ] Phase I: Multi-feature backlog management (`aitri next`, `aitri features`)
+- [ ] Phase I: Spec versioning and amendment (`aitri amend`)
+- [ ] Phase I: Post-delivery feedback loop (`aitri feedback`)
+- [ ] Phase J: Init conflict detection for brownfield projects
+- [ ] Phase J: Scaffold coexistence with existing project structure
+- [ ] Phase K: Retroactive upgrade protocol (`aitri doctor`)
+- [ ] Phase K: Migration command (`aitri upgrade`)
+- [ ] Phase K: Version compatibility matrix per release

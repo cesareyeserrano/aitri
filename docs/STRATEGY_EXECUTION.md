@@ -205,6 +205,141 @@ CI enforcement status:
 - Current CI enforces smoke + file-growth + critical-gate blocker and publishes stabilization-gate snapshot visibility.
 - Blocking behavior is implemented via `scripts/check-critical-gate.mjs`.
 
+### Phase I: Iteration and Multi-Feature Lifecycle
+Status: BACKLOG
+
+### Purpose
+Enable Aitri to manage multiple features, post-delivery iterations, and continuous improvement cycles within the same project.
+
+### Sub-Phase I.1: Multi-Feature Backlog Management
+Status: BACKLOG
+Dependency: Phase H complete
+Scope:
+- Project-level feature queue with priority ordering (`docs/project-queue.json`)
+- `aitri next` command: suggest/start the next prioritized feature after delivery
+- `aitri features` command: list all features with their SDLC state (draft/approved/delivered)
+- Status report includes project-wide feature summary
+
+Closure criteria:
+- `aitri features` shows all features and their current state
+- `aitri next` picks the highest-priority undelivered feature
+- Status report includes multi-feature summary
+
+### Sub-Phase I.2: Spec Versioning and Amendment
+Status: BACKLOG
+Dependency: I.1
+Scope:
+- Spec versioning: v1.0 → v1.1 with changelog of what changed and why
+- `aitri amend --feature <name>` command to create a new version of a delivered spec
+- Amendment triggers re-validation of downstream artifacts (backlog, tests)
+- Delivery report links to spec version
+
+Closure criteria:
+- Amended spec preserves version history
+- Downstream artifacts are flagged as stale when spec is amended
+- `aitri validate` detects spec-version mismatch with existing artifacts
+
+### Sub-Phase I.3: Post-Delivery Feedback Loop
+Status: BACKLOG
+Dependency: I.2
+Scope:
+- `aitri feedback --feature <name>` command to capture user/stakeholder feedback
+- Feedback stored as structured artifact (`docs/feedback/<feature>.json`)
+- Feedback items can be promoted to new features or spec amendments
+- Delivery report includes "known gaps" section from feedback
+
+Closure criteria:
+- Feedback is captured and stored with traceability to original feature
+- Feedback items can be promoted to new draft specs or amendments
+- Post-delivery status suggests `aitri feedback` as next action
+
+### Phase J: Brownfield Project Safety
+Status: BACKLOG
+
+### Purpose
+Make Aitri safe and helpful when initialized in existing projects with established directory structures, tech stacks, and conventions.
+
+### Sub-Phase J.1: Init Conflict Detection
+Status: BACKLOG
+Dependency: None
+Scope:
+- Detect existing `tests/`, `docs/`, `src/` directories during `aitri init`
+- Warn user about potential conflicts before creating directories
+- Auto-suggest `aitri.config.json` with mapped paths to avoid collisions
+- Detect project type from existing files (package.json, pyproject.toml, go.mod, Cargo.toml)
+- Prevent overwrite of existing `docs/project.json` without confirmation
+
+Closure criteria:
+- Init warns when target directories already exist with non-Aitri content
+- Init suggests path mapping when conflicts are detected
+- Init does not overwrite existing project metadata without confirmation
+- Project type detection informs default tech stack for later scaffold
+
+### Sub-Phase J.2: Scaffold Coexistence
+Status: BACKLOG
+Dependency: J.1
+Scope:
+- Scaffold respects existing `src/` structure: only creates subdirs that don't exist
+- Scaffold warns before creating directories that conflict with existing project layout
+- Tech stack inferred from existing project files when not specified in spec
+- Dry-run mode for scaffold (`--dry-run`) to preview what would be created
+
+Closure criteria:
+- Scaffold does not overwrite existing source files
+- Scaffold warns about directory conflicts
+- `--dry-run` shows planned changes without writing
+- Tech stack auto-detected from project files as fallback
+
+### Phase K: Retroactive Upgrade Protocol
+Status: BACKLOG
+
+### Purpose
+When Aitri is updated to a new version, existing projects should be able to adopt new capabilities and close gaps retroactively without re-running the entire pipeline from scratch.
+
+### Sub-Phase K.1: Project Health Check
+Status: BACKLOG
+Dependency: None
+Scope:
+- `aitri doctor` command: scan existing project artifacts against current Aitri version expectations
+- Detect missing fields in specs (e.g., Requirement Source Statement added in 0.2.26)
+- Detect missing artifacts that new gates require
+- Report gaps with actionable fix suggestions
+- Non-destructive: read-only scan, no modifications
+
+Closure criteria:
+- `aitri doctor` reports all gaps between existing artifacts and current version expectations
+- Each gap includes a severity level and fix suggestion
+- Exit code reflects whether project is up-to-date or has gaps
+
+### Sub-Phase K.2: Retroactive Migration
+Status: BACKLOG
+Dependency: K.1
+Scope:
+- `aitri upgrade` command: apply non-breaking improvements to existing artifacts
+- Add missing spec sections (e.g., Requirement Source Statement) with safe defaults
+- Generate missing artifacts that new gates require (e.g., project.json)
+- Preserve all existing user-provided content — only add structure, never modify requirements
+- Version stamp in project metadata to track which Aitri version generated each artifact
+
+Closure criteria:
+- `aitri upgrade` adds missing structure without modifying user-provided content
+- Upgraded artifacts pass current validation gates
+- Project metadata includes Aitri version stamp
+- Upgrade is idempotent (running twice produces same result)
+
+### Sub-Phase K.3: Version Compatibility Matrix
+Status: BACKLOG
+Dependency: K.2
+Scope:
+- Each Aitri release documents which artifact formats changed
+- `aitri doctor` uses compatibility matrix to identify exactly which upgrades apply
+- Changelog includes migration notes for breaking changes
+
+Closure criteria:
+- Compatibility matrix is maintained per release
+- `aitri doctor` references matrix for precise gap identification
+- Users can upgrade incrementally across multiple versions
+
 ## Next Targets (v1.0.x)
 1. Complete Phase H: Software Factory Transformation (closed delivery cycle).
 2. Eliminate all placeholder content in generated artifacts (real actors, real FRs, real TCs).
@@ -215,6 +350,11 @@ CI enforcement status:
 7. Update all adapter SKILL.md files with complete factory workflow.
 8. Continue modularization for heavyweight report surfaces under bounded modules.
 9. Maintain and tune integrated file-growth checks in CI as core files evolve.
+
+## Next Targets (v1.1.x)
+10. Phase I: Multi-feature lifecycle, spec versioning, and feedback loops.
+11. Phase J: Brownfield project safety (init conflict detection, scaffold coexistence).
+12. Phase K: Retroactive upgrade protocol (`aitri doctor` + `aitri upgrade`).
 
 ## Maintainability Watchlist (Baseline: 2026-02-16)
 
