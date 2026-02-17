@@ -65,7 +65,23 @@ We need stronger coverage validation to prevent partially implemented or unteste
 
 Now refine: what problem are we solving and why now?
 
-## 2. Scope
+## 2. Discovery Interview Summary (Discovery Persona)
+- Primary users:
+- Product Owner, Developer, QA Engineer, AI Agent
+- Jobs to be done:
+- Validate coverage consistency between spec, backlog, and tests
+- Current pain:
+- Partially implemented or untested FRs reach implementation undetected
+- Constraints (business/technical/compliance):
+- Must complete in under 1 second; no file modifications
+- Dependencies:
+- Approved spec, backlog, tests artifacts must exist
+- Success metrics:
+- 100% FR coverage detected before implementation
+- Assumptions:
+- All artifacts follow Aitri naming conventions
+
+## 3. Scope
 ### In scope
 -
 
@@ -79,39 +95,49 @@ Actors:
 Primary journey:
 -
 
-## 4. Architecture (Architect Persona)
+## 5. Architecture (Architect Persona)
 - Components:
--
+- validate command module, spec-parser, coverage checker
 - Data flow:
--
+- spec → parse FR IDs → scan backlog/tests for references → report gaps
 - Key decisions:
--
+- Regex-based ID extraction; fail-fast on missing artifacts
 - Risks:
--
+- Malformed IDs could escape regex matching
 
-## 5. Security (Security Persona)
+## 6. Security (Security Persona)
 - Threats:
--
+- Path traversal via feature name
 - Controls required:
--
+- Restrict file reads to project-local artifacts
 - Validation rules:
--
+- No external network calls; no arbitrary code execution
 
-## 6. Backlog Outline
+## 7. Backlog Outline
 Epic:
--
+- Coverage validation engine
 
 User stories:
-1.
-2.
-3.
+1. As a developer, I want validate to check FR coverage so I catch gaps early.
+2. As a QA, I want missing coverage listed so I know what to test.
+3. As an AI agent, I want clear exit codes so I can gate the pipeline.
 
-## 7. Test Strategy
+## 8. Test Strategy
 - Smoke tests:
--
+- Run validate on complete example → passes
 - Functional tests:
--
+- Remove FR from backlog → validate fails listing the gap
 - Security tests:
--
+- Feature name with path traversal → rejected
 - Edge cases:
--
+- Spec with no FR entries → passes vacuously
+
+## 9. Discovery Confidence
+- Confidence:
+- High
+- Reason:
+- Problem is well-scoped; all artifacts are defined and parseable
+- Evidence gaps:
+- None identified
+- Handoff decision:
+- Proceed to planning

@@ -74,36 +74,51 @@ We need stronger coverage validation to prevent partially implemented or unteste
 ### Out of scope
 -
 
-## 3. Architecture (Architect Persona)
+## 3. Delivery Milestones
+- M1: Coverage checker parses FR IDs from spec
+- M2: Cross-reference backlog and tests
+- M3: JSON output with gap report
+
+## 4. Product Review (Product Persona)
+### Business value
+Prevents partially tested features from reaching implementation, reducing rework and late-stage defects.
+
+### Success metric
+100% of FR-* entries validated before scaffold phase with zero false negatives.
+
+### Assumptions to validate
+All specs follow FR-* naming convention consistently; backlog references FRs explicitly.
+
+## 5. Architecture (Architect Persona)
 ### Components
--
+- validate command, spec-parser, coverage-checker
 
 ### Data flow
--
+- spec → extract FR IDs → scan backlog for US→FR refs → scan tests for TC→FR refs → produce gap report
 
 ### Key decisions
--
+- Regex-based extraction; deterministic single-pass scan
 
 ### Risks & mitigations
--
+- Malformed IDs → strict regex with warning on partial matches
 
 ### Observability (logs/metrics/tracing)
--
+- JSON output includes specFr, backlogFr, testsFr counts
 
-## 4. Security (Security Persona)
+## 6. Security (Security Persona)
 ### Threats
--
+- Path traversal via feature name
 
 ### Required controls
--
+- Restrict file reads to project-local artifacts
 
 ### Validation rules
--
+- No external network calls; no arbitrary code execution
 
 ### Abuse prevention / rate limiting (if applicable)
--
+- N/A (local CLI tool)
 
-## 5. Backlog
+## 7. Backlog
 > Create as many epics/stories as needed. Do not impose artificial limits.
 
 ### Epics
@@ -125,7 +140,7 @@ For each story include clear Acceptance Criteria (Given/When/Then).
 
 (repeat as needed)
 
-## 6. Test Cases (QA Persona)
+## 8. Test Cases (QA Persona)
 > Create as many test cases as needed. Include negative and edge cases.
 
 ### Functional
@@ -144,7 +159,7 @@ For each story include clear Acceptance Criteria (Given/When/Then).
 1.
 2.
 
-## 7. Implementation Notes
+## 9. Implementation Notes
 - Suggested sequence:
 -
 - Dependencies:
