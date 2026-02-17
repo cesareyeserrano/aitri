@@ -614,31 +614,31 @@ if (cmd === "draft") {
   if (options.guided && !options.nonInteractive) {
     // Full guided wizard — produces complete spec sections
     printGuidedDraftWizard();
-    const summary = idea || await ask("1) What do you want to build? (1-2 lines): ");
-    const actor = await ask("2) Who uses it? (example: customer, admin, player): ");
-    const outcome = await ask("3) What should happen when it works? (expected outcome): ");
-    const inScope = await ask("4) What's included? (main things in scope): ");
-    const outOfScope = await ask("5) What's excluded? (out of scope, optional): ");
+    const summary = idea || await ask("1) What do you want to build?\n   Example: \"A zombie survival game with waves, power-ups, and a scoring system\"\n   > ");
+    const actor = await ask("2) Who uses it?\n   Example: \"Player\", \"Admin\", \"Support agent\"\n   > ");
+    const outcome = await ask("3) What should happen when it works?\n   Example: \"Player can survive zombie waves, collect power-ups, and see their score\"\n   > ");
+    const inScope = await ask("4) What's included?\n   Example: \"Game mechanics, scoring, 3 zombie types, health system\"\n   > ");
+    const outOfScope = await ask("5) What's excluded? (optional, press Enter to skip)\n   Example: \"Multiplayer, leaderboard server, account system\"\n   > ");
 
     const detectedTech = detectTechInText(summary);
     const suggestedStack = suggestStackFromSummary(summary);
     const techPrompt = detectedTech
-      ? `6) Tech detected: ${detectedTech}. Press Enter to confirm, or type replacement: `
-      : `6) Preferred stack? Suggested: ${suggestedStack}. Press Enter to accept or type replacement: `;
+      ? `6) Tech detected: ${detectedTech}. Press Enter to confirm, or type replacement:\n   > `
+      : `6) Preferred stack? Suggested: ${suggestedStack}. Press Enter to accept or type replacement:\n   > `;
     const technology = await ask(techPrompt);
     const resolvedTech = technology || detectedTech || suggestedStack;
 
     console.log("\nNow let's define the key rules and quality criteria.");
     console.log("Tip: be specific. Aitri uses these to generate tests and validate delivery.\n");
 
-    const fr1 = await ask("7) Main functional rule (what MUST the system do?): ");
-    const fr2 = await ask("8) Second rule (optional, press Enter to skip): ");
+    const fr1 = await ask("7) Main functional rule — what MUST the system do?\n   Example: \"The system must spawn a new zombie wave every 30 seconds with increasing difficulty\"\n   > ");
+    const fr2 = await ask("8) Second rule (optional, press Enter to skip)\n   Example: \"The system must save the player's high score locally\"\n   > ");
 
-    const edge1 = await ask("9) An edge case to consider (what could go wrong?): ");
+    const edge1 = await ask("9) An edge case — what could go wrong or be unexpected?\n   Example: \"Player dies while a power-up animation is active\"\n   > ");
 
-    const sec1 = await ask("10) A security consideration (access control, input validation, etc.): ");
+    const sec1 = await ask("10) A security consideration\n   Example: \"Sanitize user input in the score submission form\"\n   > ");
 
-    const ac1 = await ask("11) Acceptance criterion — complete the sentence:\n   Given [context], when [action], then [result]: ");
+    const ac1 = await ask("11) Acceptance criterion — describe a testable scenario:\n   Example: \"Given a player with full health, when hit by a zombie, then health decreases by 20\"\n   > ");
 
     // Detect if domain needs resource strategy
     const domainText = (summary + " " + outcome + " " + inScope).toLowerCase();
