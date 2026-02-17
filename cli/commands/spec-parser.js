@@ -68,6 +68,46 @@ function parseGherkinFromText(value) {
   return null;
 }
 
+function extractUiScreens(sectionText) {
+  const screens = [];
+  const screenPattern = /^Screen:\s*(.+)$/gim;
+  let match;
+  while ((match = screenPattern.exec(sectionText)) !== null) {
+    const name = match[1].trim();
+    const afterMatch = sectionText.slice(match.index + match[0].length);
+    const nextScreen = afterMatch.search(/^Screen:\s/m);
+    const rawBlock = nextScreen !== -1 ? afterMatch.slice(0, nextScreen) : afterMatch;
+    const boundary = rawBlock.search(/^(Flow:|###\s|[-*]\s*UI-REF-)/m);
+    const block = boundary !== -1 ? rawBlock.slice(0, boundary) : rawBlock;
+    const components = [...block.matchAll(/\[([^\]]+)\]/g)].map((m) => m[1].trim());
+    screens.push({ name, components, raw: block.trim() });
+  }
+  return screens;
+}
+
+function extractUiFlows(sectionText) {
+  const flows = [];
+  const flowPattern = /^Flow:\s*(.+?)\s*→\s*(.+)$/gim;
+  let match;
+  while ((match = flowPattern.exec(sectionText)) !== null) {
+    flows.push({ from: match[1].trim(), to: match[2].trim() });
+  }
+  return flows;
+}
+
+function extractUiRefs(sectionText) {
+  const refs = [];
+  const refPattern = /^[-*]\s*(UI-REF-\d+)\s*:\s*([^→\n]+?)\s*→\s*([^\n]+)$/gim;
+  let match;
+  while ((match = refPattern.exec(sectionText)) !== null) {
+    const id = match[1].trim();
+    const refPath = match[2].trim();
+    const acIds = [...match[3].matchAll(/AC-\d+/g)].map((m) => m[0]);
+    refs.push({ id, path: refPath, acIds });
+  }
+  return refs;
+}
+
 function detectTechStack(specContent) {
   const text = String(specContent || "").toLowerCase();
   const checks = [
@@ -191,6 +231,15 @@ export function parseApprovedSpec(specContent, options = {}) {
     "Out-of-scope constraints not specified."
   );
 
+  const uiSectionText = extractFirstSection(specContent, ["## 6. UI Structure"]);
+  const hasUiSection = uiSectionText.length > 0;
+  const uiStructure = {
+    hasUiSection,
+    screens: hasUiSection ? extractUiScreens(uiSectionText) : [],
+    flows: hasUiSection ? extractUiFlows(uiSectionText) : [],
+    refs: hasUiSection ? extractUiRefs(uiSectionText) : []
+  };
+
   const featureFromSpec = extractFeatureFromSpec(specContent);
   const feature = String(options.feature || featureFromSpec || "feature").trim();
   const techStack = detectTechStack(specContent);
@@ -210,6 +259,7 @@ export function parseApprovedSpec(specContent, options = {}) {
     securityNotes,
     outOfScope,
     techStack,
-    actorByRule
+    actorByRule,
+    uiStructure
   };
 }

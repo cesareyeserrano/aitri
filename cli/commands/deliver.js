@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getStatusReport } from "./status.js";
 import { resolveFeature } from "../lib.js";
+import { parseApprovedSpec } from "./spec-parser.js";
 
 function wantsJson(options, positional = []) {
   if (options.json) return true;
@@ -60,6 +61,11 @@ function buildMarkdownReport(payload) {
     : "- None";
   const frRows = payload.frMatrix.map((row) => `- ${row.frId}: passingTC=${row.passingTc.join(", ") || "none"} | uncovered=${row.covered ? "no" : "yes"}`).join("\n");
   const acRows = (payload.acMatrix || []).map((row) => `- ${row.acId}: passingTC=${row.passingTc.join(", ") || "none"} | uncovered=${row.covered ? "no" : "yes"}`).join("\n");
+  const uiRefRows = (payload.uiRefValidation || []).map((ref) => `- ${ref.id}: ${ref.path} | exists=${ref.fileExists ? "yes" : "no"} | ACs=${ref.acIds.join(", ") || "none"}`).join("\n");
+  const uiRefSection = uiRefRows
+    ? `\n## UI Reference Validation\n${uiRefRows}\n`
+    : "";
+
   return `# Delivery Report: ${payload.feature}
 
 Decision: ${payload.decision}
@@ -82,7 +88,7 @@ ${frRows || "- No FR data available."}
 
 ## AC Coverage Matrix
 ${acRows || "- No AC data available."}
-
+${uiRefSection}
 ## Timeline
 - go: ${payload.timeline.go || "missing"}
 - scaffold: ${payload.timeline.scaffold || "missing"}
@@ -190,6 +196,14 @@ export async function runDeliverCommand({
     };
   });
 
+  const parsedSpec = parseApprovedSpec(specContent, { feature });
+  const uiRefValidation = (parsedSpec.uiStructure?.refs || []).map((ref) => ({
+    id: ref.id,
+    path: ref.path,
+    fileExists: fs.existsSync(path.join(process.cwd(), ref.path)),
+    acIds: ref.acIds
+  }));
+
   const status = getStatusReport({
     root: process.cwd(),
     feature
@@ -214,6 +228,9 @@ export async function runDeliverCommand({
   if (uncoveredAc.length > 0) {
     blockers.push(`Uncovered ACs: ${uncoveredAc.join(", ")}`);
   }
+  uiRefValidation.filter((ref) => !ref.fileExists).forEach((ref) => {
+    blockers.push(`UI-REF ${ref.id} references missing file: ${ref.path}`);
+  });
   if (confidenceScore < threshold) {
     blockers.push(`Confidence score ${Math.round(confidenceScore * 100)}% is below threshold ${Math.round(threshold * 100)}%.`);
   }
@@ -242,6 +259,7 @@ export async function runDeliverCommand({
     },
     frMatrix,
     acMatrix,
+    uiRefValidation,
     blockers,
     timeline: {
       go: goMarker.decidedAt || null,
