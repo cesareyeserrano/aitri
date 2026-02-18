@@ -27,6 +27,9 @@ import { runUpgradeCommand } from "./commands/upgrade.js";
 import { runFeaturesCommand, runNextCommand } from "./commands/features.js";
 import { runAmendCommand } from "./commands/amend.js";
 import { runFeedbackCommand } from "./commands/feedback.js";
+import { runTriageCommand } from "./commands/triage.js";
+import { runRoadmapCommand } from "./commands/roadmap.js";
+import { runChangelogCommand } from "./commands/changelog.js";
 import { runScaffoldCommand } from "./commands/scaffold.js";
 import { CONFIG_FILE, loadAitriConfig, resolveProjectPaths } from "./config.js";
 import { normalizeFeatureName } from "./lib.js";
@@ -96,7 +99,7 @@ function parseArgs(argv) {
     feature: null,
     project: null,
     story: null,
-    noBuild: false, noVerify: false, dryRun: false, note: null,
+    noBuild: false, noVerify: false, dryRun: false, note: null, source: null, ref: null,
     verifyCmd: null,
     discoveryDepth: null,
     retrievalMode: null,
@@ -155,6 +158,8 @@ function parseArgs(argv) {
     } else if (arg === "--no-verify") { parsed.noVerify = true;
     } else if (arg === "--dry-run") { parsed.dryRun = true;
     } else if (arg === "--note") { parsed.note = (argv[i + 1] || "").trim(); i += 1;
+    } else if (arg === "--source") { parsed.source = (argv[i + 1] || "").trim(); i += 1;
+    } else if (arg === "--ref") { parsed.ref = (argv[i + 1] || "").trim(); i += 1;
     } else if (arg === "--verify-cmd") {
       parsed.verifyCmd = (argv[i + 1] || "").trim();
       i += 1;
@@ -869,29 +874,19 @@ if (cmd === "build") {
 }
 
 if (cmd === "preview") {
-  const code = await runPreviewCommand({
-    options, getProjectContextOrExit,
-    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
-  });
+  const code = await runPreviewCommand({ options, getProjectContextOrExit, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "scaffold" || cmd === "implement") {
   if (!wantsJson(options, options.positional)) console.log(`DEPRECATION: \`aitri ${cmd}\` is deprecated. Use \`aitri build\` instead.`);
   const handler = cmd === "scaffold" ? runScaffoldCommand : runImplementCommand;
-  const code = await handler({
-    options, getProjectContextOrExit, getStatusReportOrExit,
-    confirmProceed, printCheckpointSummary, runAutoCheckpoint,
-    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
-  });
+  const code = await handler({ options, getProjectContextOrExit, getStatusReportOrExit, confirmProceed, printCheckpointSummary, runAutoCheckpoint, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "deliver") {
-  const code = await runDeliverCommand({
-    options, getProjectContextOrExit, getStatusReportOrExit, confirmProceed,
-    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
-  });
+  const code = await runDeliverCommand({ options, getProjectContextOrExit, getStatusReportOrExit, confirmProceed, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
@@ -934,35 +929,17 @@ if (cmd === "status") {
 }
 
 if (cmd === "resume") {
-  const code = await runResumeCommand({
-    options,
-    getStatusReportOrExit,
-    toRecommendedCommand,
-    confirmResume,
-    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
-  });
+  const code = await runResumeCommand({ options, getStatusReportOrExit, toRecommendedCommand, confirmResume, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "handoff") {
-  const code = runHandoffCommand({
-    options,
-    getStatusReportOrExit,
-    toRecommendedCommand,
-    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
-  });
+  const code = runHandoffCommand({ options, getStatusReportOrExit, toRecommendedCommand, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "go") {
-  const code = await runGoCommand({
-    options,
-    getStatusReportOrExit,
-    toRecommendedCommand,
-    getProjectContextOrExit,
-    confirmProceed,
-    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
-  });
+  const code = await runGoCommand({ options, getStatusReportOrExit, toRecommendedCommand, getProjectContextOrExit, confirmProceed, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
@@ -993,6 +970,21 @@ if (cmd === "amend") {
 
 if (cmd === "feedback") {
   const code = await runFeedbackCommand({ options, ask, askRequired, getProjectContextOrExit, confirmProceed, printCheckpointSummary, runAutoCheckpoint, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
+  await exitWithFlow({ code, command: cmd, options });
+}
+
+if (cmd === "triage") {
+  const code = await runTriageCommand({ options, ask, getProjectContextOrExit, confirmProceed, printCheckpointSummary, runAutoCheckpoint, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
+  await exitWithFlow({ code, command: cmd, options });
+}
+
+if (cmd === "roadmap") {
+  const code = runRoadmapCommand({ options, getProjectContextOrExit, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR } });
+  await exitWithFlow({ code, command: cmd, options });
+}
+
+if (cmd === "changelog") {
+  const code = runChangelogCommand({ options, getProjectContextOrExit, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR } });
   await exitWithFlow({ code, command: cmd, options });
 }
 

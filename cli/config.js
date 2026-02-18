@@ -238,6 +238,10 @@ export function resolveProjectPaths(root, mappedPaths) {
     feedbackFile(feature) {
       return path.join(docsRoot, "feedback", `${feature}.json`);
     },
-    projectQueueFile: path.join(docsRoot, "project-queue.json")
+    projectQueueFile: path.join(docsRoot, "project-queue.json"),
+    docsTriageDir: path.join(docsRoot, "triage"),
+    triageFile(feature) {
+      return path.join(docsRoot, "triage", `${feature}.json`);
+    }
   };
 }
