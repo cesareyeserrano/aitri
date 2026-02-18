@@ -106,6 +106,22 @@ function validateConfig(raw) {
     }
   }
 
+  if (raw.ai !== undefined) {
+    if (typeof raw.ai !== "object" || Array.isArray(raw.ai)) {
+      issues.push("`ai` must be an object.");
+    } else {
+      if (raw.ai.provider !== undefined && !["claude", "openai", "gemini"].includes(raw.ai.provider)) {
+        issues.push("ai.provider must be 'claude', 'openai', or 'gemini'.");
+      }
+    }
+  }
+
+  if (raw.hooks !== undefined) {
+    if (typeof raw.hooks !== "object" || Array.isArray(raw.hooks)) {
+      issues.push("`hooks` must be an object.");
+    }
+  }
+
   return issues;
 }
 
@@ -117,7 +133,9 @@ export function loadAitriConfig(root = process.cwd()) {
       file: CONFIG_FILE,
       paths: { ...DEFAULT_PATHS },
       policy: { ...DEFAULT_POLICY },
-      delivery: { ...DEFAULT_DELIVERY }
+      delivery: { ...DEFAULT_DELIVERY },
+      ai: { provider: null, model: null, apiKeyEnv: null },
+      hooks: { preCommit: true, prePush: true }
     };
   }
 
@@ -152,6 +170,16 @@ export function loadAitriConfig(root = process.cwd()) {
     delivery: {
       ...DEFAULT_DELIVERY,
       ...(raw.delivery || {})
+    },
+    ai: {
+      provider: raw.ai?.provider || null,
+      model: raw.ai?.model || null,
+      apiKeyEnv: raw.ai?.apiKeyEnv || null,
+      ...(raw.ai || {})
+    },
+    hooks: {
+      preCommit: raw.hooks?.preCommit !== false,
+      prePush: raw.hooks?.prePush !== false
     }
   };
 }
@@ -165,6 +193,7 @@ export function resolveProjectPaths(root, mappedPaths) {
   const srcRoot = path.join(root, "src");
   const docsImplementationDir = path.join(docsRoot, "implementation");
   const docsDeliveryDir = path.join(docsRoot, "delivery");
+  const docsExecutionDir = path.join(docsRoot, "execution");
 
   return {
     root,
@@ -176,6 +205,7 @@ export function resolveProjectPaths(root, mappedPaths) {
     srcRoot,
     docsImplementationDir,
     docsDeliveryDir,
+    docsExecutionDir,
     specsDraftsDir: path.join(specsRoot, "drafts"),
     specsApprovedDir: path.join(specsRoot, "approved"),
     docsDiscoveryDir: path.join(docsRoot, "discovery"),
@@ -219,6 +249,32 @@ export function resolveProjectPaths(root, mappedPaths) {
     },
     verificationFile(feature) {
       return path.join(docsRoot, "verification", `${feature}.json`);
+    },
+    buildManifestFile(feature) {
+      return path.join(docsImplementationDir, feature, "build-manifest.json");
+    },
+    specsVersionsDir: path.join(specsRoot, "versions"),
+    specVersionDir(feature) {
+      return path.join(specsRoot, "versions", feature);
+    },
+    specChangelogFile(feature) {
+      return path.join(specsRoot, "versions", feature, "changelog.json");
+    },
+    staleMarkerDir: path.join(docsRoot, "stale"),
+    staleMarkerFile(feature) {
+      return path.join(docsRoot, "stale", `${feature}.json`);
+    },
+    docsFeedbackDir: path.join(docsRoot, "feedback"),
+    feedbackFile(feature) {
+      return path.join(docsRoot, "feedback", `${feature}.json`);
+    },
+    projectQueueFile: path.join(docsRoot, "project-queue.json"),
+    docsTriageDir: path.join(docsRoot, "triage"),
+    triageFile(feature) {
+      return path.join(docsRoot, "triage", `${feature}.json`);
+    },
+    executionFile(feature, story) {
+      return path.join(docsRoot, "execution", `${feature}-${story}.json`);
     }
   };
 }

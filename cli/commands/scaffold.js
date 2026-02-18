@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseApprovedSpec } from "./spec-parser.js";
 import { escapeRegExp, extractSection, extractSubsection, resolveFeature } from "../lib.js";
 
-function slugify(value) {
+export function slugify(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -20,14 +20,14 @@ function pascalCase(value) {
     .join("");
 }
 
-function renderTemplate(template, variables) {
+export function renderTemplate(template, variables) {
   return Object.entries(variables).reduce(
     (content, [key, value]) => content.replaceAll(`{{${key}}}`, String(value)),
     String(template || "")
   );
 }
 
-function readTemplate(templateName) {
+export function readTemplate(templateName) {
   const cliDir = path.dirname(fileURLToPath(import.meta.url));
   const templatePath = path.resolve(cliDir, "..", "..", "core", "templates", "scaffold", templateName);
   if (!fs.existsSync(templatePath)) {
@@ -36,14 +36,14 @@ function readTemplate(templateName) {
   return fs.readFileSync(templatePath, "utf8");
 }
 
-function detectStackFamily(parsedSpec) {
+export function detectStackFamily(parsedSpec) {
   const stack = parsedSpec.techStack?.id || "node-cli";
   if (stack === "python") return "python";
   if (stack === "go") return "go";
   return "node";
 }
 
-function parseTestCases(testsContent) {
+export function parseTestCases(testsContent) {
   const matches = [...String(testsContent || "").matchAll(/###\s*(TC-\d+)([\s\S]*?)(?=\n###\s*TC-\d+|$)/g)];
   return matches.map((match) => {
     const id = match[1].trim();
@@ -153,6 +153,29 @@ function writeFile(file, content) {
   fs.writeFileSync(file, content, "utf8");
 }
 
+function detectExistingSrcConflicts(plannedDirs, root) {
+  const conflicts = [];
+  for (const dir of plannedDirs) {
+    const abs = path.join(root, dir);
+    if (!fs.existsSync(abs)) continue;
+    const entries = fs.readdirSync(abs).filter((e) => !e.startsWith("."));
+    if (entries.length > 0) {
+      conflicts.push({
+        dir,
+        existingFiles: entries.slice(0, 3),
+        total: entries.length
+      });
+    }
+  }
+  return conflicts;
+}
+
+function readProjectProfile(docsRoot) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(docsRoot, "project.json"), "utf8"));
+  } catch { return null; }
+}
+
 function maybeWriteBaseConfig({ root, stackFamily, feature }) {
   const writes = [];
   const gitignore = path.join(root, ".gitignore");
@@ -221,7 +244,7 @@ function scaffoldTemplatesByStack(stackFamily) {
   };
 }
 
-function createTestStub({ root, stackFamily, feature, tc, testTemplate, parsedSpec }) {
+export function createTestStub({ root, stackFamily, feature, tc, testTemplate, parsedSpec }) {
   const acVars = buildAcTemplateVars(tc, parsedSpec || {});
   const file = testPathByStack(root, stackFamily, feature, tc.id, tc.title);
   const body = renderTemplate(testTemplate, {
@@ -234,7 +257,7 @@ function createTestStub({ root, stackFamily, feature, tc, testTemplate, parsedSp
   return file;
 }
 
-function createInterfaceStub({ root, stackFamily, fr, ifaceTemplate }) {
+export function createInterfaceStub({ root, stackFamily, fr, ifaceTemplate }) {
   const fnName = slugify(`${fr.id}-${fr.text}`).replace(/-/g, "_");
   const file = interfacePathByStack(root, stackFamily, "", fr.id, fr.text);
   const body = renderTemplate(ifaceTemplate, {
@@ -291,7 +314,16 @@ export async function runScaffoldCommand({
 
   const approvedSpec = fs.readFileSync(approvedFile, "utf8");
   const parsedSpec = parseApprovedSpec(approvedSpec, { feature });
-  const stackFamily = detectStackFamily(parsedSpec);
+
+  // Stack: spec-defined > project profile detection > default
+  let stackFamily = detectStackFamily(parsedSpec);
+  if (!parsedSpec.techStack?.id) {
+    const profile = readProjectProfile(project.paths.docsRoot);
+    if (profile?.detectedStack?.length > 0) {
+      stackFamily = profile.detectedStack[0];
+      console.log(`Tech stack auto-detected from project: ${stackFamily}`);
+    }
+  }
   const testsContent = fs.readFileSync(testsFile, "utf8");
   const testCases = parseTestCases(testsContent);
   if (testCases.length === 0) {
@@ -308,6 +340,30 @@ export async function runScaffoldCommand({
   const interfaceRules = parsedSpec.functionalRules.length > 0
     ? parsedSpec.functionalRules
     : [{ id: "FR-1", text: "deliver approved scope with traceability" }];
+
+  // Dry-run: show plan without writing
+  if (options.dryRun) {
+    console.log("DRY RUN — no files will be written:");
+    dirs.forEach((dir) => {
+      const exists = fs.existsSync(path.join(process.cwd(), dir));
+      console.log(`  ${exists ? "[EXISTS]" : "[CREATE]"} ${dir}`);
+    });
+    testCases.forEach((tc) => console.log(`  [STUB]   tests/${feature}/generated/${tc.id}-*.test.*`));
+    interfaceRules.forEach((fr) => console.log(`  [STUB]   src/contracts/${fr.id.toLowerCase()}-*.js`));
+    return OK;
+  }
+
+  // Existing src/ content detection
+  const srcConflicts = detectExistingSrcConflicts(dirs.filter((d) => !d.startsWith("tests/")), process.cwd());
+  if (srcConflicts.length > 0) {
+    console.log("WARNING: Scaffold would write to existing directories with content:");
+    srcConflicts.forEach((c) => {
+      const preview = c.existingFiles.join(", ") + (c.total > 3 ? ", ..." : "");
+      console.log(`  ${c.dir}/ (${c.total} existing files: ${preview})`);
+    });
+    console.log("Aitri will only ADD new files. Existing files will NOT be overwritten.");
+    console.log("");
+  }
 
   console.log("PLAN:");
   console.log("- Read: " + path.relative(process.cwd(), approvedFile));
@@ -354,6 +410,7 @@ export async function runScaffoldCommand({
 
   const manifestFile = path.join(project.paths.implementationFeatureDir(feature), "scaffold-manifest.json");
   writeFile(manifestFile, JSON.stringify({
+    schemaVersion: 1,
     feature,
     stackFamily,
     generatedAt: new Date().toISOString(),
