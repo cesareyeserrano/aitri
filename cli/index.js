@@ -23,6 +23,7 @@ import {
 import { runBuildCommand } from "./commands/build.js";
 import { runPreviewCommand } from "./commands/preview.js";
 import { runDoctorCommand } from "./commands/doctor.js";
+import { runUpgradeCommand } from "./commands/upgrade.js";
 import { runScaffoldCommand } from "./commands/scaffold.js";
 import { CONFIG_FILE, loadAitriConfig, resolveProjectPaths } from "./config.js";
 import { normalizeFeatureName } from "./lib.js";
@@ -92,8 +93,7 @@ function parseArgs(argv) {
     feature: null,
     project: null,
     story: null,
-    noBuild: false,
-    noVerify: false,
+    noBuild: false, noVerify: false, dryRun: false,
     verifyCmd: null,
     discoveryDepth: null,
     retrievalMode: null,
@@ -148,10 +148,9 @@ function parseArgs(argv) {
       i += 1;
     } else if (arg.startsWith("--story=")) {
       parsed.story = arg.slice("--story=".length).trim();
-    } else if (arg === "--no-build") {
-      parsed.noBuild = true;
-    } else if (arg === "--no-verify") {
-      parsed.noVerify = true;
+    } else if (arg === "--no-build") { parsed.noBuild = true;
+    } else if (arg === "--no-verify") { parsed.noVerify = true;
+    } else if (arg === "--dry-run") { parsed.dryRun = true;
     } else if (arg === "--verify-cmd") {
       parsed.verifyCmd = (argv[i + 1] || "").trim();
       i += 1;
@@ -872,12 +871,7 @@ if (cmd === "plan") {
 }
 
 if (cmd === "verify") {
-  const code = await runVerifyCommand({
-    options,
-    getProjectContextOrExit,
-    ask,
-    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
-  });
+  const code = await runVerifyCommand({ options, getProjectContextOrExit, ask, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
@@ -993,6 +987,11 @@ if (cmd === "go") {
 
 if (cmd === "doctor") {
   const code = runDoctorCommand({ options, getProjectContextOrExit, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR } });
+  await exitWithFlow({ code, command: cmd, options });
+}
+
+if (cmd === "upgrade") {
+  const code = await runUpgradeCommand({ options, getProjectContextOrExit, confirmProceed, printCheckpointSummary, runAutoCheckpoint, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
