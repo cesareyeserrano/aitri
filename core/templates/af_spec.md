@@ -21,6 +21,13 @@ Use stable IDs so stories/tests can reference them.
 - <failure condition>
 
 ## 6. Non-Functional Requirements
+<!-- For visual features, replace this section with "## 6. UI Structure" to enable UI traceability:
+## 6. UI Structure
+Screen: <ScreenName>
+Flow: <ScreenName> → <TargetScreen>
+### References
+- UI-REF-1: <path/to/mockup.png> → AC-1, AC-2
+-->
 - <nfr>
 
 ## 7. Security Considerations

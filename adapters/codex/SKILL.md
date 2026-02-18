@@ -14,8 +14,8 @@ Aitri execution model:
 - Agent executes within Aitri constraints
 
 ## Session Bootstrap (Mandatory)
-1. Run `aitri resume` (or `aitri resume json` in automation)
-2. If structure is missing (`nextStep: "aitri init"`), run `aitri init --non-interactive --yes`
+1. Run `aitri resume` (or `aitri resume json` for machine-readable output)
+2. If structure is missing (`nextStep: "aitri init"`), run `aitri init`
 3. Re-run `aitri resume`
 4. If checkpoint confirmation is requested, ask: "Checkpoint found. Continue from checkpoint? (yes/no)" and wait for explicit user decision.
 5. Read `docs/README.md` and `docs/EXECUTION_GUARDRAILS.md` if present
@@ -27,29 +27,48 @@ Aitri execution model:
 3. One command step at a time.
 4. Use kebab-case feature names.
 5. Keep output deterministic and minimal.
+6. Do not invent requirements. Requirements/spec content must come from explicit user input.
+7. If requirement details are missing, ask the user and stop advancement until clarified.
 
 ## Commands
+
+### Pre-Go (Governance and Planning)
 - `aitri init`
 - `aitri draft [--guided]`
 - `aitri approve`
 - `aitri discover [--guided]`
 - `aitri plan`
+- `aitri validate`
 - `aitri verify`
 - `aitri policy`
-- `aitri validate`
 - `aitri status`
 - `aitri resume`
 - `aitri handoff`
 - `aitri go`
 
-## CI/Agent Mode
-For non-interactive execution:
-- Use `--non-interactive`
-- For write commands (`init`, `draft`, `approve`, `discover`, `plan`) also use `--yes`
-- Pass feature explicitly where needed: `--feature <name>`
-- Use `json`, `-j`, or `--format json` for machine-readable output (`status`, `verify`, `policy`, `validate`)
+### Post-Go (Factory Execution)
+- `aitri scaffold` — generate project skeleton, executable test stubs, interface contracts
+- `aitri implement` — generate ordered implementation briefs for AI agents
+- `aitri verify` — (enhanced) map test results to TC-*, report FR/US coverage
+- `aitri deliver` — final delivery gate: all FRs covered, all TCs passing
+
+## Interactive Mode (Default)
+Aitri commands are **interactive by default**. The agent should:
+- Let Aitri prompt for confirmations naturally
+- Review each PLAN output before confirming
+- Never add `--non-interactive --yes` unless the user explicitly requests automation
+- Never suggest `--non-interactive --yes` by default in conversational sessions
+
+## CI/Pipeline Mode (Opt-in Only)
+Only use these flags in CI pipelines or when the user explicitly requests unattended execution:
+- `--non-interactive` — suppress prompts, fail if required args are missing
+- `--yes` — auto-confirm write operations
+- `--feature <name>` — pass feature explicitly
+- `json`, `-j`, or `--format json` — machine-readable output (`status`, `verify`, `policy`, `validate`)
 
 ## Recommended Workflow
+
+### Pre-Go Phase
 1. `aitri resume`
 2. `aitri init` (if structure missing)
 3. `aitri draft`
@@ -61,7 +80,17 @@ For non-interactive execution:
 9. `aitri validate`
 10. `aitri verify`
 11. `aitri policy`
-12. Human approval before implementation/deployment assistance
+12. `aitri handoff`
+13. Human GO/NO-GO decision
+14. `aitri go`
+
+### Post-Go Phase (Factory Execution)
+15. `aitri scaffold` — generate project skeleton
+16. `aitri implement` — receive implementation briefs
+17. Implement each US-* brief in order from IMPLEMENTATION_ORDER.md
+18. After each US-*: `aitri verify` to confirm TC-* pass
+19. Repeat 17-18 until all stories pass
+20. `aitri deliver` — final delivery gate
 
 ## Persona Usage
 When refining artifacts, apply:

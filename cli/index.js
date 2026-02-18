@@ -2,7 +2,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getStatusReport, runStatus } from "./commands/status.js";
 import {
@@ -10,8 +9,28 @@ import {
   runPlanCommand,
   runValidateCommand
 } from "./commands/discovery-plan-validate.js";
-import { evaluatePolicyChecks, resolveVerifyFeature, runVerification } from "./commands/runtime.js";
+import { runDeliverCommand } from "./commands/deliver.js";
+import { runImplementCommand } from "./commands/implement.js";
+import { runInitCommand } from "./commands/init.js";
+import { runCompletionGuide } from "./commands/post-delivery.js";
+import {
+  runGoCommand,
+  runHandoffCommand,
+  runPolicyCommand,
+  runResumeCommand,
+  runVerifyCommand
+} from "./commands/runtime-flow.js";
+import { runScaffoldCommand } from "./commands/scaffold.js";
 import { CONFIG_FILE, loadAitriConfig, resolveProjectPaths } from "./config.js";
+import { normalizeFeatureName } from "./lib.js";
+import {
+  confirmProceed as confirmProceedSession,
+  confirmResume as confirmResumeSession,
+  confirmYesNo as confirmYesNoSession,
+  runAutoCheckpoint as runAutoCheckpointSession,
+  printCheckpointSummary,
+  exitWithFlow as exitWithFlowSession
+} from "./commands/session-control.js";
 
 function showBanner() {
   const iron = "\x1b[38;5;24m";      // dark iron gray
@@ -45,6 +64,14 @@ function ask(question) {
   );
 }
 
+async function askRequired(question) {
+  while (true) {
+    const value = await ask(question);
+    if (String(value || "").trim()) return value.trim();
+    console.log("This field is required. Aitri cannot infer requirements.");
+  }
+}
+
 function parseArgs(argv) {
   const parsed = {
     json: false,
@@ -52,11 +79,15 @@ function parseArgs(argv) {
     openUi: true,
     format: null,
     autoCheckpoint: true,
+    autoAdvance: true,
     nonInteractive: false,
-    guided: false,
+    strictPolicy: false,
+    guided: true,
+    raw: false,
     yes: false,
     idea: null,
     feature: null,
+    project: null,
     verifyCmd: null,
     discoveryDepth: null,
     retrievalMode: null,
@@ -71,6 +102,8 @@ function parseArgs(argv) {
       parsed.ui = true;
     } else if (arg === "--no-open") {
       parsed.openUi = false;
+    } else if (arg === "--no-auto-advance") {
+      parsed.autoAdvance = false;
     } else if (arg === "--no-checkpoint") {
       parsed.autoCheckpoint = false;
     } else if (arg === "--format") {
@@ -80,8 +113,13 @@ function parseArgs(argv) {
       parsed.format = arg.slice("--format=".length).trim().toLowerCase();
     } else if (arg === "--non-interactive") {
       parsed.nonInteractive = true;
+    } else if (arg === "--strict-policy") {
+      parsed.strictPolicy = true;
     } else if (arg === "--guided") {
       parsed.guided = true;
+    } else if (arg === "--raw") {
+      parsed.guided = false;
+      parsed.raw = true;
     } else if (arg === "--yes" || arg === "-y") {
       parsed.yes = true;
     } else if (arg === "--idea") {
@@ -94,6 +132,11 @@ function parseArgs(argv) {
       i += 1;
     } else if (arg.startsWith("--feature=")) {
       parsed.feature = arg.slice("--feature=".length).trim();
+    } else if (arg === "--project") {
+      parsed.project = (argv[i + 1] || "").trim();
+      i += 1;
+    } else if (arg.startsWith("--project=")) {
+      parsed.project = arg.slice("--project=".length).trim();
     } else if (arg === "--verify-cmd") {
       parsed.verifyCmd = (argv[i + 1] || "").trim();
       i += 1;
@@ -129,10 +172,6 @@ function wantsUi(options, positional = []) {
   return positional.some((p) => p.toLowerCase() === "ui");
 }
 
-function normalizeFeatureName(value) {
-  return (value || "").replace(/\s+/g, "-").trim();
-}
-
 function toRecommendedCommand(nextStep) {
   if (!nextStep) return null;
   if (nextStep === "ready_for_human_approval") return "aitri handoff";
@@ -156,9 +195,9 @@ function getProjectContextOrExit() {
   }
 }
 
-function getStatusReportOrExit() {
+function getStatusReportOrExit(feature = null) {
   try {
-    return getStatusReport({ root: process.cwd() });
+    return getStatusReport({ root: process.cwd(), feature });
   } catch (error) {
     const message = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
     console.log(message);
@@ -166,170 +205,47 @@ function getStatusReportOrExit() {
   }
 }
 
-function shellEscapeSingle(value) {
-  return String(value).replace(/'/g, "'\\''");
-}
-
-function runGit(cmd, cwd) {
-  try {
-    const out = execSync(cmd, {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"]
-    }).trim();
-    return { ok: true, out };
-  } catch (error) {
-    const stderr = error && error.stderr ? String(error.stderr).trim() : "";
-    return { ok: false, out: "", err: stderr || "git command failed" };
-  }
-}
-
-function runGitRaw(cmd, cwd) {
-  try {
-    const out = execSync(cmd, {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    return { ok: true, out };
-  } catch (error) {
-    const stderr = error && error.stderr ? String(error.stderr).trim() : "";
-    return { ok: false, out: "", err: stderr || "git command failed" };
-  }
-}
-
-function sanitizeTagPart(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 function runAutoCheckpoint({ enabled, phase, feature }) {
-  if (!enabled) return { performed: false, reason: "disabled" };
-  const cwd = process.cwd();
-
-  const inside = runGit("git rev-parse --is-inside-work-tree", cwd);
-  if (!inside.ok || inside.out !== "true") {
-    return { performed: false, reason: "not_git_repo" };
-  }
-
-  const add = runGit("git add -A", cwd);
-  if (!add.ok) return { performed: false, reason: "git_add_failed", detail: add.err };
-
-  const hasChanges = runGit("git diff --cached --name-only", cwd);
-  if (!hasChanges.ok) return { performed: false, reason: "git_diff_failed", detail: hasChanges.err };
-  if (!hasChanges.out) return { performed: false, reason: "no_changes" };
-
-  const label = feature || "project";
-  const message = `checkpoint: ${label} ${phase}`;
-  const commit = runGit(`git commit -m '${shellEscapeSingle(message)}'`, cwd);
-  if (!commit.ok) return { performed: false, reason: "git_commit_failed", detail: commit.err };
-
-  const head = runGit("git rev-parse --short HEAD", cwd);
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  const tagName = `aitri-checkpoint/${sanitizeTagPart(label)}-${sanitizeTagPart(phase)}-${ts}`;
-  const tag = runGit(`git tag '${shellEscapeSingle(tagName)}' HEAD`, cwd);
-
-  const tags = runGit("git tag --list 'aitri-checkpoint/*' --sort=-creatordate", cwd);
-  if (tags.ok) {
-    const list = tags.out.split("\n").map((t) => t.trim()).filter(Boolean);
-    list.slice(AUTO_CHECKPOINT_MAX).forEach((oldTag) => {
-      runGit(`git tag -d '${shellEscapeSingle(oldTag)}'`, cwd);
-    });
-  }
-
-  return {
-    performed: true,
-    commit: head.ok ? head.out : null,
-    tag: tag.ok ? tagName : null,
-    max: AUTO_CHECKPOINT_MAX
-  };
-}
-
-function printCheckpointSummary(result) {
-  if (result.performed) {
-    console.log(`Auto-checkpoint saved${result.commit ? `: ${result.commit}` : ""}`);
-    console.log(`Checkpoint retention: last ${result.max}`);
-    return;
-  }
-  if (result.reason === "disabled") {
-    console.log("Auto-checkpoint disabled for this run.");
-    return;
-  }
-  if (result.reason === "not_git_repo") {
-    console.log("Auto-checkpoint skipped: not a git repository.");
-    return;
-  }
-  if (result.reason !== "no_changes") {
-    console.log(`Auto-checkpoint skipped: ${result.reason}${result.detail ? ` (${result.detail})` : ""}`);
-  }
+  return runAutoCheckpointSession({
+    enabled,
+    phase,
+    feature,
+    getProjectContextOrExit,
+    autoCheckpointMax: AUTO_CHECKPOINT_MAX,
+    cwd: process.cwd()
+  });
 }
 
 async function confirmProceed(opts) {
-  if (opts.yes) return true;
-  if (opts.nonInteractive) return null;
-  while (true) {
-    const answer = (await ask("Proceed with this plan? Type 'y' to continue or 'n' to cancel: ")).toLowerCase();
-    if (answer === "y" || answer === "yes") return true;
-    if (answer === "n" || answer === "no") return false;
-    console.log("Invalid input. Please type 'y' or 'n'.");
-  }
+  return confirmProceedSession({ options: opts, ask });
 }
 
 async function confirmResume(opts) {
-  if (opts.yes) return true;
-  if (opts.nonInteractive) return null;
-  while (true) {
-    const answer = (await ask("Checkpoint found. Continue from checkpoint? Type 'y' to continue or 'n' to stop: ")).toLowerCase();
-    if (answer === "y" || answer === "yes") return true;
-    if (answer === "n" || answer === "no") return false;
-    console.log("Invalid input. Please type 'y' or 'n'.");
-  }
+  return confirmResumeSession({ options: opts, ask });
+}
+
+async function exitWithFlow({ code, command, options, feature = null }) {
+  await exitWithFlowSession({
+    code,
+    command,
+    options,
+    feature,
+    getStatusReport,
+    toRecommendedCommand,
+    wantsJson,
+    wantsUi,
+    runCompletionGuide,
+    confirmYesNoFn: ({ question, defaultYes = true }) => confirmYesNoSession({ ask, question, defaultYes }),
+    cliPath: fileURLToPath(import.meta.url),
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
+  });
 }
 
 function printGuidedDraftWizard() {
   console.log("\nGuided Draft Wizard (English prompts)");
-  console.log("Answer briefly. Aitri will transform your answers into the draft context.");
-  console.log("Aitri will ask for technology preferences and can suggest a baseline stack.");
+  console.log("Answer explicitly. Aitri structures your inputs but does not invent requirements.");
+  console.log("All requirements in the draft must be provided by you.");
   console.log("Example feature name: user-login\n");
-}
-
-function detectTechInText(text) {
-  const value = (text || "").toLowerCase();
-  const known = [
-    "react", "next.js", "nextjs", "vue", "angular", "svelte",
-    "node", "node.js", "express", "nestjs", "fastify",
-    "python", "fastapi", "django", "flask",
-    "java", "spring", "spring boot",
-    "go", "golang", "rust", "php", "laravel",
-    "postgres", "postgresql", "mysql", "mongodb", "sqlite",
-    "redis", "graphql"
-  ];
-
-  const found = known.filter((k) => value.includes(k));
-  if (found.length === 0) return null;
-  return [...new Set(found)].join(", ");
-}
-
-function suggestStackFromSummary(text) {
-  const value = (text || "").toLowerCase();
-  if (/\b(cli|terminal|command line)\b/.test(value)) {
-    return "Node.js CLI";
-  }
-  if (/\b(mobile|ios|android|app)\b/.test(value)) {
-    return "React Native + Node.js API + PostgreSQL";
-  }
-  if (/\b(ai|llm|rag|assistant|chatbot)\b/.test(value)) {
-    return "Python (FastAPI) + PostgreSQL + Redis";
-  }
-  if (/\b(api|backend|service)\b/.test(value)) {
-    return "Node.js (Express) + PostgreSQL";
-  }
-  if (/\b(web|dashboard|portal|frontend|ui)\b/.test(value)) {
-    return "React + Node.js API + PostgreSQL";
-  }
-  return "Node.js (Express) + PostgreSQL";
 }
 
 const cmd = process.argv[2];
@@ -344,89 +260,91 @@ if (cmd === "--version" || cmd === "-v") {
 
 if (!cmd || cmd === "help") {
   showBanner();
+  const advanced = process.argv.includes("--advanced");
   console.log(`
-Aitri ⚒️
+Aitri ⚒️  — Spec-driven software factory
 
-Commands:
-  init       Initialize project structure
-  draft      Create a draft spec from an idea (use --guided for guided input)
-  approve    Approve a draft spec (runs gates and moves draft into approved specs)
-  discover   Generate discovery + artifact scaffolding from an approved spec (use --guided for discovery interview)
-  plan       Generate plan doc + traceable backlog/tests from an approved spec
-  verify     Execute runtime verification suite and persist machine-readable evidence
-  policy     Run managed-go policy checks (dependency drift, forbidden imports/paths)
-  validate   Validate traceability placeholders are resolved (FR/AC/US/TC)
-  status     Show project state and next recommended step
-  handoff    Summarize validated SDLC artifacts and require explicit go/no-go decision
-  go         Explicitly enter implementation mode after handoff readiness
-  resume     Resume deterministically from checkpoint state and nextStep
+Workflow (Aitri guides you through each step):
+  1. aitri init         Set up project structure
+  2. aitri draft        Capture user-provided requirements into a draft spec
+  3. aitri approve      Quality gate — validates your spec is complete
+  4. aitri discover     Generate discovery analysis
+  5. aitri plan         Generate plan, backlog, and test cases
+  6. aitri validate     Check traceability (FR → US → TC)
+  7. aitri verify       Run tests and persist evidence
+  8. aitri policy       Check dependency and security policy
+  9. aitri handoff      Summarize readiness for implementation
+  10. aitri go          Approve implementation start (human decision)
+  11. aitri scaffold    Generate project skeleton and test stubs
+  12. aitri implement   Generate implementation briefs per story
+      [WRITE CODE]     You or your AI agent implements each story
+  13. aitri verify      Confirm all tests pass
+  14. aitri deliver     Final delivery gate
 
-Options:
-  --yes, -y              Auto-approve plan prompts where supported
-  --feature, -f <name>   Feature name for non-interactive runs
+Other:
+  aitri status         Show current state and next step
+  aitri resume         Resume from last checkpoint
+
+Common options:
+  --feature, -f <name>   Specify feature name
+  --project <name>       Specify project name (init metadata)
+  --yes, -y              Auto-confirm prompts
+  --raw                  Use free-form draft instead of guided wizard
+  --json, -j             Machine-readable output`);
+
+  if (advanced) {
+    console.log(`
+Advanced options:
   --idea <text>          Idea text for non-interactive draft
-  --verify-cmd <cmd>     Explicit runtime verification command (used by \`aitri verify\`)
-  --discovery-depth <d>  Guided discovery depth: quick | standard | deep
-  --retrieval-mode <m>   Retrieval mode for discover/plan: section | semantic
-  --ui                   Generate static status insight page (status command)
-  --no-open              Do not auto-open generated status UI page
-  --non-interactive      Do not prompt; fail if required args are missing
-  --json, -j             Output machine-readable JSON (status, validate)
-  --format <type>        Output format (json supported)
-  --no-checkpoint        Disable auto-checkpoint for this command
+  --verify-cmd <cmd>     Explicit runtime verification command
+  --discovery-depth <d>  Discovery depth: quick | standard | deep
+  --retrieval-mode <m>   Retrieval mode: section | semantic
+  --ui                   Generate status insight page
+  --no-open              Don't auto-open status page
+  --no-auto-advance      Disable auto-advance to next step
+  --strict-policy        Require git for policy checks
+  --non-interactive      Suppress all prompts (CI/pipeline mode)
+  --no-checkpoint        Disable auto-checkpoint
+  --format <type>        Output format (json)`);
+  } else {
+    console.log(`
+Run \`aitri help --advanced\` for all options.`);
+  }
 
-Exit codes:
-  0 success
-  1 error (validation/usage/runtime)
-  2 aborted by user
-`);
+  console.log("");
   process.exit(EXIT_OK);
 }
 
 if (cmd === "init") {
-  const project = getProjectContextOrExit();
-  showBanner();
-  const initDirs = [
-    project.paths.specsDraftsDir,
-    project.paths.specsApprovedDir,
-    project.paths.backlogRoot,
-    project.paths.testsRoot,
-    project.paths.docsRoot
-  ];
-
-  console.log("PLAN:");
-  initDirs.forEach((dir) => console.log("- Create: " + path.relative(process.cwd(), dir)));
-  if (project.config.loaded) {
-    console.log(`- Config: ${project.config.file}`);
-  }
-
-  const proceed = await confirmProceed(options);
-  if (proceed === null) {
-    console.log("Non-interactive mode requires --yes for commands that modify files.");
-    process.exit(EXIT_ERROR);
-  }
-  if (!proceed) {
-    console.log("Aborted.");
-    process.exit(EXIT_ABORTED);
-  }
-
-  initDirs.forEach((dir) => fs.mkdirSync(dir, { recursive: true }));
-
-  console.log("Project initialized by Aitri ⚒️");
-  printCheckpointSummary(runAutoCheckpoint({
-    enabled: options.autoCheckpoint,
-    phase: "init",
-    feature: "project"
-  }));
-  process.exit(EXIT_OK);
+  const code = await runInitCommand({
+    options,
+    ask,
+    showBanner,
+    getProjectContextOrExit,
+    confirmProceed,
+    runAutoCheckpoint,
+    printCheckpointSummary,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
 }
  
 if (cmd === "draft") {
   const project = getProjectContextOrExit();
   // We expect to run this from a project repo, not from the Aitri repo
-  let feature = normalizeFeatureName(options.feature || options.positional[0]);
+  const rawFeatureInput = String(options.feature || options.positional[0] || "").trim();
+  let feature = normalizeFeatureName(rawFeatureInput);
+  if (rawFeatureInput && !feature) {
+    console.log("Invalid feature name. Use kebab-case (example: user-login).");
+    process.exit(EXIT_ERROR);
+  }
   if (!feature && !options.nonInteractive) {
-    feature = normalizeFeatureName(await ask("Feature name in kebab-case (example: user-login): "));
+    const prompted = await ask("Feature name in kebab-case (example: user-login): ");
+    feature = normalizeFeatureName(prompted);
+    if (!feature && String(prompted || "").trim()) {
+      console.log("Invalid feature name. Use kebab-case (example: user-login).");
+      process.exit(EXIT_ERROR);
+    }
   }
   if (!feature) {
     console.log("Feature name is required. Use kebab-case (example: user-login).");
@@ -434,66 +352,83 @@ if (cmd === "draft") {
   }
 
   let idea = options.idea || "";
-  if (options.guided) {
-    if (options.nonInteractive && !idea) {
-      console.log("In guided + non-interactive mode, provide --idea \"<summary>\".");
-      process.exit(EXIT_ERROR);
-    }
+  let wizardSections = null;
 
-    if (!options.nonInteractive) {
-      printGuidedDraftWizard();
-      const summary = idea || await ask("1) What capability do you want to build? (1-2 lines): ");
-      const actor = await ask("2) Primary actor (example: customer, admin): ");
-      const outcome = await ask("3) Expected outcome (what should happen): ");
-      const inScope = await ask("4) In scope (main things to include): ");
-      const outOfScope = await ask("5) Out of scope (optional): ");
-      const detectedTech = detectTechInText(summary);
-      const suggestedStack = suggestStackFromSummary(summary);
-      const techPrompt = detectedTech
-        ? `6) Requirement mentions: ${detectedTech}. Press Enter to confirm, or type replacement: `
-        : `6) Preferred language/stack (optional). Suggested: ${suggestedStack}. Press Enter to accept or type replacement: `;
-      const technology = await ask(techPrompt);
-      idea = [
-        `Summary: ${summary || "TBD"}`,
+  if (options.guided && !options.nonInteractive) {
+    // Full guided wizard — produces complete spec sections
+    printGuidedDraftWizard();
+    const summary = idea || await askRequired("1) What do you want to build?\n   Example: \"A zombie survival game with waves, power-ups, and a scoring system\"\n   > ");
+    const actor = await askRequired("2) Who uses it?\n   Example: \"Player\", \"Admin\", \"Support agent\"\n   > ");
+    const outcome = await askRequired("3) What should happen when it works?\n   Example: \"Player can survive zombie waves, collect power-ups, and see their score\"\n   > ");
+    const inScope = await askRequired("4) What's included?\n   Example: \"Game mechanics, scoring, 3 zombie types, health system\"\n   > ");
+    const outOfScope = await ask("5) What's excluded? (optional, press Enter to skip)\n   Example: \"Multiplayer, leaderboard server, account system\"\n   > ");
+    const technology = await ask("6) Preferred stack (optional):\n   Example: \"React + Node.js + PostgreSQL\"\n   > ");
+    const resolvedTech = technology || "Not specified by user.";
+
+    console.log("\nNow let's define the key rules and quality criteria.");
+    console.log("Tip: be specific. Aitri uses these to generate tests and validate delivery.\n");
+
+    const fr1 = await askRequired("7) Main functional rule — what MUST the system do?\n   Example: \"The system must spawn a new zombie wave every 30 seconds with increasing difficulty\"\n   > ");
+    const fr2 = await ask("8) Second rule (optional, press Enter to skip)\n   Example: \"The system must save the player's high score locally\"\n   > ");
+
+    const edge1 = await askRequired("9) An edge case — what could go wrong or be unexpected?\n   Example: \"Player dies while a power-up animation is active\"\n   > ");
+
+    const sec1 = await askRequired("10) A security consideration\n   Example: \"Sanitize user input in the score submission form\"\n   > ");
+
+    const ac1 = await askRequired("11) Acceptance criterion — describe a testable scenario:\n   Example: \"Given a player with full health, when hit by a zombie, then health decreases by 20\"\n   > ");
+    const resourceStrategy = await ask("12) Resource strategy (optional):\n   Example: \"Assets provided by user in /assets\" or \"No external assets required\"\n   > ");
+
+    wizardSections = {
+      context: [
+        summary || "TBD",
+        "",
         `Primary actor: ${actor || "TBD"}`,
         `Expected outcome: ${outcome || "TBD"}`,
         `In scope: ${inScope || "TBD"}`,
-        `Out of scope: ${outOfScope || "Not specified"}`,
-        `Technology preference: ${technology || detectedTech || suggestedStack}`,
-        `Technology source: ${detectedTech ? "Requirement-defined (confirmed)" : "Aitri suggestion (accepted/replaced)"}`
-      ].join("\n");
-    } else {
-      const detectedTech = detectTechInText(idea);
-      const suggestedStack = suggestStackFromSummary(idea);
-      idea = [
-        `Summary: ${idea}`,
-        "Primary actor: TBD",
-        "Expected outcome: TBD",
-        "In scope: TBD",
-        "Out of scope: Not specified",
-        `Technology preference: ${detectedTech || suggestedStack}`,
-        `Technology source: ${detectedTech ? "Requirement-defined (auto-detected)" : "Aitri suggestion (auto-applied)"}`
-      ].join("\n");
+        `Out of scope: ${outOfScope || "Not specified by user."}`,
+        `Technology: ${resolvedTech}`,
+        "Requirement source: Provided explicitly by user in guided draft."
+      ].join("\n"),
+      actors: `- ${actor}`,
+      functionalRules: [
+        `- FR-1: ${fr1}`,
+        fr2 ? `- FR-2: ${fr2}` : null
+      ].filter(Boolean).join("\n"),
+      edgeCases: `- ${edge1}`,
+      security: `- ${sec1}`,
+      acceptanceCriteria: `- AC-1: ${ac1}`,
+      outOfScope: outOfScope || "Not specified by user.",
+      resourceStrategy: resourceStrategy.trim()
+    };
+
+    idea = wizardSections.context;
+
+  } else if (options.guided && options.nonInteractive) {
+    // Non-interactive guided — no inferred requirements.
+    if (!idea) {
+      console.log("In non-interactive mode, provide --idea \"<summary>\".");
+      process.exit(EXIT_ERROR);
     }
-  } else if (!idea && !options.nonInteractive) {
-    idea = await ask("Describe the idea in 1-3 lines: ");
+    if (idea.trim().length < 15) {
+      console.log("Idea is too short. Provide at least 15 characters describing what you want to build.");
+      console.log("Example: --idea \"A REST API for tracking expense entries with validation and audit logs\"");
+      process.exit(EXIT_ERROR);
+    }
+    idea = [
+      `Summary (provided by user): ${idea}`,
+      "Requirement source: provided explicitly by user via --idea.",
+      "No inferred requirements were added by Aitri."
+    ].join("\n");
+  } else {
+    // Raw mode (--raw): free-form idea text
+    if (!idea && !options.nonInteractive) {
+      idea = await ask("Describe the idea in 1-3 lines: ");
+    }
   }
   if (!idea) {
     console.log("Idea is required. Provide --idea in non-interactive mode.");
     process.exit(EXIT_ERROR);
   }
-
-  // Locate Aitri core template relative to where this CLI package lives
-  const cliDir = path.dirname(fileURLToPath(import.meta.url));
-  const templatePath = path.resolve(cliDir, "..", "core", "templates", "af_spec.md");
-
-  if (!fs.existsSync(templatePath)) {
-    console.log(`Template not found at: ${templatePath}`);
-    console.log("Make sure Aitri repo has core/templates/af_spec.md");
-    process.exit(EXIT_ERROR);
-  }
-
-  const template = fs.readFileSync(templatePath, "utf8");
 
   const outDir = project.paths.specsDraftsDir;
   const outFile = project.paths.draftSpecFile(feature);
@@ -518,13 +453,68 @@ if (cmd === "draft") {
 
   fs.mkdirSync(outDir, { recursive: true });
 
-  // Insert idea into Context section (simple but effective for v0.1)
-  const enriched = template.replace(
-    "## 1. Context\nDescribe the problem context.",
-    `## 1. Context\n${idea}\n\n---\n\n(Assumptions and details will be refined during review.)`
-  );
+  let specContent;
+  if (wizardSections) {
+    // Generate complete spec from wizard answers — no template placeholders
+    const parts = [
+      `# AF-SPEC: ${feature}`,
+      "",
+      "STATUS: DRAFT",
+      "",
+      "## 1. Context",
+      wizardSections.context,
+      "",
+      "## 2. Actors",
+      wizardSections.actors,
+      "",
+      "## 3. Functional Rules (traceable)",
+      wizardSections.functionalRules,
+      "",
+      "## 4. Edge Cases",
+      wizardSections.edgeCases,
+      "",
+      "## 5. Failure Conditions",
+      "- TBD (refine during review)",
+      "",
+      "## 6. Non-Functional Requirements",
+      "- TBD (refine during review)",
+      "",
+      "## 7. Security Considerations",
+      wizardSections.security,
+      "",
+      "## 8. Out of Scope",
+      `- ${wizardSections.outOfScope}`,
+      "",
+      "## 9. Acceptance Criteria",
+      wizardSections.acceptanceCriteria,
+      "",
+      "## 10. Requirement Source Statement",
+      "- All requirements in this draft were provided explicitly by the user.",
+      "- Aitri structured the content and did not invent requirements."
+    ];
+    if (wizardSections.resourceStrategy) {
+      parts.push("", "## 11. Resource Strategy", `- ${wizardSections.resourceStrategy}`);
+    }
+    parts.push("");
+    specContent = parts.join("\n");
+  } else {
+    // Raw mode — use template with idea injected into context
+    const cliDir = path.dirname(fileURLToPath(import.meta.url));
+    const templatePath = path.resolve(cliDir, "..", "core", "templates", "af_spec.md");
+    if (!fs.existsSync(templatePath)) {
+      console.log(`Template not found at: ${templatePath}`);
+      console.log("Make sure Aitri repo has core/templates/af_spec.md");
+      process.exit(EXIT_ERROR);
+    }
+    const template = fs.readFileSync(templatePath, "utf8");
+    specContent = template.replace(
+      "## 1. Context\nDescribe the problem context.",
+      `## 1. Context\n${idea}\n\n---\n\n(Complete all requirement sections with explicit user-provided requirements before approve.)`
+    );
+    specContent = `${specContent}\n## 10. Requirement Source Statement\n- Requirements must be provided explicitly by the user.\n- Aitri does not invent requirements.\n`;
+  }
 
-  fs.writeFileSync(outFile, enriched, "utf8");
+  fs.writeFileSync(outFile, specContent, "utf8");
 
   console.log(`Draft spec created: ${path.relative(process.cwd(), outFile)}`);
   printCheckpointSummary(runAutoCheckpoint({
@@ -532,14 +522,25 @@ if (cmd === "draft") {
     phase: "draft",
     feature
   }));
-  process.exit(EXIT_OK);
+  console.log(`Next recommended command: aitri approve --feature ${feature}`);
+  await exitWithFlow({ code: EXIT_OK, command: cmd, options, feature });
 }
 
 if (cmd === "approve") {
   const project = getProjectContextOrExit();
-  let feature = normalizeFeatureName(options.feature || options.positional[0]);
+  const rawFeatureInput = String(options.feature || options.positional[0] || "").trim();
+  let feature = normalizeFeatureName(rawFeatureInput);
+  if (rawFeatureInput && !feature) {
+    console.log("Invalid feature name. Use kebab-case (example: user-login).");
+    process.exit(EXIT_ERROR);
+  }
   if (!feature && !options.nonInteractive) {
-    feature = normalizeFeatureName(await ask("Feature name to approve (kebab-case): "));
+    const prompted = await ask("Feature name to approve (kebab-case): ");
+    feature = normalizeFeatureName(prompted);
+    if (!feature && String(prompted || "").trim()) {
+      console.log("Invalid feature name. Use kebab-case (example: user-login).");
+      process.exit(EXIT_ERROR);
+    }
   }
   if (!feature) {
     console.log("Feature name is required. Use --feature <name> in non-interactive mode.");
@@ -583,11 +584,15 @@ if (cmd === "approve") {
         .replace(/^FR-\d+\s*:\s*/i, "")
         .replace(/^\d+\.\s+/, "")
         .trim();
-      return cleaned.length >= 8 && !/^<.*>$/.test(cleaned);
+      if (cleaned.length < 8) return false;
+      if (/^<.*>$/.test(cleaned)) return false;
+      if (/<verifiable rule>/i.test(cleaned)) return false;
+      if (/<[a-z\s]+>/i.test(cleaned) && cleaned.replace(/<[^>]+>/g, "").trim().length < 8) return false;
+      return true;
     });
 
     if (!(hasFR || hasLegacyNumbered) || !meaningful) {
-      issues.push("Functional Rules must include at least one meaningful rule using `- FR-1: ...` (preferred) or legacy `1. ...` format.");
+      issues.push("Functional Rules must include at least one meaningful rule using `- FR-1: ...` (preferred) or legacy `1. ...` format. Replace all <placeholder> tokens with real content.");
     }
   }
 
@@ -613,18 +618,192 @@ if (cmd === "approve") {
   if (!acMatch) {
     issues.push("Missing section: `## 9. Acceptance Criteria`.");
   } else {
-    const lines = acMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
-    const meaningful = lines.some(l =>
-      l !== "-" && !/^<.*>$/.test(l) && l.replace(/^[-*]\s*/, "").trim().length >= 8
-    );
-    if (!meaningful) {
-      issues.push("Acceptance Criteria must include at least one meaningful bullet.");
+    const acLines = acMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
+    const acMeaningful = acLines.some(l => {
+      const cleaned = l
+        .replace(/^[-*]\s*/, "")
+        .replace(/^AC-\d+\s*:\s*/i, "")
+        .trim();
+      if (cleaned.length < 8) return false;
+      if (/^<.*>$/.test(cleaned)) return false;
+      if (/<context>/i.test(cleaned) || /<action>/i.test(cleaned) || /<expected>/i.test(cleaned)) return false;
+      if (/<[a-z\s]+>/i.test(cleaned) && cleaned.replace(/<[^>]+>/g, "").trim().length < 8) return false;
+      return true;
+    });
+    if (!acMeaningful) {
+      issues.push("Acceptance Criteria must include at least one meaningful criterion. Replace all <placeholder> tokens (e.g. <context>, <action>, <expected>) with real content.");
     }
   }
 
+  // Actors check (section 2)
+  const actorsMatch = content.match(/## 2\. Actors([\s\S]*?)(\n##\s|\s*$)/);
+  if (!actorsMatch) {
+    issues.push("Missing section: `## 2. Actors`.");
+  } else {
+    const actorLines = actorsMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
+    const actorMeaningful = actorLines.some(l => {
+      const cleaned = l.replace(/^[-*]\s*/, "").trim();
+      if (cleaned.length < 3) return false;
+      if (/^<.*>$/.test(cleaned)) return false;
+      if (/<actor>/i.test(cleaned) || /<role>/i.test(cleaned)) return false;
+      return true;
+    });
+    if (!actorMeaningful) {
+      issues.push("Actors section must list at least one real actor/role. Replace all <placeholder> tokens with real content.");
+    }
+  }
+
+  // Edge Cases check (section 4)
+  const edgeMatch = content.match(/## 4\. Edge Cases([\s\S]*?)(\n##\s|\s*$)/);
+  if (!edgeMatch) {
+    issues.push("Missing section: `## 4. Edge Cases`.");
+  } else {
+    const edgeLines = edgeMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
+    const edgeMeaningful = edgeLines.some(l => {
+      const cleaned = l.replace(/^[-*]\s*/, "").trim();
+      if (cleaned.length < 8) return false;
+      if (/^<.*>$/.test(cleaned)) return false;
+      if (/<[a-z\s]+>/i.test(cleaned) && cleaned.replace(/<[^>]+>/g, "").trim().length < 8) return false;
+      return true;
+    });
+    if (!edgeMeaningful) {
+      issues.push("Edge Cases must include at least one meaningful scenario. Replace all <placeholder> tokens with real content.");
+    }
+  }
+
+  // Asset strategy check for visual/game/web domains
+  const contextMatch = content.match(/## 1\. Context([\s\S]*?)(\n##\s|\s*$)/);
+  const contextText = contextMatch ? contextMatch[1].toLowerCase() : "";
+  const fullLower = content.toLowerCase();
+  const isVisualDomain = /\b(game|juego|sprite|canvas|webgl|three\.?js|phaser|godot|unity|animation|visual|graphic|ui\s*design|web\s*app|frontend|pixel|tilemap|asset|artwork|render)\b/.test(contextText) ||
+    /\b(game|juego|sprite|canvas|webgl|three\.?js|phaser)\b/.test(fullLower);
+
+  if (isVisualDomain) {
+    const hasAssetSection = /##\s*\d*\.?\s*(Assets|Asset Strategy|Visual Assets|Art Direction|Resource Requirements)/i.test(content);
+    const hasAssetMention = /\b(sprite|texture|image|sound|audio|music|font|tileset|asset|artwork|art\s*style|resolution|pixel\s*art|3d\s*model)\b/i.test(content);
+    if (!hasAssetSection && !hasAssetMention) {
+      issues.push("This spec describes a visual/game project but has no asset strategy. Add a section describing required assets (sprites, sounds, art style, etc.) or reference them in Functional Rules.");
+    }
+  }
+
+  if (/Aitri suggestion \(auto-applied\)/i.test(content) || /Technology source:\s*Aitri suggestion/i.test(content)) {
+    issues.push("Requirements source integrity: this draft contains AI-inferred requirement hints. Replace them with explicit user-provided requirements before approve.");
+  }
+
+  if (issues.length > 0 && !options.nonInteractive) {
+    // Interactive correction mode
+    console.log("APPROVE GATE — issues found:");
+    issues.forEach((issue, idx) => console.log(`  ${idx + 1}. ${issue}`));
+    console.log("\nAitri can help you fix these now.\n");
+
+    let updatedContent = content;
+    let fixedCount = 0;
+
+    for (const issue of issues) {
+      if (issue.includes("Functional Rules")) {
+        const answer = await ask("Enter a functional rule (e.g., 'The system must validate user input before processing'): ");
+        if (answer.trim()) {
+          const frLine = `- FR-1: ${answer.trim()}`;
+          updatedContent = updatedContent.replace(
+            /## 3\. Functional Rules[^\n]*\n([\s\S]*?)(\n##)/,
+            `## 3. Functional Rules (traceable)\n${frLine}\n$2`
+          );
+          fixedCount++;
+        }
+      } else if (issue.includes("Security Considerations")) {
+        const answer = await ask("Enter a security consideration (e.g., 'Sanitize all user input to prevent injection'): ");
+        if (answer.trim()) {
+          updatedContent = updatedContent.replace(
+            /## 7\. Security Considerations\n([\s\S]*?)(\n##)/,
+            `## 7. Security Considerations\n- ${answer.trim()}\n$2`
+          );
+          fixedCount++;
+        }
+      } else if (issue.includes("Acceptance Criteria")) {
+        const answer = await ask("Enter an acceptance criterion (Given [context], when [action], then [result]): ");
+        if (answer.trim()) {
+          updatedContent = updatedContent.replace(
+            /## 9\. Acceptance Criteria[^\n]*\n([\s\S]*?)(\n##|$)/,
+            `## 9. Acceptance Criteria\n- AC-1: ${answer.trim()}\n$2`
+          );
+          fixedCount++;
+        }
+      } else if (issue.includes("Actors")) {
+        const answer = await ask("Who uses this system? (e.g., 'End user', 'Admin'): ");
+        if (answer.trim()) {
+          if (actorsMatch) {
+            updatedContent = updatedContent.replace(
+              /## 2\. Actors\n([\s\S]*?)(\n##)/,
+              `## 2. Actors\n- ${answer.trim()}\n$2`
+            );
+          } else {
+            updatedContent = updatedContent.replace(
+              /## 3\./,
+              `## 2. Actors\n- ${answer.trim()}\n\n## 3.`
+            );
+          }
+          fixedCount++;
+        }
+      } else if (issue.includes("Edge Cases")) {
+        const answer = await ask("Enter an edge case (what could go wrong?): ");
+        if (answer.trim()) {
+          if (edgeMatch) {
+            updatedContent = updatedContent.replace(
+              /## 4\. Edge Cases\n([\s\S]*?)(\n##)/,
+              `## 4. Edge Cases\n- ${answer.trim()}\n$2`
+            );
+          } else {
+            updatedContent = updatedContent.replace(
+              /## 5\./,
+              `## 4. Edge Cases\n- ${answer.trim()}\n\n## 5.`
+            );
+            if (!updatedContent.includes("## 4. Edge Cases")) {
+              updatedContent = updatedContent.replace(
+                /## 7\./,
+                `## 4. Edge Cases\n- ${answer.trim()}\n\n## 7.`
+              );
+            }
+          }
+          fixedCount++;
+        }
+      } else if (issue.includes("asset strategy") || issue.includes("visual/game")) {
+        console.log("This project needs a resource/asset strategy.");
+        console.log("  a) I have my own resources");
+        console.log("  b) Generate programmatic placeholders");
+        console.log("  c) Search for free resources online");
+        console.log("  d) I have an account/service");
+        const answer = (await ask("Resource strategy (a/b/c/d): ")).trim().toLowerCase();
+        let strategy = "Generate programmatic placeholders only.";
+        if (answer === "a" || answer.startsWith("a")) {
+          strategy = "User provides own resources. Agent must ask for resource paths.";
+        } else if (answer === "c" || answer.startsWith("c")) {
+          strategy = "Agent should search for free/open-licensed resources online.";
+        } else if (answer === "d" || answer.startsWith("d")) {
+          const svc = await ask("  Which service? (e.g., itch.io, Unsplash): ");
+          strategy = `User has account on: ${svc || "external service"}.`;
+        }
+        updatedContent += `\n## 10. Resource Strategy\n- ${strategy}\n`;
+        fixedCount++;
+      }
+    }
+
+    if (fixedCount > 0) {
+      fs.writeFileSync(draftsFile, updatedContent, "utf8");
+      console.log(`\nFixed ${fixedCount} issue(s) in ${path.relative(process.cwd(), draftsFile)}.`);
+      console.log(`Run again: aitri approve --feature ${feature}`);
+    } else {
+      console.log(`\nNo fixes applied. Edit manually: ${path.relative(process.cwd(), draftsFile)}`);
+      console.log(`Then run: aitri approve --feature ${feature}`);
+    }
+    process.exit(EXIT_ERROR);
+  }
+
   if (issues.length > 0) {
+    // Non-interactive mode — just report
     console.log("GATE FAILED:");
     issues.forEach(i => console.log("- " + i));
+    console.log(`\nFix: ${path.relative(process.cwd(), draftsFile)}`);
+    console.log(`Run: aitri approve --feature ${feature}`);
     process.exit(EXIT_ERROR);
   }
 
@@ -657,7 +836,7 @@ if (cmd === "approve") {
     phase: "approve",
     feature
   }));
-  process.exit(EXIT_OK);
+  await exitWithFlow({ code: EXIT_OK, command: cmd, options, feature });
 }
 
 if (cmd === "discover") {
@@ -670,7 +849,7 @@ if (cmd === "discover") {
     runAutoCheckpoint,
     exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
   });
-  process.exit(code);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "plan") {
@@ -683,133 +862,64 @@ if (cmd === "plan") {
     runAutoCheckpoint,
     exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
   });
-  process.exit(code);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "verify") {
-  const project = getProjectContextOrExit();
-  const verifyPositional = [...options.positional];
-  const jsonOutput = wantsJson(options, verifyPositional);
-  if (verifyPositional.length > 0 && verifyPositional[verifyPositional.length - 1].toLowerCase() === "json") {
-    verifyPositional.pop();
-  }
-
-  let feature = null;
-  try {
-    feature = resolveVerifyFeature({ ...options, positional: verifyPositional }, process.cwd());
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
-    if (jsonOutput) {
-      console.log(JSON.stringify({ ok: false, feature: null, issues: [msg] }, null, 2));
-    } else {
-      console.log(msg);
-    }
-    process.exit(EXIT_ERROR);
-  }
-  if (!feature) {
-    const msg = "Feature name is required. Use --feature <name> or ensure an approved spec exists.";
-    if (jsonOutput) {
-      console.log(JSON.stringify({
-        ok: false,
-        feature: null,
-        issues: [msg]
-      }, null, 2));
-    } else {
-      console.log(msg);
-    }
-    process.exit(EXIT_ERROR);
-  }
-
-  const result = runVerification({
-    root: process.cwd(),
-    feature,
-    verifyCmd: options.verifyCmd
+  const code = await runVerifyCommand({
+    options,
+    getProjectContextOrExit,
+    ask,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
   });
+  await exitWithFlow({ code, command: cmd, options });
+}
 
-  const evidenceDir = project.paths.docsVerificationDir;
-  const evidenceFile = project.paths.verificationFile(feature);
-  fs.mkdirSync(evidenceDir, { recursive: true });
-  fs.writeFileSync(evidenceFile, JSON.stringify({
-    ...result,
-    evidenceFile: path.relative(process.cwd(), evidenceFile)
-  }, null, 2), "utf8");
+if (cmd === "scaffold") {
+  const code = await runScaffoldCommand({
+    options,
+    getProjectContextOrExit,
+    getStatusReportOrExit,
+    confirmProceed,
+    printCheckpointSummary,
+    runAutoCheckpoint,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
+}
 
-  const payload = {
-    ...result,
-    evidenceFile: path.relative(process.cwd(), evidenceFile)
-  };
+if (cmd === "implement") {
+  const code = await runImplementCommand({
+    options,
+    getProjectContextOrExit,
+    getStatusReportOrExit,
+    confirmProceed,
+    printCheckpointSummary,
+    runAutoCheckpoint,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
+}
 
-  if (jsonOutput) {
-    console.log(JSON.stringify(payload, null, 2));
-  } else if (payload.ok) {
-    console.log("VERIFICATION PASSED ✅");
-    console.log(`- Feature: ${payload.feature}`);
-    console.log(`- Command: ${payload.command}`);
-    console.log(`- Evidence: ${payload.evidenceFile}`);
-    if (payload.stdoutTail) console.log(`- Output (tail):\n${payload.stdoutTail}`);
-  } else {
-    console.log("VERIFICATION FAILED ❌");
-    console.log(`- Feature: ${payload.feature}`);
-    console.log(`- Command: ${payload.command || "(not detected)"}`);
-    console.log(`- Evidence: ${payload.evidenceFile}`);
-    console.log(`- Reason: ${payload.reason}`);
-    if (payload.stderrTail) console.log(`- Error (tail):\n${payload.stderrTail}`);
-    if (Array.isArray(payload.suggestions) && payload.suggestions.length > 0) {
-      console.log("- Suggested fixes:");
-      payload.suggestions.forEach((item) => console.log(`  - ${item}`));
-    }
-  }
-
-  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
+if (cmd === "deliver") {
+  const code = await runDeliverCommand({
+    options,
+    getProjectContextOrExit,
+    getStatusReportOrExit,
+    confirmProceed,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "policy") {
-  const policyPositional = [...options.positional];
-  const jsonOutput = wantsJson(options, policyPositional);
-  if (policyPositional.length > 0 && policyPositional[policyPositional.length - 1].toLowerCase() === "json") {
-    policyPositional.pop();
-  }
-
-  const project = getProjectContextOrExit();
-  let feature = normalizeFeatureName(options.feature || policyPositional[0]);
-  if (!feature) {
-    const report = getStatusReportOrExit();
-    feature = report.approvedSpec.feature || null;
-  }
-
-  if (!feature) {
-    const msg = "Feature name is required. Use --feature <name> or ensure an approved spec exists.";
-    if (jsonOutput) {
-      console.log(JSON.stringify({ ok: false, feature: null, issues: [msg] }, null, 2));
-    } else {
-      console.log(msg);
-    }
-    process.exit(EXIT_ERROR);
-  }
-
-  const payload = evaluatePolicyChecks({
-    root: process.cwd(),
-    feature,
-    project
+  const code = runPolicyCommand({
+    options,
+    getProjectContextOrExit,
+    getStatusReportOrExit,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
   });
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(payload, null, 2));
-  } else if (payload.ok) {
-    console.log("POLICY PASSED ✅");
-    console.log(`- Feature: ${payload.feature}`);
-    console.log(`- Evidence: ${payload.evidenceFile}`);
-    if (payload.warnings.length > 0) {
-      payload.warnings.forEach((warning) => console.log(`- Warning: ${warning}`));
-    }
-  } else {
-    console.log("POLICY FAILED ❌");
-    console.log(`- Feature: ${payload.feature}`);
-    console.log(`- Evidence: ${payload.evidenceFile}`);
-    payload.issues.forEach((issue) => console.log(`- ${issue}`));
-  }
-
-  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "validate") {
@@ -819,144 +929,58 @@ if (cmd === "validate") {
     getProjectContextOrExit,
     exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
   });
-  process.exit(code);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "status") {
   try {
-    runStatus({
+    const ok = runStatus({
       json: wantsJson(options, options.positional),
       ui: wantsUi(options, options.positional),
       openUi: options.openUi,
-      root: process.cwd()
+      root: process.cwd(),
+      feature: options.feature
     });
+    if (!ok) process.exit(EXIT_ERROR);
   } catch (error) {
     const message = error instanceof Error ? error.message : `Invalid ${CONFIG_FILE}`;
     console.log(message);
     process.exit(EXIT_ERROR);
   }
-  process.exit(EXIT_OK);
+  await exitWithFlow({ code: EXIT_OK, command: cmd, options });
 }
 
 if (cmd === "resume") {
-  const report = getStatusReportOrExit();
-  const jsonOutput = wantsJson(options, options.positional);
-  const checkpointDetected = report.checkpoint.state.detected;
-  const needsResumeDecision = report.checkpoint.state.resumeDecision === "ask_user_resume_from_checkpoint";
-  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
-
-  const payload = {
-    ok: true,
-    checkpointDetected,
-    resumeDecision: report.checkpoint.state.resumeDecision,
-    nextStep: report.nextStep,
-    recommendedCommand,
-    message: needsResumeDecision
-      ? "Checkpoint detected. Explicit user confirmation is required to continue."
-      : "No checkpoint decision required. Continue with recommended command."
-  };
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(payload, null, 2));
-    process.exit(EXIT_OK);
-  }
-
-  if (needsResumeDecision) {
-    const proceed = await confirmResume(options);
-    if (proceed === null) {
-      console.log("Non-interactive mode requires --yes to confirm resume from checkpoint.");
-      process.exit(EXIT_ERROR);
-    }
-    if (!proceed) {
-      console.log("Resume decision: STOP.");
-      process.exit(EXIT_ABORTED);
-    }
-  }
-
-  console.log("Resume decision: CONTINUE.");
-  console.log(`Current state: ${report.nextStep}`);
-  console.log(`Recommended next command: ${recommendedCommand}`);
-  process.exit(EXIT_OK);
+  const code = await runResumeCommand({
+    options,
+    getStatusReportOrExit,
+    toRecommendedCommand,
+    confirmResume,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
+  });
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "handoff") {
-  const report = getStatusReportOrExit();
-  const jsonOutput = wantsJson(options, options.positional);
-  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
-  const payload = {
-    ok: report.nextStep === "ready_for_human_approval",
-    feature: report.approvedSpec.feature,
-    nextStep: report.nextStep,
-    recommendedCommand,
-    handoff: report.handoff
-  };
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(payload, null, 2));
-  } else if (payload.ok) {
-    console.log("HANDOFF READY ✅");
-    console.log(`Feature: ${payload.feature}`);
-    console.log("Human decision required: GO or NO-GO for implementation.");
-    console.log("Recommended next command: aitri go");
-  } else {
-    console.log("HANDOFF NOT READY ❌");
-    console.log(`Current state: ${payload.nextStep}`);
-    if (payload.recommendedCommand) {
-      console.log(`Run next command: ${payload.recommendedCommand}`);
-    }
-    console.log("Complete the SDLC flow first, then run handoff again.");
-  }
-
-  process.exit(payload.ok ? EXIT_OK : EXIT_ERROR);
+  const code = runHandoffCommand({
+    options,
+    getStatusReportOrExit,
+    toRecommendedCommand,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR }
+  });
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 if (cmd === "go") {
-  const report = getStatusReportOrExit();
-  const recommendedCommand = report.recommendedCommand || toRecommendedCommand(report.nextStep);
-  const ready = report.nextStep === "ready_for_human_approval";
-  if (!ready) {
-    console.log("GO BLOCKED: SDLC flow is not ready for implementation handoff.");
-    console.log(`Current state: ${report.nextStep}`);
-    if (recommendedCommand) {
-      console.log(`Run next command: ${recommendedCommand}`);
-    }
-    process.exit(EXIT_ERROR);
-  }
-
-  const project = getProjectContextOrExit();
-  const policy = evaluatePolicyChecks({
-    root: process.cwd(),
-    feature: report.approvedSpec.feature,
-    project
+  const code = await runGoCommand({
+    options,
+    getStatusReportOrExit,
+    toRecommendedCommand,
+    getProjectContextOrExit,
+    confirmProceed,
+    exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
   });
-  if (!policy.ok) {
-    console.log("GO BLOCKED: managed-go policy checks failed.");
-    policy.issues.forEach((issue) => console.log(`- ${issue}`));
-    console.log(`Policy evidence: ${policy.evidenceFile}`);
-    process.exit(EXIT_ERROR);
-  }
-
-  const proceed = await confirmProceed(options);
-  if (proceed === null) {
-    console.log("Non-interactive mode requires --yes for go/no-go confirmation.");
-    process.exit(EXIT_ERROR);
-  }
-  if (!proceed) {
-    console.log("Implementation go/no-go decision: NO-GO.");
-    process.exit(EXIT_ABORTED);
-  }
-
-  const feature = report.approvedSpec.feature;
-
-  console.log("Implementation go/no-go decision: GO.");
-  console.log("Use approved artifacts as source of truth:");
-  console.log(`- ${report.approvedSpec.file}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.discoveryFile(feature))}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.planFile(feature))}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.backlogFile(feature))}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.testsFile(feature))}`);
-  console.log(`- ${path.relative(process.cwd(), project.paths.verificationFile(feature))}`);
-  process.exit(EXIT_OK);
+  await exitWithFlow({ code, command: cmd, options });
 }
 
 console.log("Unknown command.");

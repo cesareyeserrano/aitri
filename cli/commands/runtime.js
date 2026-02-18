@@ -2,18 +2,84 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { getStatusReport } from "./status.js";
+import { loadAitriConfig, resolveProjectPaths } from "../config.js";
+import { scanTcMarkers } from "./tc-scanner.js";
+import { normalizeFeatureName } from "../lib.js";
 
-function normalizeFeatureName(value) {
-  return (value || "").replace(/\s+/g, "-").trim();
-}
-
-function shellEscapeSingle(value) {
-  return String(value).replace(/'/g, "'\\''");
-}
+const DEFAULT_VERIFY_TIMEOUT_MS = 120000;
 
 function tailLines(content, maxLines = 40) {
   const lines = String(content || "").split("\n");
   return lines.slice(Math.max(0, lines.length - maxLines)).join("\n").trim();
+}
+
+function resolveVerifyTimeoutMs() {
+  const raw = Number.parseInt(process.env.AITRI_VERIFY_TIMEOUT_MS || "", 10);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_VERIFY_TIMEOUT_MS;
+  return raw;
+}
+
+function commandTokensToString(tokens) {
+  return tokens.map((token) => (
+    /\s/.test(token) ? JSON.stringify(token) : token
+  )).join(" ");
+}
+
+function tokenizeCommand(command) {
+  const input = String(command || "").trim();
+  if (!input) {
+    return { ok: false, reason: "Verification command is empty." };
+  }
+
+  const tokens = [];
+  let current = "";
+  let quote = null;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    if (quote) {
+      if (ch === "\\" && quote === "\"" && i + 1 < input.length) {
+        current += input[i + 1];
+        i += 1;
+        continue;
+      }
+      if (ch === quote) {
+        quote = null;
+        continue;
+      }
+      current += ch;
+      continue;
+    }
+
+    if (ch === "'" || ch === "\"") {
+      quote = ch;
+      continue;
+    }
+
+    if (/\s/.test(ch)) {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (quote) {
+    return { ok: false, reason: "Verification command has an unmatched quote." };
+  }
+
+  if (current) tokens.push(current);
+  if (tokens.length === 0) {
+    return { ok: false, reason: "Verification command is empty." };
+  }
+
+  return {
+    ok: true,
+    tokens
+  };
 }
 
 function toPosixPath(value) {
@@ -131,15 +197,9 @@ function detectPackageRunner(pkg) {
 }
 
 function scriptCommand(runner, scriptName) {
-  if (scriptName === "test") {
-    if (runner === "yarn") return "yarn test";
-    if (runner === "pnpm") return "pnpm test";
-    if (runner === "bun") return "bun run test";
-    return "npm test";
-  }
-  if (runner === "yarn") return `yarn ${scriptName}`;
-  if (runner === "bun") return `bun run ${scriptName}`;
-  return `${runner} run ${scriptName}`;
+  if (runner === "yarn") return ["yarn", "run", scriptName];
+  if (runner === "bun") return ["bun", "run", scriptName];
+  return [runner, "run", scriptName];
 }
 
 function findNodeTestFiles(root) {
@@ -192,7 +252,7 @@ function pickNodeVerifyCommand(root) {
   });
   const file = ranked[0];
   return {
-    command: `node --test '${shellEscapeSingle(file)}'`,
+    commandArgs: ["node", "--test", file],
     source: "node:test:file"
   };
 }
@@ -208,13 +268,13 @@ function detectVerificationCommand(root) {
       const selected = priorities.find((name) => typeof scripts[name] === "string" && scripts[name].trim() !== "");
       if (selected) {
         return {
-          command: scriptCommand(runner, selected),
+          commandArgs: scriptCommand(runner, selected),
           source: `package.json:scripts.${selected}`
         };
       }
     } catch {
       return {
-        command: null,
+        commandArgs: null,
         source: "package.json:invalid",
         suggestions: [
           "Fix package.json JSON syntax.",
@@ -231,13 +291,13 @@ function detectVerificationCommand(root) {
   }
 
   if (fs.existsSync(path.join(root, "pytest.ini")) || fs.existsSync(path.join(root, "pyproject.toml"))) {
-    return { command: "pytest -q", source: "python:pytest" };
+    return { commandArgs: ["pytest", "-q"], source: "python:pytest" };
   }
   if (fs.existsSync(path.join(root, "go.mod"))) {
-    return { command: "go test ./...", source: "go:test" };
+    return { commandArgs: ["go", "test", "./..."], source: "go:test" };
   }
   return {
-    command: null,
+    commandArgs: null,
     source: "none",
     suggestions: [
       "Add package.json script `test:aitri` (recommended).",
@@ -246,8 +306,197 @@ function detectVerificationCommand(root) {
   };
 }
 
+function parseTraceIds(traceLine, prefix) {
+  return [...new Set(
+    [...String(traceLine || "").matchAll(new RegExp(`\\b${prefix}-\\d+\\b`, "g"))]
+      .map((match) => match[0])
+  )];
+}
+
+function parseTestTraceMap(testsContent) {
+  const blocks = [...String(testsContent || "").matchAll(/###\s*(TC-\d+)([\s\S]*?)(?=\n###\s*TC-\d+|$)/g)];
+  const map = {};
+  blocks.forEach((match) => {
+    const tcId = match[1];
+    const body = match[2];
+    const traceLine = (body.match(/-\s*Trace:\s*([^\n]+)/i) || [null, ""])[1];
+    map[tcId] = {
+      frIds: parseTraceIds(traceLine, "FR"),
+      usIds: parseTraceIds(traceLine, "US")
+    };
+  });
+  return map;
+}
+
+function parseSpecFrIds(specContent) {
+  return [...new Set(
+    [...String(specContent || "").matchAll(/\bFR-\d+\b/g)].map((match) => match[0])
+  )];
+}
+
+function parseBacklogUsIds(backlogContent) {
+  return [...new Set(
+    [...String(backlogContent || "").matchAll(/\bUS-\d+\b/g)].map((match) => match[0])
+  )];
+}
+
+function buildLegacyCoverage(mode, declaredTc = 0) {
+  return {
+    available: false,
+    mode,
+    declared: declaredTc,
+    executable: 0,
+    passing: 0,
+    failing: 0,
+    missing: declaredTc,
+    mapped: {}
+  };
+}
+
+function enrichVerificationWithCoverage(baseResult, { root, feature }) {
+  let project;
+  try {
+    const config = loadAitriConfig(root);
+    project = { config, paths: resolveProjectPaths(root, config.paths) };
+  } catch {
+    return baseResult;
+  }
+
+  const specFile = project.paths.approvedSpecFile(feature);
+  const backlogFile = project.paths.backlogFile(feature);
+  const testsFile = project.paths.testsFile(feature);
+  const generatedDir = project.paths.generatedTestsDir(feature);
+
+  if (!fs.existsSync(testsFile)) {
+    return {
+      ...baseResult,
+      tcCoverage: buildLegacyCoverage("missing_tests_file", 0),
+      frCoverage: { available: false, mode: "missing_tests_file", declared: 0, covered: 0, uncovered: [] },
+      usCoverage: { available: false, mode: "missing_tests_file", declared: 0, fullyVerified: [], partial: [], unverified: [] },
+      coverageConfidence: { score: 0, mode: "missing_tests_file", ratio: 0 }
+    };
+  }
+
+  const testsContent = fs.readFileSync(testsFile, "utf8");
+  const traceMap = parseTestTraceMap(testsContent);
+  const scan = scanTcMarkers({
+    root,
+    feature,
+    testsFile,
+    generatedDir
+  });
+
+  if (!scan.available) {
+    return {
+      ...baseResult,
+      tcCoverage: buildLegacyCoverage(scan.mode, scan.declared || 0),
+      frCoverage: {
+        available: false,
+        mode: scan.mode,
+        declared: 0,
+        covered: 0,
+        uncovered: []
+      },
+      usCoverage: {
+        available: false,
+        mode: scan.mode,
+        declared: 0,
+        fullyVerified: [],
+        partial: [],
+        unverified: []
+      },
+      coverageConfidence: { score: 0, mode: scan.mode, ratio: 0 }
+    };
+  }
+
+  const declaredTc = Object.keys(scan.map);
+  const executableTc = declaredTc.filter((tcId) => scan.map[tcId].found);
+  const passingTc = baseResult.ok ? executableTc : [];
+  const failingTc = baseResult.ok ? [] : executableTc;
+  const missingTc = declaredTc.filter((tcId) => !scan.map[tcId].found);
+
+  const tcCoverage = {
+    available: true,
+    mode: "scaffold",
+    declared: declaredTc.length,
+    executable: executableTc.length,
+    passing: passingTc.length,
+    failing: failingTc.length,
+    missing: missingTc.length,
+    mapped: scan.map
+  };
+
+  const specFr = fs.existsSync(specFile)
+    ? parseSpecFrIds(fs.readFileSync(specFile, "utf8"))
+    : [];
+  const backlogUs = fs.existsSync(backlogFile)
+    ? parseBacklogUsIds(fs.readFileSync(backlogFile, "utf8"))
+    : [];
+
+  const coveredFr = new Set();
+  passingTc.forEach((tcId) => {
+    (traceMap[tcId]?.frIds || []).forEach((frId) => coveredFr.add(frId));
+  });
+  const uncoveredFr = specFr.filter((frId) => !coveredFr.has(frId));
+  const frCoverage = {
+    available: true,
+    mode: "scaffold",
+    declared: specFr.length,
+    covered: coveredFr.size,
+    uncovered: uncoveredFr
+  };
+
+  const fullyVerified = [];
+  const partial = [];
+  const unverified = [];
+  backlogUs.forEach((usId) => {
+    const relatedTc = declaredTc.filter((tcId) => (traceMap[tcId]?.usIds || []).includes(usId));
+    const relatedPassing = relatedTc.filter((tcId) => passingTc.includes(tcId));
+    if (relatedTc.length === 0) {
+      unverified.push(usId);
+      return;
+    }
+    if (relatedPassing.length === relatedTc.length) {
+      fullyVerified.push(usId);
+      return;
+    }
+    if (relatedPassing.length > 0) {
+      partial.push(usId);
+      return;
+    }
+    unverified.push(usId);
+  });
+  const usCoverage = {
+    available: true,
+    mode: "scaffold",
+    declared: backlogUs.length,
+    fullyVerified,
+    partial,
+    unverified
+  };
+
+  const ratio = tcCoverage.declared > 0 ? tcCoverage.passing / tcCoverage.declared : 0;
+  const coverageConfidence = {
+    score: Math.round(ratio * 100),
+    ratio,
+    mode: "scaffold"
+  };
+
+  return {
+    ...baseResult,
+    tcCoverage,
+    frCoverage,
+    usCoverage,
+    coverageConfidence
+  };
+}
+
 export function resolveVerifyFeature(options, root) {
-  const fromArgs = normalizeFeatureName(options.feature || options.positional[0]);
+  const rawFeature = String(options.feature || options.positional[0] || "").trim();
+  const fromArgs = normalizeFeatureName(rawFeature);
+  if (rawFeature && !fromArgs) {
+    throw new Error("Invalid feature name. Use kebab-case (example: user-login).");
+  }
   if (fromArgs) return fromArgs;
   const report = getStatusReport({ root });
   return report.approvedSpec.feature || null;
@@ -255,12 +504,31 @@ export function resolveVerifyFeature(options, root) {
 
 export function runVerification({ root, feature, verifyCmd }) {
   const detected = detectVerificationCommand(root);
-  const command = verifyCmd || detected.command;
+  const fromFlag = verifyCmd ? tokenizeCommand(verifyCmd) : null;
+  const commandArgs = verifyCmd ? (fromFlag.ok ? fromFlag.tokens : null) : detected.commandArgs;
   const source = verifyCmd ? "flag:verify-cmd" : detected.source;
   const startedAt = new Date();
   const startMs = Date.now();
+  const timeoutMs = resolveVerifyTimeoutMs();
 
-  if (!command) {
+  if (verifyCmd && fromFlag && !fromFlag.ok) {
+    return {
+      ok: false,
+      feature,
+      command: String(verifyCmd || "").trim(),
+      commandSource: source,
+      exitCode: 1,
+      durationMs: Date.now() - startMs,
+      timeoutMs,
+      startedAt: startedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      stdoutTail: "",
+      stderrTail: fromFlag.reason,
+      reason: "invalid_verify_command"
+    };
+  }
+
+  if (!commandArgs) {
     const suggestions = Array.isArray(detected.suggestions) ? detected.suggestions : [];
     return {
       ok: false,
@@ -269,6 +537,7 @@ export function runVerification({ root, feature, verifyCmd }) {
       commandSource: source,
       exitCode: 1,
       durationMs: Date.now() - startMs,
+      timeoutMs,
       startedAt: startedAt.toISOString(),
       finishedAt: new Date().toISOString(),
       stdoutTail: "",
@@ -278,25 +547,38 @@ export function runVerification({ root, feature, verifyCmd }) {
     };
   }
 
-  const run = spawnSync(command, {
+  const [commandFile, ...commandArgv] = commandArgs;
+  const run = spawnSync(commandFile, commandArgv, {
     cwd: root,
     encoding: "utf8",
-    shell: true
+    timeout: timeoutMs,
+    windowsHide: true
   });
+  const timedOut = run.error && run.error.code === "ETIMEDOUT";
+  const runError = run.error ? String(run.error.message || run.error) : "";
+  const stderrTail = tailLines([run.stderr || "", runError].filter(Boolean).join("\n"));
+  const command = commandTokensToString(commandArgs);
+  const exitCode = typeof run.status === "number"
+    ? run.status
+    : (timedOut ? 124 : 1);
 
-  return {
-    ok: run.status === 0,
+  const baseResult = {
+    ok: run.status === 0 && !timedOut,
     feature,
     command,
     commandSource: source,
-    exitCode: run.status == null ? 1 : run.status,
+    exitCode,
     durationMs: Date.now() - startMs,
+    timeoutMs,
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),
     stdoutTail: tailLines(run.stdout || ""),
-    stderrTail: tailLines(run.stderr || ""),
-    reason: run.status === 0 ? "passed" : "verification_failed"
+    stderrTail,
+    reason: timedOut
+      ? "verification_timeout"
+      : (run.status === 0 ? "passed" : "verification_failed")
   };
+  return enrichVerificationWithCoverage(baseResult, { root, feature });
 }
 
 export function evaluatePolicyChecks({ root, feature, project }) {
@@ -370,6 +652,7 @@ export function evaluatePolicyChecks({ root, feature, project }) {
 
   const payload = {
     ok: issues.length === 0,
+    limited: !changed.git,
     feature,
     evaluatedAt: new Date().toISOString(),
     policy: {

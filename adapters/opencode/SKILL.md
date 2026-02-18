@@ -9,8 +9,8 @@ description: Spec-driven SDLC workflow guardrail for OpenCode sessions using Ait
 Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory human approvals.
 
 ## Session Bootstrap
-1. Run `aitri resume` (or `aitri resume json` in automation)
-2. If structure is missing (`nextStep: "aitri init"`), run `aitri init --non-interactive --yes`
+1. Run `aitri resume` (or `aitri resume json` for machine-readable output)
+2. If structure is missing (`nextStep: "aitri init"`), run `aitri init`
 3. Re-run `aitri resume`
 4. If checkpoint confirmation is requested, ask: "Checkpoint found. Continue from checkpoint? (yes/no)" and wait for explicit user decision.
 5. Read `docs/README.md` and `docs/EXECUTION_GUARDRAILS.md` if present
@@ -23,26 +23,52 @@ Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory hum
 - Use non-interactive mode only when explicitly needed.
 - Persona usage is iterative; re-run relevant personas when context changes.
 - Discovery persona should be applied before planning when requirements are ambiguous.
+- Do not invent requirements. Requirements/spec content must come from explicit user input.
+- If requirement details are missing, ask the user and stop advancement until clarified.
 
 ## Commands
+
+### Pre-Go (Governance and Planning)
 - `aitri init`
 - `aitri draft [--guided]`
 - `aitri approve`
 - `aitri discover [--guided]`
 - `aitri plan`
+- `aitri validate`
 - `aitri verify`
 - `aitri policy`
-- `aitri validate`
 - `aitri status`
 - `aitri resume`
 - `aitri handoff`
 - `aitri go`
 
-## CI/Automation Mode
-- `--non-interactive`
-- `--yes` for write commands
-- `--feature <name>` where required
-- `json`, `-j`, or `--format json` for `status`, `verify`, `policy`, and `validate`
+### Post-Go (Factory Execution)
+- `aitri scaffold` — generate project skeleton, executable test stubs, interface contracts
+- `aitri implement` — generate ordered implementation briefs for AI agents
+- `aitri verify` — (enhanced) map test results to TC-*, report FR/US coverage
+- `aitri deliver` — final delivery gate: all FRs covered, all TCs passing
+
+## Factory Workflow (Post-Go)
+1. `aitri scaffold` — generate project skeleton
+2. `aitri implement` — receive implementation briefs
+3. Implement each US-* brief in order from IMPLEMENTATION_ORDER.md
+4. After each US-*: `aitri verify` to confirm TC-* pass
+5. Repeat 3-4 until all stories pass
+6. `aitri deliver` — final delivery gate
+
+## Interactive Mode (Default)
+Aitri commands are **interactive by default**. The agent should:
+- Let Aitri prompt for confirmations naturally
+- Review each PLAN output before confirming
+- Never add `--non-interactive --yes` unless the user explicitly requests automation
+- Never suggest `--non-interactive --yes` by default in conversational sessions
+
+## CI/Pipeline Mode (Opt-in Only)
+Only use these flags in CI pipelines or when the user explicitly requests unattended execution:
+- `--non-interactive` — suppress prompts, fail if required args are missing
+- `--yes` — auto-confirm write operations
+- `--feature <name>` — pass feature explicitly
+- `json`, `-j`, or `--format json` — machine-readable output for `status`, `verify`, `policy`, `validate`
 
 ## Checkpoint Behavior
 Write commands create auto-checkpoints by default in git repositories (retained max: 10).

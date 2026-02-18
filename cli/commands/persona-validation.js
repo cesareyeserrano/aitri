@@ -1,18 +1,4 @@
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function extractSection(content, heading) {
-  const pattern = new RegExp(`${escapeRegExp(heading)}([\\s\\S]*?)(?=\\n##\\s+\\d+\\.|$)`, "i");
-  const match = String(content).match(pattern);
-  return match ? match[1] : "";
-}
-
-function extractSubsection(content, heading) {
-  const pattern = new RegExp(`${escapeRegExp(heading)}([\\s\\S]*?)(?=\\n###\\s+|$)`, "i");
-  const match = String(content).match(pattern);
-  return match ? match[1] : "";
-}
+import { extractSection, extractSubsection } from "../lib.js";
 
 function hasMeaningfulContent(content) {
   const lines = String(content)

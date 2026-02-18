@@ -10,8 +10,12 @@ export const DEFAULT_PATHS = Object.freeze({
 });
 export const DEFAULT_POLICY = Object.freeze({
   allowDependencyChanges: false,
+  goRequireGit: false,
   blockedImports: [],
   blockedPaths: []
+});
+export const DEFAULT_DELIVERY = Object.freeze({
+  confidenceThreshold: 0.85
 });
 
 function normalizePathLike(value) {
@@ -31,6 +35,12 @@ function validateMappedPath(key, value) {
   }
   if (normalized.split("/").includes("..")) {
     return `paths.${key} must not contain "..".`;
+  }
+  if (/[\r\n\t]/.test(normalized)) {
+    return `paths.${key} must not contain control characters.`;
+  }
+  if (/[`$;&|<>]/.test(normalized)) {
+    return `paths.${key} contains unsupported characters.`;
   }
   return null;
 }
@@ -65,6 +75,9 @@ function validateConfig(raw) {
       if (raw.policy.allowDependencyChanges !== undefined && typeof raw.policy.allowDependencyChanges !== "boolean") {
         issues.push("policy.allowDependencyChanges must be a boolean.");
       }
+      if (raw.policy.goRequireGit !== undefined && typeof raw.policy.goRequireGit !== "boolean") {
+        issues.push("policy.goRequireGit must be a boolean.");
+      }
       if (raw.policy.blockedImports !== undefined) {
         if (!Array.isArray(raw.policy.blockedImports)) {
           issues.push("policy.blockedImports must be an array of strings.");
@@ -82,6 +95,17 @@ function validateConfig(raw) {
     }
   }
 
+  if (raw.delivery !== undefined) {
+    if (raw.delivery === null || typeof raw.delivery !== "object" || Array.isArray(raw.delivery)) {
+      issues.push("`delivery` must be an object when provided.");
+    } else if (raw.delivery.confidenceThreshold !== undefined) {
+      const threshold = raw.delivery.confidenceThreshold;
+      if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+        issues.push("delivery.confidenceThreshold must be a number between 0 and 1.");
+      }
+    }
+  }
+
   return issues;
 }
 
@@ -92,7 +116,8 @@ export function loadAitriConfig(root = process.cwd()) {
       loaded: false,
       file: CONFIG_FILE,
       paths: { ...DEFAULT_PATHS },
-      policy: { ...DEFAULT_POLICY }
+      policy: { ...DEFAULT_POLICY },
+      delivery: { ...DEFAULT_DELIVERY }
     };
   }
 
@@ -123,6 +148,10 @@ export function loadAitriConfig(root = process.cwd()) {
       ...(raw.policy || {}),
       blockedImports: [...(raw.policy?.blockedImports || DEFAULT_POLICY.blockedImports)],
       blockedPaths: [...(raw.policy?.blockedPaths || DEFAULT_POLICY.blockedPaths)]
+    },
+    delivery: {
+      ...DEFAULT_DELIVERY,
+      ...(raw.delivery || {})
     }
   };
 }
@@ -133,6 +162,9 @@ export function resolveProjectPaths(root, mappedPaths) {
   const backlogRoot = path.join(root, paths.backlog);
   const testsRoot = path.join(root, paths.tests);
   const docsRoot = path.join(root, paths.docs);
+  const srcRoot = path.join(root, "src");
+  const docsImplementationDir = path.join(docsRoot, "implementation");
+  const docsDeliveryDir = path.join(docsRoot, "delivery");
 
   return {
     root,
@@ -141,6 +173,9 @@ export function resolveProjectPaths(root, mappedPaths) {
     backlogRoot,
     testsRoot,
     docsRoot,
+    srcRoot,
+    docsImplementationDir,
+    docsDeliveryDir,
     specsDraftsDir: path.join(specsRoot, "drafts"),
     specsApprovedDir: path.join(specsRoot, "approved"),
     docsDiscoveryDir: path.join(docsRoot, "discovery"),
@@ -163,6 +198,24 @@ export function resolveProjectPaths(root, mappedPaths) {
     },
     testsFile(feature) {
       return path.join(testsRoot, feature, "tests.md");
+    },
+    generatedTestsDir(feature) {
+      return path.join(testsRoot, feature, "generated");
+    },
+    implementationFeatureDir(feature) {
+      return path.join(docsImplementationDir, feature);
+    },
+    implementationOrderFile(feature) {
+      return path.join(docsImplementationDir, feature, "IMPLEMENTATION_ORDER.md");
+    },
+    goMarkerFile(feature) {
+      return path.join(docsImplementationDir, feature, "go.json");
+    },
+    deliveryJsonFile(feature) {
+      return path.join(docsDeliveryDir, `${feature}.json`);
+    },
+    deliveryReportFile(feature) {
+      return path.join(docsDeliveryDir, `${feature}.md`);
     },
     verificationFile(feature) {
       return path.join(docsRoot, "verification", `${feature}.json`);
