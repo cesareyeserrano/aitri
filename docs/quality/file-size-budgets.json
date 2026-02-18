@@ -8,8 +8,8 @@
   "files": [
     {
       "path": "cli/index.js",
-      "soft": 990,
-      "hard": 1000
+      "soft": 700,
+      "hard": 800
     },
     {
       "path": "cli/commands/status.js",
@@ -92,6 +92,14 @@
     { "path": "cli/commands/triage.js", "soft": 200, "hard": 300 },
     { "path": "cli/commands/roadmap.js", "soft": 150, "hard": 250 },
     { "path": "cli/commands/changelog.js", "soft": 140, "hard": 240 },
-    { "path": "tests/regression/product-loop.test.mjs", "soft": 350, "hard": 500 }
+    { "path": "tests/regression/product-loop.test.mjs", "soft": 350, "hard": 500 },
+    { "path": "cli/commands/approve.js", "soft": 340, "hard": 400 },
+    { "path": "cli/commands/hooks.js", "soft": 170, "hard": 250 },
+    { "path": "cli/commands/ci.js", "soft": 140, "hard": 220 },
+    { "path": "cli/ai-client.js", "soft": 125, "hard": 200 },
+    { "path": "cli/commands/spec-improve.js", "soft": 145, "hard": 220 },
+    { "path": "cli/commands/execute.js", "soft": 275, "hard": 380 },
+    { "path": "cli/commands/serve.js", "soft": 220, "hard": 300 },
+    { "path": "tests/regression/enforcement-execution.test.mjs", "soft": 240, "hard": 400 }
   ]
 }
