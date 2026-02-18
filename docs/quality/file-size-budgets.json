@@ -80,6 +80,14 @@
       "path": "cli/commands/deliver.js",
       "soft": 350,
       "hard": 500
-    }
+    },
+    { "path": "cli/commands/doctor.js", "soft": 300, "hard": 400 },
+    { "path": "cli/commands/upgrade.js", "soft": 280, "hard": 380 },
+    { "path": "cli/commands/features.js", "soft": 200, "hard": 300 },
+    { "path": "cli/commands/amend.js", "soft": 250, "hard": 350 },
+    { "path": "cli/commands/feedback.js", "soft": 200, "hard": 300 },
+    { "path": "tests/regression/brownfield-safety.test.mjs", "soft": 350, "hard": 500 },
+    { "path": "tests/regression/retroactive-upgrade.test.mjs", "soft": 300, "hard": 450 },
+    { "path": "tests/regression/iteration-lifecycle.test.mjs", "soft": 350, "hard": 500 }
   ]
 }

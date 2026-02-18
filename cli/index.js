@@ -22,6 +22,7 @@ import {
 } from "./commands/runtime-flow.js";
 import { runBuildCommand } from "./commands/build.js";
 import { runPreviewCommand } from "./commands/preview.js";
+import { runDoctorCommand } from "./commands/doctor.js";
 import { runScaffoldCommand } from "./commands/scaffold.js";
 import { CONFIG_FILE, loadAitriConfig, resolveProjectPaths } from "./config.js";
 import { normalizeFeatureName } from "./lib.js";
@@ -987,6 +988,11 @@ if (cmd === "go") {
     confirmProceed,
     exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED }
   });
+  await exitWithFlow({ code, command: cmd, options });
+}
+
+if (cmd === "doctor") {
+  const code = runDoctorCommand({ options, getProjectContextOrExit, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
