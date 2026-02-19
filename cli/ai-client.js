@@ -1,6 +1,6 @@
 /**
  * Aitri AI client — thin provider-agnostic wrapper over native fetch.
- * Supports Claude (Anthropic) and OpenAI. No npm dependencies.
+ * Supports Claude (Anthropic), OpenAI, Gemini, and Ollama (local). No npm dependencies.
  */
 
 export async function callAI({ prompt, systemPrompt, config }) {
@@ -8,7 +8,24 @@ export async function callAI({ prompt, systemPrompt, config }) {
     return { ok: false, error: "AI not configured. Add an `ai` section to .aitri.json." };
   }
 
-  const { provider, model, apiKeyEnv } = config;
+  const { provider, model, apiKeyEnv, baseUrl } = config;
+
+  // Ollama — local or cloud (cloud requires API key)
+  if (provider === "ollama") {
+    const ollamaKey = apiKeyEnv ? process.env[apiKeyEnv] : null;
+    try {
+      return await callOllama({
+        prompt, systemPrompt,
+        model: model || "gemma3:4b",
+        baseUrl: baseUrl || "http://localhost:11434",
+        apiKey: ollamaKey
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: `Ollama request failed: ${message}` };
+    }
+  }
+
   const envKey = apiKeyEnv || defaultApiKeyEnv(provider);
   const apiKey = process.env[envKey];
 
@@ -24,12 +41,12 @@ export async function callAI({ prompt, systemPrompt, config }) {
       return await callClaude({ prompt, systemPrompt, model: model || "claude-opus-4-6", apiKey });
     }
     if (provider === "openai") {
-      return await callOpenAI({ prompt, systemPrompt, model: model || "gpt-4o", apiKey });
+      return await callOpenAI({ prompt, systemPrompt, model: model || "gpt-4o", apiKey, baseUrl });
     }
     if (provider === "gemini") {
       return await callGemini({ prompt, systemPrompt, model: model || "gemini-1.5-pro", apiKey });
     }
-    return { ok: false, error: `Unknown AI provider: '${provider}'. Use claude, openai, or gemini.` };
+    return { ok: false, error: `Unknown AI provider: '${provider}'. Use claude, openai, gemini, or ollama.` };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, error: `AI request failed: ${message}` };
@@ -41,6 +58,30 @@ function defaultApiKeyEnv(provider) {
   if (provider === "openai") return "OPENAI_API_KEY";
   if (provider === "gemini") return "GEMINI_API_KEY";
   return "AI_API_KEY";
+}
+
+async function callOllama({ prompt, systemPrompt, model, baseUrl, apiKey }) {
+  const messages = [];
+  if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
+  messages.push({ role: "user", content: prompt });
+
+  const headers = { "Content-Type": "application/json" };
+  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ model, messages, stream: false })
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "(no body)");
+    return { ok: false, error: `Ollama error ${response.status}: ${text}` };
+  }
+
+  const data = await response.json();
+  const content = data?.message?.content || "";
+  return { ok: true, content };
 }
 
 async function callClaude({ prompt, systemPrompt, model, apiKey }) {

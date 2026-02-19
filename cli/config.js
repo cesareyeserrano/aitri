@@ -110,8 +110,8 @@ function validateConfig(raw) {
     if (typeof raw.ai !== "object" || Array.isArray(raw.ai)) {
       issues.push("`ai` must be an object.");
     } else {
-      if (raw.ai.provider !== undefined && !["claude", "openai", "gemini"].includes(raw.ai.provider)) {
-        issues.push("ai.provider must be 'claude', 'openai', or 'gemini'.");
+      if (raw.ai.provider !== undefined && !["claude", "openai", "gemini", "ollama"].includes(raw.ai.provider)) {
+        issues.push("ai.provider must be 'claude', 'openai', 'gemini', or 'ollama'.");
       }
     }
   }

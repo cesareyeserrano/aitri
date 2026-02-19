@@ -1,0 +1,5 @@
+version: 1
+interface:
+  display_name: "Aitri SDLC Guardrail (Gemini)"
+  short_description: "Use Aitri workflow gates with Gemini's 1M context window for spec-driven delivery."
+  default_prompt: "Operate through Aitri commands, respect gates, and report each step. Leverage deep context for cross-feature traceability and SDD integrity."
