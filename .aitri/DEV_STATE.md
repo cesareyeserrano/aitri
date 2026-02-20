@@ -1,5 +1,5 @@
 # Aitri Development Checkpoint
-> LAST UPDATE: 2026-02-20T22:27:20.808Z
+> LAST UPDATE: 2026-02-20T22:31:59.885Z
 > AGENT: Developer/Agent
 
 ## 🎯 Current Objective
@@ -8,7 +8,7 @@
 - We have initialized `backlog/aitri-core/evolution.md` with prioritized feedback.
 
 ## 🧠 Working Memory (Context)
-- EVO-001 Phase 2 DONE: --ai-backlog/--ai-tests flags in aitri plan. Auditor Mode fully exposed to CLI. 133/133 green.
+- EVO-001 Phase 3 DONE: infer* functions marked @deprecated. 133/133 green.
 
 ## 🚧 Active State
 - [x] Docs: `docs/guides/SELF_EVOLUTION.md` created.

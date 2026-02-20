@@ -34,12 +34,14 @@
 
 ## 🟡 In Progress
 
-- **[EVO-001] Refactor: Auditor Mode for Content Generator** — Phase 3 pending
-    - **Phase 1 DONE:** `auditBacklog()`, `auditTests()`, `auditAgentContent()` exported. 8 unit tests.
-    - **Phase 2 DONE:** `--ai-backlog` + `--ai-tests` flags in `aitri plan`. 2 regression tests. 133/133 green.
-    - **Phase 3:** Deprecate `infer*` heuristic functions. Mark as legacy. Full agent-authored path.
+_(none)_
 
 ## 🔴 Done
+
+- **[EVO-001] Refactor: Auditor Mode for Content Generator**
+    - **Phase 1 DONE:** `auditBacklog()`, `auditTests()`, `auditAgentContent()` exported. 8 unit tests.
+    - **Phase 2 DONE:** `--ai-backlog` + `--ai-tests` flags in `aitri plan`. 2 regression tests. 133/133 green.
+    - **Phase 3 DONE:** `inferBenefit`, `inferCapability`, `normalizeActor`, `toGherkin`, `fallbackActor` marked `@deprecated`. Legacy path documented in `generatePlanArtifacts`. 133/133 green.
 
 - **[EVO-002] Feature: Semantic Validation Gate**
     - **Source:** docs/feedback/ARCHITECTURAL_FEEDBACK.md#1.2

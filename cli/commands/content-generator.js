@@ -33,6 +33,11 @@ function stripRulePrefix(text) {
     .replace(/^must\s+/i, "");
 }
 
+/**
+ * @deprecated Legacy heuristic — replaced by Auditor Mode (EVO-001).
+ * Use `generatePlanArtifacts({ agentContent })` with agent-authored backlog instead.
+ * Retained for backward compatibility with the inference path.
+ */
 function normalizeActor(actor, qualityProfile) {
   const value = normalizeLine(actor);
   if (!value) return fallbackActor(qualityProfile);
@@ -42,6 +47,11 @@ function normalizeActor(actor, qualityProfile) {
   return value;
 }
 
+/**
+ * @deprecated Legacy heuristic — replaced by Auditor Mode (EVO-001).
+ * Use `generatePlanArtifacts({ agentContent })` with agent-authored backlog instead.
+ * Retained for backward compatibility with the inference path.
+ */
 function fallbackActor(qualityProfile) {
   const domain = String(qualityProfile?.id || "general");
   if (domain === "web") return "Support agent";
@@ -59,6 +69,11 @@ function buildUiVocabularyHints(uiStructure) {
   };
 }
 
+/**
+ * @deprecated Legacy heuristic — replaced by Auditor Mode (EVO-001).
+ * Use `generatePlanArtifacts({ agentContent })` with agent-authored tests instead.
+ * Retained for backward compatibility with the inference path.
+ */
 function toGherkin(ac, ruleText, uiVocab = null) {
   if (ac?.gherkin?.given && ac?.gherkin?.when && ac?.gherkin?.then) {
     return {
@@ -111,6 +126,11 @@ function selectCriteriaForRule(rule, allCriteria) {
   return [allCriteria[Math.min(rule.index - 1, allCriteria.length - 1)]];
 }
 
+/**
+ * @deprecated Legacy heuristic — replaced by Auditor Mode (EVO-001).
+ * Use `generatePlanArtifacts({ agentContent })` with agent-authored backlog instead.
+ * Retained for backward compatibility with the inference path.
+ */
 function inferBenefit(ruleText, actor) {
   const text = stripRulePrefix(ruleText).toLowerCase();
   if (/\bauth|login|credential|session\b/.test(text)) return `${actor.toLowerCase()}s can access the right capabilities safely`;
@@ -120,6 +140,11 @@ function inferBenefit(ruleText, actor) {
   return `the workflow remains reliable and traceable`;
 }
 
+/**
+ * @deprecated Legacy heuristic — replaced by Auditor Mode (EVO-001).
+ * Use `generatePlanArtifacts({ agentContent })` with agent-authored backlog instead.
+ * Retained for backward compatibility with the inference path.
+ */
 function inferCapability(ruleText) {
   const summary = stripRulePrefix(ruleText);
   const lowered = summary.charAt(0).toLowerCase() + summary.slice(1);
@@ -460,8 +485,10 @@ export function generatePlanArtifacts({
   qualityProfile,
   agentContent = null
 }) {
-  // EVO-001: Auditor Mode — if agent has provided pre-generated artifacts, audit them.
-  // Fall back to inference generation if no agent content is provided.
+  // EVO-001: Auditor Mode — if agent has provided pre-generated artifacts, audit and merge them.
+  // LEGACY PATH: when agentContent is null, falls back to heuristic inference functions
+  // (inferBenefit, inferCapability, normalizeActor, toGherkin, fallbackActor).
+  // These are deprecated — the preferred path is to supply agentContent from an LLM agent.
   if (agentContent) {
     return auditAndMergeAgentContent({ feature, parsedSpec, rigor, qualityProfile, agentContent });
   }
