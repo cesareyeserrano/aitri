@@ -44,9 +44,9 @@ function isTestLikeFile(file) {
 function markerInContent(content, tcId) {
   const escaped = tcId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const candidates = [
-    new RegExp(`//\\s*${escaped}\\s*:`, "i"),
-    new RegExp(`#\\s*${escaped}\\s*:`, "i"),
-    new RegExp(`["']\\s*//\\s*${escaped}\\s*:`, "i")
+    new RegExp(`//\\s*${escaped}(\\s*:|\\b)`, "i"),
+    new RegExp(`#\\s*${escaped}(\\s*:|\\b)`, "i"),
+    new RegExp(`["']\\s*//\\s*${escaped}(\\s*:|\\b)`, "i")
   ];
   return candidates.some((regex) => regex.test(content));
 }

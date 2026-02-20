@@ -34,6 +34,8 @@
     "test:all": "npm run test:smoke && npm run test:regression",
     "check:file-growth": "node scripts/check-file-growth.mjs",
     "check:file-growth:strict": "node scripts/check-file-growth.mjs --strict",
-    "demo:5min": "bash scripts/demo-5min.sh"
+    "demo:5min": "bash scripts/demo-5min.sh",
+    "dev:checkpoint": "node scripts/dev-checkpoint.mjs",
+    "dev:resume": "cat .aitri/DEV_STATE.md"
   }
 }
