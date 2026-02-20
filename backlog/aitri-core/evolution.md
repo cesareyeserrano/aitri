@@ -2,37 +2,17 @@
 
 ## 🟢 Ready for Implementation
 
-- **[EVO-008] Feature: Project Adoption (`aitri adopt`)**
-
+- **[EVO-008] Feature: Project Adoption (`aitri adopt`) — Phase 2**
     - **Source:** User Feedback (Session 2026-02-20)
     - **Priority:** High
-    - **Context:** Aitri can only work on projects it created from scratch. There is no path for onboarding an existing project built by other agents, teams, or developers with different folder structures.
-    - **Problem:** A mature Node/Python/Go project exists. It has code, tests, maybe a README. It has NO Aitri spec. The developer or agent wants to bring it under Aitri's spec-driven workflow without rewriting anything.
-    - **Command:** `aitri adopt [--feature <name>] [--depth quick|standard|deep] [--dry-run]`
-    - **Invariants (non-negotiable):**
-        - Read-only on all source files — NEVER modifies `src/`, tests, or existing code
-        - Output is always DRAFT — human must run `aitri approve` before anything is enforced
-        - Idempotent — if Aitri structure already exists, `adopt` diffs instead of overwriting
-        - Phase 1 works without AI config; Phase 2 requires `ai` config
-    - **Phases:**
-        - **Phase 1 (Scan — deterministic, no AI):**
-            - Scan: `package.json`, `pyproject.toml`, `go.mod`, `README.md`, `.env.example`, test files, entry points, folder structure
-            - Detect: tech stack, custom folder conventions (non-standard `src/`, `__tests__/`, etc.)
-            - Produce: `docs/adoption-manifest.json` (inventory of what was found)
-            - Propose: `aitri.config.json` if project uses non-standard paths
-            - Initialize: Aitri folder structure without touching existing files
-            - Output: summary of detected features, stack, and gaps vs Aitri standard
-        - **Phase 2 (Infer — LLM, requires `ai` config):**
-            - LLM reads manifest + README + key entry points (bounded, not full codebase)
-            - Infers: candidate feature list, Functional Rules from code behavior, Actors, Acceptance Criteria from existing tests
-            - Generates: `specs/drafts/<feature>.md` per inferred feature (DRAFT, never APPROVED)
-            - Generates: `docs/discovery/<feature>.md` retrograde discovery document
-            - Generates: `tests/<feature>/tests.md` mapping existing test names to TC-* format (where detectable)
-        - **Phase 3 (Map — after human approval of drafted specs):**
-            - After `aitri approve` runs on adopted specs, map existing tests to TC-* in backlog
-            - Generate `aitri.config.json` with verified path mappings
-    - **Acceptance (Phase 1):** `aitri adopt --dry-run` shows scan results and proposed config. `aitri adopt` initializes structure and writes `adoption-manifest.json`. No source files modified.
-    - **Acceptance (Phase 2):** `aitri adopt --depth standard` with AI config produces at least one DRAFT spec from README/code inference. Human can run `aitri approve` on the result.
+    - **Phase 1 Status:** DONE. `cli/commands/adopt.js` — stack detection, folder conventions, entry points, adoption-manifest.json, proposed aitri.config.json. 5 regression tests. 147/147 green.
+    - **Remaining work (Phase 2 — LLM inference):**
+        - `--depth standard` activates LLM path; reads manifest + README + bounded entry points
+        - Generates: `specs/drafts/<feature>.md` per inferred feature (DRAFT only)
+        - Generates: `docs/discovery/<feature>.md` retrograde discovery document
+        - Generates: `tests/<feature>/tests.md` mapping existing test names to TC-*
+        - Requires `ai` config in `aitri.config.json`
+    - **Phase 3 (Map):** After `aitri approve`, map existing tests to TC-* in backlog. Generate verified `aitri.config.json`.
 
 ## 🟡 In Progress
 
@@ -42,6 +22,9 @@ _(none)_
 
 - **[EVO-009] Enhancement: Version-Aware Project Migration (`aitri upgrade` v2)**
     - **Status:** DONE. `semverLt()`, `readProjectVersion()`, `readAppliedMigrations()`, `stampProjectVersion()` added to `upgrade.js`. `sinceVersion` field on migrations. `NOTIFY-NEW-COMMANDS-0.5.0` (atomic, writes `docs/UPGRADE-NOTES-v0.5.0.md`). Idempotent via `migrationsApplied` in `project.json`. 142/142 green.
+
+- **[EVO-008] Feature: Project Adoption (`aitri adopt`) — Phase 1**
+    - **Status:** DONE. `cli/commands/adopt.js` — stack detection (node/python/go/rust/java), folder conventions, entry points, test file count, README detection, gap analysis, `docs/adoption-manifest.json`, proposed `aitri.config.json` for path conflicts. `--dry-run` supported. NEVER modifies source files. 5 regression tests. 147/147 green.
 
 - **[EVO-004] Doc: Vision Alignment Update**
     - **Status:** DONE. `docs/architecture.md` reframed for agent-centric workflow. `GETTING_STARTED.md` updated with Auditor Mode section. `docs/guides/AGENT_INTEGRATION_GUIDE.md` created.

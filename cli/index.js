@@ -39,6 +39,7 @@ import { runScaffoldCommand } from "./commands/scaffold.js";
 import { runCheckpointCommand, runCheckpointShowCommand } from "./commands/checkpoint.js";
 import { runVerifyIntentCommand } from "./commands/verify-intent.js";
 import { runDiffCommand } from "./commands/diff.js";
+import { runAdoptCommand } from "./commands/adopt.js";
 import { CONFIG_FILE, loadAitriConfig, resolveProjectPaths } from "./config.js";
 import { normalizeFeatureName, smartExtractSpec } from "./lib.js";
 import {
@@ -324,7 +325,7 @@ Workflow:
      [WRITE CODE]    You or your AI agent implements each story
   7. aitri deliver    Release tag + build artifact
 
-Other: preview, status, resume, checkpoint, verify-intent, spec-improve, diff
+Other: preview, status, resume, checkpoint, verify-intent, spec-improve, diff, adopt, upgrade
 Still work (deprecated): discover, validate, handoff, scaffold, implement, verify, policy
 
 Common options:
@@ -703,6 +704,11 @@ if (cmd === "doctor") {
 
 if (cmd === "upgrade") {
   const code = await runUpgradeCommand({ options, getProjectContextOrExit, confirmProceed, printCheckpointSummary, runAutoCheckpoint, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
+  await exitWithFlow({ code, command: cmd, options });
+}
+
+if (cmd === "adopt") {
+  const code = await runAdoptCommand({ options, getProjectContextOrExit, confirmProceed, printCheckpointSummary, runAutoCheckpoint, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
   await exitWithFlow({ code, command: cmd, options });
 }
 
