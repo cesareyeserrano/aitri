@@ -6,9 +6,8 @@ How to integrate Aitri into an AI agent's workflow as the engineering system of 
 
 ## Vision
 
-**"Bolt.new with Discipline"** — Aitri is the guardrail that prevents agentic hallucination in
-software delivery. The agent moves fast; Aitri ensures every artifact traces back to a
-reviewed specification.
+Aitri is the guardrail that prevents agentic hallucination in software delivery.
+The agent moves fast; Aitri ensures every artifact traces back to a reviewed specification.
 
 Human interaction is limited to:
 1. Providing the initial intent (idea)
