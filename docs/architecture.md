@@ -101,7 +101,7 @@ Definition of done baseline:
 - Critical stabilization window: CLOSED (H-001/H-002/H-003 verified)
 - Phase G (Production Quality Hardening): baseline delivered
 - Phase H (Software Factory Transformation): baseline delivered
-- EVO backlog: all items complete (EVO-001 through EVO-007, EVO-META, EVO-003, EVO-006)
+- EVO backlog: EVO-001 through EVO-009 (EVO-008 in Ready); EVO-009 complete
 - Auditor Mode: ACTIVE — `aitri plan --ai-backlog/--ai-tests` available
 - New commands: `verify-intent`, `diff`, `spec-improve`, `checkpoint`
 - Source of truth: `docs/STRATEGY_EXECUTION.md`

@@ -3,6 +3,7 @@
 ## 🟢 Ready for Implementation
 
 - **[EVO-008] Feature: Project Adoption (`aitri adopt`)**
+
     - **Source:** User Feedback (Session 2026-02-20)
     - **Priority:** High
     - **Context:** Aitri can only work on projects it created from scratch. There is no path for onboarding an existing project built by other agents, teams, or developers with different folder structures.
@@ -33,27 +34,14 @@
     - **Acceptance (Phase 1):** `aitri adopt --dry-run` shows scan results and proposed config. `aitri adopt` initializes structure and writes `adoption-manifest.json`. No source files modified.
     - **Acceptance (Phase 2):** `aitri adopt --depth standard` with AI config produces at least one DRAFT spec from README/code inference. Human can run `aitri approve` on the result.
 
-- **[EVO-009] Enhancement: Version-Aware Project Migration (`aitri upgrade` v2)**
-    - **Source:** User Feedback (Session 2026-02-20)
-    - **Priority:** Medium
-    - **Context:** `aitri upgrade` already exists (v0.4.0) with a `MIGRATIONS` array pattern. It currently has 2 migrations and no version-gating. When a new Aitri version is released, existing projects cannot automatically adopt new features or have their artifacts updated.
-    - **Problem:** User installs Aitri v0.5.0 on a project built with v0.4.0. The project has old test stubs without `{{CONTRACT_IMPORT}}`, no `ai` config hint, and no awareness of new commands (`diff`, `verify-intent`, `checkpoint`). `aitri upgrade` should bridge this gap.
-    - **What already works:** The `MIGRATIONS[]` runner in `upgrade.js` is solid — `applies()` detects need, `apply()` executes, confirmation gate before writes.
-    - **What needs adding:**
-        1. **Version comparison:** Read `docs/project.json`.`aitriVersion`, compare to current. Only run migrations for versions newer than the project's last upgrade.
-        2. **`migrationsApplied` tracking:** Add `migrationsApplied: []` to `docs/project.json` after each run. Idempotent by design.
-        3. **v0.5.0 migrations (new):**
-            - `NOTIFY-AUDITOR-MODE`: if project has specs/approved but no `ai` config, print notice about Auditor Mode and add commented example to `.aitri.json`
-            - `NOTIFY-NEW-COMMANDS`: print summary of new commands available since last upgrade (diff, verify-intent, spec-improve, checkpoint)
-            - `UPDATE-PROJECT-VERSION`: stamp `docs/project.json` with new `aitriVersion` after all migrations run
-        4. **Migration API:** Add `targetFromVersion` and `targetToVersion` fields per migration entry for precise version gating
-    - **Acceptance:** `aitri upgrade` on a v0.4.0 project detects version gap, shows migration plan, applies applicable migrations, and updates `aitriVersion` in `docs/project.json`. Running `aitri upgrade` again is a no-op.
-
 ## 🟡 In Progress
 
 _(none)_
 
 ## 🔴 Done
+
+- **[EVO-009] Enhancement: Version-Aware Project Migration (`aitri upgrade` v2)**
+    - **Status:** DONE. `semverLt()`, `readProjectVersion()`, `readAppliedMigrations()`, `stampProjectVersion()` added to `upgrade.js`. `sinceVersion` field on migrations. `NOTIFY-NEW-COMMANDS-0.5.0` (atomic, writes `docs/UPGRADE-NOTES-v0.5.0.md`). Idempotent via `migrationsApplied` in `project.json`. 142/142 green.
 
 - **[EVO-004] Doc: Vision Alignment Update**
     - **Status:** DONE. `docs/architecture.md` reframed for agent-centric workflow. `GETTING_STARTED.md` updated with Auditor Mode section. `docs/guides/AGENT_INTEGRATION_GUIDE.md` created.

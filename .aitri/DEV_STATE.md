@@ -1,5 +1,5 @@
 # Aitri Development Checkpoint
-> LAST UPDATE: 2026-02-20T22:59:23.224Z
+> LAST UPDATE: 2026-02-20T23:07:55.637Z
 > AGENT: Developer/Agent
 
 ## 🎯 Current Objective
@@ -8,7 +8,7 @@
 - We have initialized `backlog/aitri-core/evolution.md` with prioritized feedback.
 
 ## 🧠 Working Memory (Context)
-- EVO-008 + EVO-009 documented in backlog. Feedback doc created. Ready to implement EVO-009 first (upgrade v2), then EVO-008 Phase 1 (adopt scan).
+- EVO-009 DONE: version-aware aitri upgrade — semverLt, migrationsApplied tracking, NOTIFY-NEW-COMMANDS-0.5.0 migration, atomic notes file write. 142/142 green. Next: EVO-008 Phase 1 (aitri adopt scan)
 
 ## 🚧 Active State
 - [x] Docs: `docs/guides/SELF_EVOLUTION.md` created.
