@@ -14,17 +14,14 @@
     - **Context:** Add `verify-intent` command to check if US satisfies FR intent using LLM.
     - **Acceptance:** Command exists and calls `ai-client` with spec context.
 
-- **[EVO-004] Doc: Vision Alignment Update**
-    - **Source:** docs/feedback/VISION_ALIGNMENT.md
-    - **Priority:** Low
-    - **Context:** Update `architecture.md` and guides to reflect "Bolt.new with Discipline" vision.
-    - **Acceptance:** Docs reflect agent-centric workflow.
-
 ## 🟡 In Progress
 
 _(none)_
 
 ## 🔴 Done
+
+- **[EVO-004] Doc: Vision Alignment Update**
+    - **Status:** DONE. `docs/architecture.md` reframed for agent-centric workflow. `GETTING_STARTED.md` updated with Auditor Mode section. `docs/guides/AGENT_INTEGRATION_GUIDE.md` created.
 
 - **[EVO-006] Scaffold: Automated Contract-Test Linkage**
     - **Status:** DONE. `parseTestCases` extracts FR-* refs; `buildContractImports` generates per-stack import statements. Templates updated with `{{CONTRACT_IMPORT}}`. 5 unit tests. 142/142 green.

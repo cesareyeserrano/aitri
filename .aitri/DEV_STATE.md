@@ -1,5 +1,5 @@
 # Aitri Development Checkpoint
-> LAST UPDATE: 2026-02-20T22:42:23.397Z
+> LAST UPDATE: 2026-02-20T22:47:22.072Z
 > AGENT: Developer/Agent
 
 ## 🎯 Current Objective
@@ -8,7 +8,7 @@
 - We have initialized `backlog/aitri-core/evolution.md` with prioritized feedback.
 
 ## 🧠 Working Memory (Context)
-- EVO-006 DONE: contract-test linkage in scaffold. 142/142 green.
+- EVO-004 DONE: docs updated for agent-centric workflow. AGENT_INTEGRATION_GUIDE.md created. All EVO items complete.
 
 ## 🚧 Active State
 - [x] Docs: `docs/guides/SELF_EVOLUTION.md` created.

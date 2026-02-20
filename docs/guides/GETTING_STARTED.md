@@ -1,13 +1,17 @@
 # Getting Started: Install and Use Aitri End-to-End
 
-This guide is for first-time users.
+Aitri is a **Disciplined Agentic Skill** — a spec-driven SDLC engine designed to be consumed by AI agents (Claude, Codex, OpenCode) as their system of record for software delivery.
+
+**Two audiences for this guide:**
+- **Human developers** — install and operate Aitri manually
+- **Agent developers** — integrate Aitri into an AI agent's workflow (see section 4b)
 
 It covers:
 - Installing required CLIs from zero
 - Installing Aitri globally
 - Running Aitri in a specific project
 - Installing Aitri as a skill for Codex, Claude, and OpenCode
-- Running a real first workflow
+- Running a real first workflow (human and agent flows)
 
 Language behavior:
 - Aitri CLI prompts are in English.
@@ -74,7 +78,7 @@ Expected after init:
 - `structure.ok: true`
 - `recommendedCommand: "aitri draft"`
 
-## 4) First Real Workflow (Interactive Default)
+## 4a) First Real Workflow (Human — Interactive Default)
 
 ```bash
 aitri draft --feature user-auth --idea "Email and password login with forgot-password flow"
@@ -140,6 +144,43 @@ Fast full demo path:
 ```bash
 npm run demo:5min
 ```
+
+## 4b) First Real Workflow (Agent Developer — Auditor Mode)
+
+In the agent-centric flow, the AI agent generates the backlog and tests, and Aitri acts as the auditor:
+
+```bash
+# 1. Restore session context
+aitri checkpoint show
+
+# 2. Spec phase (human approves)
+aitri draft --feature user-auth --idea "Email and password login with forgot-password flow"
+aitri spec-improve --feature user-auth       # AI-powered spec quality review
+aitri approve --feature user-auth
+aitri discover --feature user-auth
+
+# 3. Agent generates backlog.md and tests.md (outside Aitri)
+# Your agent writes agent-backlog.md and agent-tests.md following the format at:
+# docs/guides/AGENT_INTEGRATION_GUIDE.md
+
+# 4. Preview the delta before committing
+aitri diff --feature user-auth --proposed agent-backlog.md
+
+# 5. Aitri audits traceability, then writes if valid
+aitri plan --feature user-auth --ai-backlog agent-backlog.md --ai-tests agent-tests.md
+
+# 6. Semantic intent validation
+aitri verify-intent --feature user-auth
+
+# 7. Continue standard flow
+aitri validate --feature user-auth
+aitri verify --feature user-auth
+aitri go --feature user-auth --yes
+aitri scaffold --feature user-auth --yes     # test stubs auto-import contracts
+```
+
+Key principle: the agent handles Markdown authoring; Aitri enforces the traceability contract.
+For the full agent integration spec, see `docs/guides/AGENT_INTEGRATION_GUIDE.md`.
 
 Guided draft behavior:
 - Captures summary, actor, outcome, scope, and technology preference.
