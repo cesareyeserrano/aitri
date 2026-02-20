@@ -34,8 +34,11 @@
 
 ## 🟡 In Progress
 
-- **[EVO-001] Refactor: Auditor Mode for Content Generator**
-    - **Status:** NEXT — content-generator.js is 17K lines, highest architectural risk.
+- **[EVO-001] Refactor: Auditor Mode for Content Generator** — Phase 2 pending
+    - **Phase 1 DONE:** `auditBacklog()`, `auditTests()`, `auditAgentContent()` exported.
+      `generatePlanArtifacts()` accepts optional `agentContent` param. 8 unit tests added.
+    - **Phase 2:** Add `--ai-override` flag to `aitri plan`. Agent provides artifacts, CLI audits.
+    - **Phase 3:** Deprecate `infer*` heuristic functions. Full agent-authored path.
 
 ## 🔴 Done
 

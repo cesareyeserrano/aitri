@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { parseApprovedSpec } from "../../cli/commands/spec-parser.js";
-import { generateTestsContent } from "../../cli/commands/content-generator.js";
+import { generateTestsContent, auditBacklog, auditTests, auditAgentContent } from "../../cli/commands/content-generator.js";
 import { runNode, runNodeOk } from "./helpers/cli-test-helpers.mjs";
 
 const SPEC_WITHOUT_UI = `# AF-SPEC: no-ui-feature
@@ -325,6 +325,113 @@ test("generateTestsContent includes UI Flows section when uiStructure has flows"
   assert.match(result, /Dashboard to Settings/);
   assert.match(result, /Given user is on the Login screen/);
   assert.match(result, /Then user is navigated to the Dashboard screen/);
+});
+
+// ─── EVO-001: Auditor Mode unit tests ────────────────────────────────────────
+
+const AUDIT_SPEC = {
+  functionalRules: [
+    { id: "FR-1", text: "The system must authenticate users." },
+    { id: "FR-2", text: "The system must reject invalid credentials." }
+  ],
+  acceptanceCriteria: [
+    { id: "AC-1", text: "Given valid credentials, when submitted, then access is granted." },
+    { id: "AC-2", text: "Given invalid credentials, when submitted, then an error is shown." }
+  ],
+  actors: ["User"],
+  edgeCases: [],
+  securityNotes: [],
+  uiStructure: { hasUiSection: false, screens: [], components: [], flows: [], uiRefs: [] }
+};
+
+const VALID_BACKLOG = [
+  "# Backlog: test-feature",
+  "",
+  "## User Stories",
+  "",
+  "### US-1",
+  "- As a user, I want to log in, so that I can access the system.",
+  "- Trace: FR-1, AC-1",
+  "",
+  "### US-2",
+  "- As a user, I want invalid logins rejected, so that my account is protected.",
+  "- Trace: FR-2, AC-2"
+].join("\n");
+
+const VALID_TESTS = [
+  "# Test Cases: test-feature",
+  "",
+  "### TC-1",
+  "- Trace: US-1, FR-1",
+  "",
+  "### TC-2",
+  "- Trace: US-2, FR-2"
+].join("\n");
+
+test("auditBacklog passes when all US have valid FR traces", () => {
+  const result = auditBacklog(VALID_BACKLOG, AUDIT_SPEC);
+  assert.equal(result.ok, true, `expected ok, got issues: ${result.issues.join(", ")}`);
+  assert.equal(result.stories.length, 2);
+  assert.equal(result.issues.length, 0);
+});
+
+test("auditBacklog fails when US references a non-existent FR", () => {
+  const badBacklog = VALID_BACKLOG.replace("Trace: FR-1, AC-1", "Trace: FR-99, AC-1");
+  const result = auditBacklog(badBacklog, AUDIT_SPEC);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some(i => i.includes("FR-99")), `expected FR-99 issue, got: ${result.issues.join(", ")}`);
+});
+
+test("auditBacklog fails when US has no FR trace", () => {
+  const noTraceBlog = VALID_BACKLOG.replace("Trace: FR-1, AC-1", "Trace: AC-1");
+  const result = auditBacklog(noTraceBlog, AUDIT_SPEC);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some(i => i.includes("missing Trace")), `expected missing trace issue, got: ${result.issues.join(", ")}`);
+});
+
+test("auditBacklog fails when no US blocks found", () => {
+  const result = auditBacklog("# Backlog\n\nNo stories here.", AUDIT_SPEC);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some(i => i.includes("No User Stories")));
+});
+
+test("auditTests passes when all TC have valid traces", () => {
+  const backlogAudit = auditBacklog(VALID_BACKLOG, AUDIT_SPEC);
+  const result = auditTests(VALID_TESTS, AUDIT_SPEC, backlogAudit.stories);
+  assert.equal(result.ok, true, `expected ok, got issues: ${result.issues.join(", ")}`);
+  assert.equal(result.testCases.length, 2);
+});
+
+test("auditTests fails when TC references non-existent US", () => {
+  const badTests = VALID_TESTS.replace("Trace: US-1, FR-1", "Trace: US-99, FR-1");
+  const backlogAudit = auditBacklog(VALID_BACKLOG, AUDIT_SPEC);
+  const result = auditTests(badTests, AUDIT_SPEC, backlogAudit.stories);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some(i => i.includes("US-99")));
+});
+
+test("auditAgentContent returns ok when backlog and tests are valid", () => {
+  const result = auditAgentContent({
+    parsedSpec: AUDIT_SPEC,
+    agentContent: { backlog: VALID_BACKLOG, tests: VALID_TESTS, architecture: "" }
+  });
+  assert.equal(result.ok, true, `expected ok, got: ${result.issues.join(", ")}`);
+  assert.equal(result.issues.length, 0);
+  assert.equal(result.stories.length, 2);
+});
+
+test("auditAgentContent aggregates issues from backlog and tests", () => {
+  const result = auditAgentContent({
+    parsedSpec: AUDIT_SPEC,
+    agentContent: {
+      backlog: VALID_BACKLOG.replace("Trace: FR-1, AC-1", "Trace: FR-99"),
+      tests: VALID_TESTS.replace("Trace: US-1, FR-1", "Trace: US-99"),
+      architecture: ""
+    }
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some(i => i.includes("[backlog]") && i.includes("FR-99")));
+  assert.ok(result.issues.some(i => i.includes("[tests]") && i.includes("US-99")));
 });
 
 // Helper
