@@ -34,14 +34,18 @@
 
 ## 🟡 In Progress
 
-- **[EVO-007] Parser: Flexible Spec Heading Numbering**
-    - **Source:** docs/feedback/TEST_DRIVE_FEEDBACK.md#1.2
-    - **Priority:** Medium
-    - **Context:** Spec headings should be identified by name regardless of number prefix.
-    - **Acceptance:** `approve` gate passes with non-sequential or missing heading numbers.
-    - **Status:** IN PROGRESS — patching section-match regexes in approve.js.
+- **[EVO-001] Refactor: Auditor Mode for Content Generator**
+    - **Status:** NEXT — content-generator.js is 17K lines, highest architectural risk.
 
 ## 🔴 Done
+
+- **[EVO-002] Feature: Semantic Validation Gate**
+    - **Source:** docs/feedback/ARCHITECTURAL_FEEDBACK.md#1.2
+    - **Status:** DONE. `aitri verify-intent` implemented. 4 regression tests. 123/123 green.
+
+- **[EVO-007] Parser: Flexible Spec Heading Numbering**
+    - **Source:** docs/feedback/TEST_DRIVE_FEEDBACK.md#1.2
+    - **Status:** DONE. approve.js matches sections by name, number prefix optional. 119/119 green.
 
 - **[EVO-005] Scanner Robustness: Relax TC Marker Regex**
     - **Source:** docs/feedback/TEST_DRIVE_FEEDBACK.md#1.3
