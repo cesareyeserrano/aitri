@@ -1,6 +1,7 @@
 # Aitri Evolution Backlog
 
 ## 🟢 Ready for Implementation
+
 - **[EVO-001] Refactor: Auditor Mode for Content Generator**
     - **Source:** docs/feedback/ARCHITECTURAL_FEEDBACK.md#1.1
     - **Priority:** High
@@ -31,34 +32,25 @@
     - **Context:** Scaffolded tests should automatically import the relevant contract.
     - **Acceptance:** Tests are ready to implement logic without manual imports.
 
-- **[EVO-007] Parser: Flexible Spec Heading Numbering**
-    - **Source:** docs/feedback/TEST_DRIVE_FEEDBACK.md#1.2
-    - **Priority:** Medium
-    - **Context:** headings in `specs/` should be identified by name regardless of number.
-    - **Acceptance:** `approve` gate passes with non-sequential numbering.
-
-- **[EVO-006] Scaffold: Automated Contract-Test Linkage**
-    - **Source:** docs/feedback/TEST_DRIVE_FEEDBACK.md#1.4
-    - **Priority:** Medium
-    - **Context:** Scaffolded tests should automatically import the relevant contract.
-    - **Acceptance:** Tests are ready to implement logic without manual imports.
-
-- **[EVO-007] Parser: Flexible Spec Heading Numbering**
-    - **Source:** docs/feedback/TEST_DRIVE_FEEDBACK.md#1.2
-    - **Priority:** Medium
-    - **Context:** headings in `specs/` should be identified by name regardless of number.
-    - **Acceptance:** `approve` gate passes with non-sequential numbering.
-
 ## 🟡 In Progress
-- **[EVO-META] Self-Evolution System Implementation**
-    - **Source:** User Feedback (Session 2026-02-18)
-    - **Priority:** Critical
-    - **Context:** Implement the "Relay Protocol" (Checkpoint & Backlog).
-    - **Status:** Docs created. Initial files generated.
+
+- **[EVO-007] Parser: Flexible Spec Heading Numbering**
+    - **Source:** docs/feedback/TEST_DRIVE_FEEDBACK.md#1.2
+    - **Priority:** Medium
+    - **Context:** Spec headings should be identified by name regardless of number prefix.
+    - **Acceptance:** `approve` gate passes with non-sequential or missing heading numbers.
+    - **Status:** IN PROGRESS — patching section-match regexes in approve.js.
 
 ## 🔴 Done
+
 - **[EVO-005] Scanner Robustness: Relax TC Marker Regex**
     - **Source:** docs/feedback/TEST_DRIVE_FEEDBACK.md#1.3
     - **Priority:** High
     - **Context:** Allow `// TC-1` without mandatory colon.
     - **Status:** DONE. Verified with smoke tests.
+
+- **[EVO-META] Self-Evolution System: Relay Protocol**
+    - **Source:** User Feedback (Session 2026-02-18)
+    - **Priority:** Critical
+    - **Context:** Implement Checkpoint & Backlog for zero context-loss between agent sessions.
+    - **Status:** DONE. `aitri checkpoint` command implemented. 119/119 tests green.

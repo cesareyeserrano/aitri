@@ -52,12 +52,12 @@ export async function runApproveCommand({
   }
 
   // Functional Rules check (supports FR-* traceable format and legacy numbered rules)
+  // EVO-007: match by section name regardless of heading number prefix
   const rulesMatch =
-    content.match(/## 3\. Functional Rules \(traceable\)([\s\S]*?)(\n##\s|\s*$)/) ||
-    content.match(/## 3\. Functional Rules([\s\S]*?)(\n##\s|\s*$)/);
+    content.match(/## (?:\d+\.?\s*)?Functional Rules(?:\s*\(traceable\))?([\s\S]*?)(\n##\s|\s*$)/);
 
   if (!rulesMatch) {
-    issues.push("Missing section: `## 3. Functional Rules`.");
+    issues.push("Missing section: `Functional Rules` (e.g., `## 3. Functional Rules (traceable)`).");
   } else {
     const body = rulesMatch[1] || "";
     const lines = body.split("\n").map(l => l.trim()).filter(Boolean);
@@ -83,10 +83,10 @@ export async function runApproveCommand({
     }
   }
 
-  // Security check
-  const secMatch = content.match(/## 7\. Security Considerations([\s\S]*?)(\n##\s|\s*$)/);
+  // Security check — EVO-007: match by name regardless of number
+  const secMatch = content.match(/## (?:\d+\.?\s*)?Security Considerations([\s\S]*?)(\n##\s|\s*$)/);
   if (!secMatch) {
-    issues.push("Missing section: `## 7. Security Considerations`.");
+    issues.push("Missing section: `Security Considerations` (e.g., `## 7. Security Considerations`).");
   } else {
     const lines = secMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
     const meaningful = lines.some(l => {
@@ -100,10 +100,10 @@ export async function runApproveCommand({
     }
   }
 
-  // Acceptance Criteria check
-  const acMatch = content.match(/## 9\. Acceptance Criteria([\s\S]*?)(\n##\s|\s*$)/);
+  // Acceptance Criteria check — EVO-007: match by name regardless of number
+  const acMatch = content.match(/## (?:\d+\.?\s*)?Acceptance Criteria([\s\S]*?)(\n##\s|\s*$)/);
   if (!acMatch) {
-    issues.push("Missing section: `## 9. Acceptance Criteria`.");
+    issues.push("Missing section: `Acceptance Criteria` (e.g., `## 9. Acceptance Criteria`).");
   } else {
     const acLines = acMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
     const acMeaningful = acLines.some(l => {
@@ -122,10 +122,10 @@ export async function runApproveCommand({
     }
   }
 
-  // Actors check (section 2)
-  const actorsMatch = content.match(/## 2\. Actors([\s\S]*?)(\n##\s|\s*$)/);
+  // Actors check — EVO-007: match by name regardless of number
+  const actorsMatch = content.match(/## (?:\d+\.?\s*)?Actors([\s\S]*?)(\n##\s|\s*$)/);
   if (!actorsMatch) {
-    issues.push("Missing section: `## 2. Actors`.");
+    issues.push("Missing section: `Actors` (e.g., `## 2. Actors`).");
   } else {
     const actorLines = actorsMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
     const actorMeaningful = actorLines.some(l => {
@@ -140,10 +140,10 @@ export async function runApproveCommand({
     }
   }
 
-  // Edge Cases check (section 4)
-  const edgeMatch = content.match(/## 4\. Edge Cases([\s\S]*?)(\n##\s|\s*$)/);
+  // Edge Cases check — EVO-007: match by name regardless of number
+  const edgeMatch = content.match(/## (?:\d+\.?\s*)?Edge Cases([\s\S]*?)(\n##\s|\s*$)/);
   if (!edgeMatch) {
-    issues.push("Missing section: `## 4. Edge Cases`.");
+    issues.push("Missing section: `Edge Cases` (e.g., `## 4. Edge Cases`).");
   } else {
     const edgeLines = edgeMatch[1].split("\n").map(l => l.trim()).filter(Boolean);
     const edgeMeaningful = edgeLines.some(l => {
@@ -158,8 +158,8 @@ export async function runApproveCommand({
     }
   }
 
-  // Asset strategy check for visual/game/web domains
-  const contextMatch = content.match(/## 1\. Context([\s\S]*?)(\n##\s|\s*$)/);
+  // Asset strategy check for visual/game/web domains — EVO-007: flexible heading
+  const contextMatch = content.match(/## (?:\d+\.?\s*)?Context([\s\S]*?)(\n##\s|\s*$)/);
   const contextText = contextMatch ? contextMatch[1].toLowerCase() : "";
   const fullLower = content.toLowerCase();
   const isVisualDomain = /\b(game|juego|sprite|canvas|webgl|three\.?js|phaser|godot|unity|animation|visual|graphic|ui\s*design|web\s*app|frontend|pixel|tilemap|asset|artwork|render)\b/.test(contextText) ||
@@ -192,7 +192,7 @@ export async function runApproveCommand({
         if (answer.trim()) {
           const frLine = `- FR-1: ${answer.trim()}`;
           updatedContent = updatedContent.replace(
-            /## 3\. Functional Rules[^\n]*\n([\s\S]*?)(\n##)/,
+            /## (?:\d+\.?\s*)?Functional Rules[^\n]*\n([\s\S]*?)(\n##)/,
             `## 3. Functional Rules (traceable)\n${frLine}\n$2`
           );
           fixedCount++;
@@ -201,7 +201,7 @@ export async function runApproveCommand({
         const answer = await ask("Enter a security consideration (e.g., 'Sanitize all user input to prevent injection'): ");
         if (answer.trim()) {
           updatedContent = updatedContent.replace(
-            /## 7\. Security Considerations\n([\s\S]*?)(\n##)/,
+            /## (?:\d+\.?\s*)?Security Considerations\n([\s\S]*?)(\n##)/,
             `## 7. Security Considerations\n- ${answer.trim()}\n$2`
           );
           fixedCount++;
@@ -210,7 +210,7 @@ export async function runApproveCommand({
         const answer = await ask("Enter an acceptance criterion (Given [context], when [action], then [result]): ");
         if (answer.trim()) {
           updatedContent = updatedContent.replace(
-            /## 9\. Acceptance Criteria[^\n]*\n([\s\S]*?)(\n##|$)/,
+            /## (?:\d+\.?\s*)?Acceptance Criteria[^\n]*\n([\s\S]*?)(\n##|$)/,
             `## 9. Acceptance Criteria\n- AC-1: ${answer.trim()}\n$2`
           );
           fixedCount++;
@@ -220,7 +220,7 @@ export async function runApproveCommand({
         if (answer.trim()) {
           if (actorsMatch) {
             updatedContent = updatedContent.replace(
-              /## 2\. Actors\n([\s\S]*?)(\n##)/,
+              /## (?:\d+\.?\s*)?Actors\n([\s\S]*?)(\n##)/,
               `## 2. Actors\n- ${answer.trim()}\n$2`
             );
           } else {
@@ -236,7 +236,7 @@ export async function runApproveCommand({
         if (answer.trim()) {
           if (edgeMatch) {
             updatedContent = updatedContent.replace(
-              /## 4\. Edge Cases\n([\s\S]*?)(\n##)/,
+              /## (?:\d+\.?\s*)?Edge Cases\n([\s\S]*?)(\n##)/,
               `## 4. Edge Cases\n- ${answer.trim()}\n$2`
             );
           } else {

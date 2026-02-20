@@ -1,5 +1,5 @@
 # Aitri Development Checkpoint
-> LAST UPDATE: 2026-02-20T21:36:08.126Z
+> LAST UPDATE: 2026-02-20T21:42:04.619Z
 > AGENT: Developer/Agent
 
 ## 🎯 Current Objective
@@ -8,7 +8,7 @@
 - We have initialized `backlog/aitri-core/evolution.md` with prioritized feedback.
 
 ## 🧠 Working Memory (Context)
-- EVO-META DONE: aitri checkpoint command implemented, wired in CLI, 119/119 tests passing
+- EVO-007 DONE: approve.js now matches spec sections by name regardless of heading number. 119/119 tests green.
 
 ## 🚧 Active State
 - [x] Docs: `docs/guides/SELF_EVOLUTION.md` created.
