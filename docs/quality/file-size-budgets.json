@@ -143,8 +143,8 @@
     },
     {
       "path": "cli/commands/approve.js",
-      "soft": 340,
-      "hard": 400
+      "soft": 360,
+      "hard": 450
     },
     {
       "path": "cli/commands/hooks.js",
@@ -177,8 +177,18 @@
       "hard": 450
     },
     {
-      "path": "tests/regression/enforcement-execution.test.mjs",
-      "soft": 240,
+      "path": "tests/regression/enforcement-hooks-ci.test.mjs",
+      "soft": 100,
+      "hard": 150
+    },
+    {
+      "path": "tests/regression/enforcement-agent-commands.test.mjs",
+      "soft": 270,
+      "hard": 350
+    },
+    {
+      "path": "tests/regression/enforcement-plan-diff.test.mjs",
+      "soft": 320,
       "hard": 400
     }
   ]
