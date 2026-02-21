@@ -81,6 +81,13 @@ export async function runApproveCommand({
     if (!(hasFR || hasLegacyNumbered) || !meaningful) {
       issues.push("Functional Rules must include at least one meaningful rule using `- FR-1: ...` (preferred) or legacy `1. ...` format. Replace all <placeholder> tokens with real content.");
     }
+
+    // EVO-011: duplicate FR-* IDs
+    const frIds = [...body.matchAll(/\bFR-(\d+)\b/gi)].map(m => m[1]);
+    const dupFR = frIds.filter((id, i) => frIds.indexOf(id) !== i);
+    if (dupFR.length > 0) {
+      issues.push(`Duplicate Functional Rule IDs: ${[...new Set(dupFR)].map(id => `FR-${id}`).join(", ")}. Each FR must have a unique ID.`);
+    }
   }
 
   // Security check — EVO-007: match by name regardless of number
@@ -119,6 +126,21 @@ export async function runApproveCommand({
     });
     if (!acMeaningful) {
       issues.push("Acceptance Criteria must include at least one meaningful criterion. Replace all <placeholder> tokens (e.g. <context>, <action>, <expected>) with real content.");
+    }
+
+    // EVO-011: duplicate AC-* IDs
+    const acIds = [...acLines.join("\n").matchAll(/\bAC-(\d+)\b/gi)].map(m => m[1]);
+    const dupAC = acIds.filter((id, i) => acIds.indexOf(id) !== i);
+    if (dupAC.length > 0) {
+      issues.push(`Duplicate Acceptance Criteria IDs: ${[...new Set(dupAC)].map(id => `AC-${id}`).join(", ")}. Each AC must have a unique ID.`);
+    }
+
+    // EVO-011: FR→AC coverage — at least as many ACs as FRs
+    const frIdCount = rulesMatch
+      ? [...(rulesMatch[1] || "").matchAll(/\bFR-(\d+)\b/gi)].length
+      : 0;
+    if (frIdCount > 0 && acIds.length < frIdCount) {
+      issues.push(`Coverage gap: ${frIdCount} Functional Rule(s) but only ${acIds.length} Acceptance Criterion(a). Add at least one AC per FR.`);
     }
   }
 
@@ -171,6 +193,13 @@ export async function runApproveCommand({
     if (!hasAssetSection && !hasAssetMention) {
       issues.push("This spec describes a visual/game project but has no asset strategy. Add a section describing required assets (sprites, sounds, art style, etc.) or reference them in Functional Rules.");
     }
+  }
+
+  // EVO-011: block TODO / TBD in approved spec
+  const inlineMatches = [...content.matchAll(/\b(TODO|TBD)\b/gi)];
+  if (inlineMatches.length > 0) {
+    const unique = [...new Set(inlineMatches.map(m => m[1].toUpperCase()))];
+    issues.push(`Spec contains ${inlineMatches.length} unresolved placeholder(s) (${unique.join(", ")}). Replace with real content before approving.`);
   }
 
   if (/Aitri suggestion \(auto-applied\)/i.test(content) || /Technology source:\s*Aitri suggestion/i.test(content)) {
