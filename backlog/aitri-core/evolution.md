@@ -25,3 +25,4 @@ _(none)_
 | EVO-010 | Doc policy enforcement — `aitri doctor` DOC-POLICY check | v0.5.0 |
 | EVO-011 | Structural spec quality gate in `aitri approve` (non-LLM) | v0.5.0 |
 | EVO-012 | Contract import coverage — `aitri verify-coverage` | v0.5.0 |
+| EVO-013 | Proof of Compliance — `aitri prove` (per-TC execution → FR proof record) | v0.6.0 |

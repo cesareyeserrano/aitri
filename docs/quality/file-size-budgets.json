@@ -97,8 +97,13 @@
       "hard": 350
     },
     {
+      "path": "cli/commands/prove.js",
+      "soft": 210,
+      "hard": 300
+    },
+    {
       "path": "cli/commands/deliver.js",
-      "soft": 350,
+      "soft": 390,
       "hard": 500
     },
     {
@@ -210,6 +215,11 @@
       "path": "tests/regression/enforcement-plan-diff.test.mjs",
       "soft": 320,
       "hard": 400
+    },
+    {
+      "path": "tests/regression/prove-compliance.test.mjs",
+      "soft": 235,
+      "hard": 320
     }
   ]
 }

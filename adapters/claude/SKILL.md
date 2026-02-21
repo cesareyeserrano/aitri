@@ -45,6 +45,7 @@ Use Aitri as the execution guardrail for spec-driven SDLC work with explicit hum
 - `aitri scaffold` — generate project skeleton, executable test stubs, interface contracts
 - `aitri implement` — generate ordered implementation briefs for AI agents
 - `aitri verify` — (enhanced) map test results to TC-*, report FR/US coverage
+- `aitri prove` — run each TC stub, map results to FR-IDs, write proof-of-compliance record
 - `aitri deliver` — final delivery gate: all FRs covered, all TCs passing
 
 ## Interactive Mode (Default)
@@ -85,7 +86,8 @@ Only use these flags in CI pipelines or when the user explicitly requests unatte
 17. Implement each US-* brief in order from IMPLEMENTATION_ORDER.md
 18. After each US-*: `aitri verify` to confirm TC-* pass
 19. Repeat 17-18 until all stories pass
-20. `aitri deliver` — final delivery gate
+20. `aitri prove` — run TC stubs, prove each FR is satisfied
+21. `aitri deliver` — final delivery gate
 
 ## Persona Alignment
 Use these lenses while refining artifacts:

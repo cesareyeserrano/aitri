@@ -41,6 +41,7 @@ import { runVerifyCoverageCommand } from "./commands/verify-coverage.js";
 import { runDiffCommand } from "./commands/diff.js";
 import { runAdoptCommand } from "./commands/adopt.js";
 import { runDraftCommand } from "./commands/draft.js";
+import { runProveCommand } from "./commands/prove.js";
 import { fileURLToPath } from "node:url";
 import { CONFIG_FILE, loadAitriConfig, resolveProjectPaths } from "./config.js";
 import {
@@ -409,6 +410,11 @@ if (cmd === "scaffold" || cmd === "implement") {
 
 if (cmd === "deliver") {
   const code = await runDeliverCommand({ options, getProjectContextOrExit, getStatusReportOrExit, confirmProceed, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR, ABORTED: EXIT_ABORTED } });
+  await exitWithFlow({ code, command: cmd, options });
+}
+
+if (cmd === "prove") {
+  const code = await runProveCommand({ options, getProjectContextOrExit, getStatusReportOrExit, exitCodes: { OK: EXIT_OK, ERROR: EXIT_ERROR } });
   await exitWithFlow({ code, command: cmd, options });
 }
 

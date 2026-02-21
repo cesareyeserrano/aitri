@@ -269,6 +269,15 @@ export async function runDeliverCommand({
     `Contract coverage: ${coverageResult.covered}/${coverageResult.total} contracts imported. Uncovered: ${coverageResult.uncovered.join(", ")}`
   ];
 
+  // EVO-013: proof of compliance advisory (non-blocking)
+  const proofFile = path.join(project.paths.implementationFeatureDir(feature), "proof-of-compliance.json");
+  const proofRecord = readJson(proofFile);
+  if (!proofRecord) {
+    warnings.push("No proof-of-compliance record found. Run: aitri prove --feature " + feature);
+  } else if (!proofRecord.ok) {
+    warnings.push(`Proof of compliance: ${proofRecord.summary?.proven || 0}/${proofRecord.summary?.total || 0} FRs proven. Re-run: aitri prove --feature ${feature}`);
+  }
+
   const decision = blockers.length === 0 ? "SHIP" : "BLOCKED";
   const generatedAt = new Date().toISOString();
   const goMarker = readJson(goMarkerFile) || {};

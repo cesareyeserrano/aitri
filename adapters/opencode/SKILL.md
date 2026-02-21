@@ -46,6 +46,7 @@ Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory hum
 - `aitri scaffold` — generate project skeleton, executable test stubs, interface contracts
 - `aitri implement` — generate ordered implementation briefs for AI agents
 - `aitri verify` — (enhanced) map test results to TC-*, report FR/US coverage
+- `aitri prove` — run each TC stub, map results to FR-IDs, write proof-of-compliance record
 - `aitri deliver` — final delivery gate: all FRs covered, all TCs passing
 
 ## Factory Workflow (Post-Go)
@@ -54,7 +55,8 @@ Use Aitri as the CLI guardrail for spec-driven SDLC execution with mandatory hum
 3. Implement each US-* brief in order from IMPLEMENTATION_ORDER.md
 4. After each US-*: `aitri verify` to confirm TC-* pass
 5. Repeat 3-4 until all stories pass
-6. `aitri deliver` — final delivery gate
+6. `aitri prove` — run TC stubs, prove each FR is satisfied
+7. `aitri deliver` — final delivery gate
 
 ## Interactive Mode (Default)
 Aitri commands are **interactive by default**. The agent should:
