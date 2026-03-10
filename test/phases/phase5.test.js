@@ -55,12 +55,30 @@ describe('Phase 5 — validate()', () => {
     assert.throws(() => PHASE_DEFS[5].validate(JSON.stringify(d)), /Invalid compliance level/);
   });
 
-  it('accepts all 4 valid compliance levels', () => {
+  it('accepts all 4 non-blocking compliance levels', () => {
     const levels = ['functionally_present', 'partial', 'complete', 'production_ready'];
     for (const level of levels) {
       const d = JSON.parse(validP5());
       d.requirement_compliance = [{ id: 'FR-001', title: 'Test', level, notes: '' }];
       assert.doesNotThrow(() => PHASE_DEFS[5].validate(JSON.stringify(d)), `Level "${level}" should be valid`);
     }
+  });
+
+  it('throws when any FR has compliance level "placeholder"', () => {
+    const d = JSON.parse(validP5());
+    d.requirement_compliance[2].level = 'placeholder';
+    assert.throws(() => PHASE_DEFS[5].validate(JSON.stringify(d)), /Pipeline blocked.*FR-003.*placeholder/);
+  });
+
+  it('throws listing all placeholder FRs when multiple are placeholder', () => {
+    const d = JSON.parse(validP5());
+    d.requirement_compliance[1].level = 'placeholder';
+    d.requirement_compliance[2].level = 'placeholder';
+    assert.throws(() => PHASE_DEFS[5].validate(JSON.stringify(d)), /FR-002.*FR-003/);
+  });
+
+  it('passes when placeholder level is not present', () => {
+    const d = JSON.parse(validP5());
+    assert.doesNotThrow(() => PHASE_DEFS[5].validate(JSON.stringify(d)));
   });
 });
