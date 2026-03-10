@@ -100,3 +100,27 @@ describe('Phase 1 — validate()', () => {
     assert.doesNotThrow(() => PHASE_DEFS[1].validate(JSON.stringify(d)));
   });
 });
+
+describe('Phase 1 — buildBriefing() (BL-001)', () => {
+  const briefing = PHASE_DEFS[1].buildBriefing({ dir: '/tmp/test', inputs: { 'IDEA.md': 'A simple app idea.' }, feedback: null });
+
+  it('briefing contains no-go zone instruction', () => {
+    assert.ok(briefing.includes('no-go'), 'briefing must mention no-go zone');
+  });
+
+  it('briefing contains no_go_zone field in schema', () => {
+    assert.ok(briefing.includes('no_go_zone'), 'briefing schema must include no_go_zone field');
+  });
+
+  it('briefing contains North Star KPI instruction', () => {
+    assert.ok(briefing.includes('North Star KPI'), 'briefing must mention North Star KPI');
+  });
+
+  it('briefing contains JTBD instruction', () => {
+    assert.ok(briefing.includes('JTBD'), 'briefing must mention JTBD');
+  });
+
+  it('briefing contains scope protection in persona intro', () => {
+    assert.ok(briefing.includes('scope protection'), 'briefing persona intro must mention scope protection');
+  });
+});

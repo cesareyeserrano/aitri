@@ -79,3 +79,23 @@ describe('Phase 2 — validate()', () => {
     assert.throws(() => PHASE_DEFS[2].validate(short), /too short.*min 40 lines/);
   });
 });
+
+describe('Phase 2 — buildBriefing() (BL-002)', () => {
+  const briefing = PHASE_DEFS[2].buildBriefing({ dir: '/tmp/test', inputs: { '01_REQUIREMENTS.json': '{}' }, feedback: null });
+
+  it('briefing contains ADR format instruction', () => {
+    assert.ok(briefing.includes('ADR'), 'briefing must mention ADR');
+  });
+
+  it('briefing requires ≥2 options per ADR', () => {
+    assert.ok(briefing.includes('≥2 options'), 'briefing must require ≥2 options per ADR');
+  });
+
+  it('briefing contains Failure Blast Radius section', () => {
+    assert.ok(briefing.toLowerCase().includes('blast radius'), 'briefing must mention failure blast radius');
+  });
+
+  it('briefing contains traceability checklist', () => {
+    assert.ok(briefing.toLowerCase().includes('traceability'), 'briefing must mention traceability checklist');
+  });
+});

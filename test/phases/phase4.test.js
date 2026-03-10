@@ -81,3 +81,20 @@ describe('Phase 4 — validate()', () => {
     assert.doesNotThrow(() => PHASE_DEFS[4].validate(JSON.stringify(d)));
   });
 });
+
+describe('Phase 4 — buildBriefing() (BL-004)', () => {
+  const briefing = PHASE_DEFS[4].buildBriefing({ dir: '/tmp/test', inputs: { '01_REQUIREMENTS.json': '{}', '02_SYSTEM_DESIGN.md': '', '03_TEST_CASES.json': '{}' }, feedback: null });
+
+  it('briefing contains Definition of Done', () => {
+    assert.ok(briefing.includes('Definition of Done'), 'briefing must include Technical Definition of Done');
+  });
+
+  it('briefing contains @aitri-trace header instruction', () => {
+    assert.ok(briefing.includes('@aitri-trace'), 'briefing must mention @aitri-trace headers');
+  });
+
+  it('briefing contains 3-phase implementation roadmap', () => {
+    assert.ok(briefing.includes('skeleton') && briefing.includes('hardening'),
+      'briefing must include skeleton and hardening phases');
+  });
+});

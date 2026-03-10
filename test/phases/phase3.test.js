@@ -68,3 +68,26 @@ describe('Phase 3 — validate()', () => {
     assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /0 e2e test.*min 2/);
   });
 });
+
+describe('Phase 3 — buildBriefing() (BL-003)', () => {
+  const briefing = PHASE_DEFS[3].buildBriefing({ dir: '/tmp/test', inputs: { '01_REQUIREMENTS.json': '{}', '02_SYSTEM_DESIGN.md': '' }, feedback: null });
+
+  it('briefing contains Given/When/Then instruction', () => {
+    assert.ok(briefing.includes('Given') && briefing.includes('When') && briefing.includes('Then'),
+      'briefing must mention Given/When/Then format');
+  });
+
+  it('briefing contains SPEC-SEALED rule', () => {
+    assert.ok(briefing.includes('SPEC-SEALED'), 'briefing must mention SPEC-SEALED rule');
+  });
+
+  it('briefing contains Type Coverage Matrix instruction', () => {
+    assert.ok(briefing.includes('Type Coverage Matrix') || briefing.includes('coverage matrix'),
+      'briefing must mention Type Coverage Matrix');
+  });
+
+  it('briefing contains concrete value example (negative)', () => {
+    assert.ok(briefing.includes('valid data') || briefing.includes('abstract'),
+      'briefing must show abstract vs concrete example');
+  });
+});
