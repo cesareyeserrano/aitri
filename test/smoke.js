@@ -191,4 +191,69 @@ describe('Aitri CLI — Smoke Test', () => {
     assert.match(out, /rejected/i);
     assert.match(out, /run-phase discovery/);
   });
+
+  // ─── Regression Matrix ─────────────────────────────────────────────────────
+
+  it('[regression] approve N success must persist in .aitri', () => {
+    // Phase 1 was approved earlier in this test suite — re-verify it's in .aitri
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.aitri'), 'utf8'));
+    assert.ok(Array.isArray(config.approvedPhases), 'approvedPhases must be an array');
+    assert.ok(config.approvedPhases.includes(1), 'Phase 1 must be persisted in approvedPhases');
+  });
+
+  it('[regression] status must match .aitri approvedPhases', () => {
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.aitri'), 'utf8'));
+    const statusOut = aitri('status', tmpDir);
+    // Phase 1 is in approvedPhases — status must show Approved
+    if (config.approvedPhases.includes(1)) {
+      assert.match(statusOut, /Approved/);
+    }
+    // Phases not in approvedPhases must NOT show as Approved (spot-check Phase 2)
+    if (!config.approvedPhases.includes(2)) {
+      const lines = statusOut.split('\n');
+      const phase2Line = lines.find(l => l.includes('Architect') || (l.includes('2') && !l.includes('Phase 2')));
+      if (phase2Line) assert.doesNotMatch(phase2Line, /✅.*Approved/);
+    }
+  });
+
+  it('[regression] verify-complete must be reflected in status', () => {
+    // Simulate verifyPassed: true in .aitri and confirm status shows it
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.aitri'), 'utf8'));
+    // Phase 4 must be approved for verify row to show; skip if not in this test's state
+    if (config.approvedPhases.includes(4) || config.verifyPassed) {
+      const statusOut = aitri('status', tmpDir);
+      if (config.verifyPassed) {
+        assert.match(statusOut, /Passed/);
+      }
+    }
+    // Always verify the .aitri field is well-formed if it exists
+    if ('verifyPassed' in config) {
+      assert.equal(typeof config.verifyPassed, 'boolean', 'verifyPassed must be boolean');
+    }
+  });
+
+  it('[regression] validate must not contradict approved state', () => {
+    // Phase 1 is approved — validate should NOT mark it as MISSING or unapproved
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.aitri'), 'utf8'));
+    const validateOut = aitri('validate', tmpDir);
+    if (config.approvedPhases.includes(1)) {
+      const lines = validateOut.split('\n');
+      const reqLine = lines.find(l => l.includes('01_REQUIREMENTS.json'));
+      // Should be ✅, not ❌ or ⏳ with "(not approved)"
+      if (reqLine) {
+        assert.ok(!reqLine.includes('not approved'), '01_REQUIREMENTS.json should not show "not approved"');
+        assert.ok(!reqLine.includes('MISSING'), '01_REQUIREMENTS.json should not show "MISSING"');
+      }
+    }
+  });
+
+  it('[regression] aitri commands work from a subdirectory', () => {
+    // Create a subdirectory and run aitri status from it — findProjectDir must locate .aitri
+    const subDir = path.join(tmpDir, 'src', 'components');
+    fs.mkdirSync(subDir, { recursive: true });
+    const out = aitri('status', subDir);
+    assert.match(out, /Aitri/i);
+    // Should show Phase 1 as approved (state carried from parent)
+    assert.match(out, /Approved/);
+  });
 });

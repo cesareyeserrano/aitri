@@ -13,6 +13,7 @@
  * To add a command: create lib/commands/<name>.js and add a case below.
  */
 
+import fs   from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { cmdInit }           from '../lib/commands/init.js';
@@ -25,11 +26,31 @@ import { cmdStatus }         from '../lib/commands/status.js';
 import { cmdValidate }       from '../lib/commands/validate.js';
 import { cmdHelp }           from '../lib/commands/help.js';
 
-const VERSION   = '0.1.8';
+const VERSION   = '0.1.9';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir   = path.dirname(__dirname);
-const dir       = process.cwd();
+const cwd       = process.cwd();
 const [,, cmd, ...args] = process.argv;
+
+/**
+ * Find the project directory by searching upward for .aitri (like git finds .git).
+ * This makes all commands work correctly regardless of which subdirectory the
+ * agent or user is in when they invoke aitri — critical for agent workflows
+ * where the shell cwd may reset between command invocations.
+ */
+function findProjectDir(startDir) {
+  let current = startDir;
+  while (true) {
+    if (fs.existsSync(path.join(current, '.aitri'))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return startDir; // filesystem root — fall back to cwd
+    current = parent;
+  }
+}
+
+// init always uses cwd (creating a new project here)
+// all other commands search upward for the .aitri file
+const dir = cmd === 'init' ? cwd : findProjectDir(cwd);
 
 const flagValue = (flag) => {
   const i = args.indexOf(flag);
