@@ -108,6 +108,12 @@ describe('Aitri CLI — Smoke Test', () => {
     assert.match(out, /Min 5 functional_requirements/);
   });
 
+  it('aitri approve 1 fails when complete 1 has not passed', () => {
+    // artifact file exists (from previous test) but complete did not pass
+    const out = aitriShouldFail('approve 1', tmpDir);
+    assert.match(out, /not been validated|complete 1/i);
+  });
+
   it('aitri complete 1 succeeds with valid artifact', () => {
     fs.writeFileSync(path.join(tmpDir, '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
     const out = aitri('complete 1', tmpDir);
