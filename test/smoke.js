@@ -123,7 +123,9 @@ describe('Aitri CLI — Smoke Test', () => {
   it('aitri approve 1 updates state and shows next step', () => {
     const out = aitri('approve 1', tmpDir);
     assert.match(out, /APPROVED/);
-    assert.match(out, /run-phase 2/);
+    // VALID_REQUIREMENTS has FR-002 type:UX — pipeline must require UX phase before Phase 2
+    assert.match(out, /run-phase ux/);
+    assert.ok(!out.includes('run-phase 2'), 'must not skip to Phase 2 when UX FRs are present');
   });
 
   it('aitri status shows Phase 1 as approved', () => {
