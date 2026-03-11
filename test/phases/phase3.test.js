@@ -90,4 +90,23 @@ describe('Phase 3 — buildBriefing() (BL-003)', () => {
     assert.ok(briefing.includes('valid data') || briefing.includes('abstract'),
       'briefing must show abstract vs concrete example');
   });
+
+  it('briefing contains user_story_id in TC schema (BL-006)', () => {
+    assert.ok(briefing.includes('user_story_id'), 'briefing TC schema must include user_story_id field');
+  });
+
+  it('briefing contains ac_id in TC schema (BL-006)', () => {
+    assert.ok(briefing.includes('ac_id'), 'briefing TC schema must include ac_id field');
+  });
+
+  it('briefing contains Human Review checklist', () => {
+    assert.ok(briefing.includes('Human Review'), 'briefing must include Human Review section');
+  });
+
+  it('Human Review checklist covers no_go_zone and concrete values', () => {
+    const reviewIdx = briefing.indexOf('Human Review');
+    const reviewSection = briefing.slice(reviewIdx);
+    assert.ok(reviewSection.includes('no_go_zone') && reviewSection.includes('concrete'),
+      'Human Review must cover no_go_zone and concrete value checks');
+  });
 });

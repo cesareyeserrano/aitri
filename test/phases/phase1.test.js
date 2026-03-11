@@ -123,4 +123,24 @@ describe('Phase 1 — buildBriefing() (BL-001)', () => {
   it('briefing contains scope protection in persona intro', () => {
     assert.ok(briefing.includes('scope protection'), 'briefing persona intro must mention scope protection');
   });
+
+  it('briefing contains acceptance_criteria in user_stories schema (BL-006)', () => {
+    assert.ok(briefing.includes('acceptance_criteria'), 'briefing schema must include acceptance_criteria in user_stories');
+  });
+
+  it('briefing contains AC Given/When/Then fields in user_stories schema (BL-006)', () => {
+    assert.ok(briefing.includes('given:') && briefing.includes('when:') && briefing.includes('then:'),
+      'briefing user_stories schema must include given/when/then AC fields');
+  });
+
+  it('briefing contains Human Review checklist', () => {
+    assert.ok(briefing.includes('Human Review'), 'briefing must include Human Review section');
+  });
+
+  it('Human Review checklist covers no_go_zone and acceptance_criteria quality', () => {
+    const reviewIdx = briefing.indexOf('Human Review');
+    const reviewSection = briefing.slice(reviewIdx);
+    assert.ok(reviewSection.includes('no_go_zone') && reviewSection.includes('acceptance_criteria'),
+      'Human Review must cover no_go_zone and acceptance_criteria checks');
+  });
 });

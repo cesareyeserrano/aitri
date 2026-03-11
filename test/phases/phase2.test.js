@@ -98,4 +98,15 @@ describe('Phase 2 — buildBriefing() (BL-002)', () => {
   it('briefing contains traceability checklist', () => {
     assert.ok(briefing.toLowerCase().includes('traceability'), 'briefing must mention traceability checklist');
   });
+
+  it('briefing contains Human Review checklist', () => {
+    assert.ok(briefing.includes('Human Review'), 'briefing must include Human Review section');
+  });
+
+  it('Human Review checklist covers no_go_zone and ADR checks', () => {
+    const reviewIdx = briefing.indexOf('Human Review');
+    const reviewSection = briefing.slice(reviewIdx);
+    assert.ok(reviewSection.includes('no_go_zone') && reviewSection.includes('ADR'),
+      'Human Review must cover no_go_zone and ADR verification');
+  });
 });

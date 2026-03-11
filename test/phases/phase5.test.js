@@ -85,3 +85,27 @@ describe('Phase 5 — validate()', () => {
     assert.doesNotThrow(() => PHASE_DEFS[5].validate(JSON.stringify(d)));
   });
 });
+
+describe('Phase 5 — buildBriefing()', () => {
+  const briefing = PHASE_DEFS[5].buildBriefing({
+    dir: '/tmp/test',
+    inputs: {
+      '01_REQUIREMENTS.json': '{}',
+      '02_SYSTEM_DESIGN.md': '',
+      '04_IMPLEMENTATION_MANIFEST.json': '{}',
+      '04_TEST_RESULTS.json': '{}',
+    },
+    feedback: null,
+  });
+
+  it('briefing contains Human Review checklist', () => {
+    assert.ok(briefing.includes('Human Review'), 'briefing must include Human Review section');
+  });
+
+  it('Human Review checklist covers compliance levels and placeholder', () => {
+    const reviewIdx = briefing.indexOf('Human Review');
+    const reviewSection = briefing.slice(reviewIdx);
+    assert.ok(reviewSection.includes('placeholder') && reviewSection.includes('compliance'),
+      'Human Review must cover placeholder and compliance level checks');
+  });
+});

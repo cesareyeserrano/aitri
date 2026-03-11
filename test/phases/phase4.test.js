@@ -97,4 +97,23 @@ describe('Phase 4 — buildBriefing() (BL-004)', () => {
     assert.ok(briefing.includes('skeleton') && briefing.includes('hardening'),
       'briefing must include skeleton and hardening phases');
   });
+
+  it('briefing contains US-ID in @aitri-trace example (BL-006)', () => {
+    assert.ok(briefing.includes('US-ID'), 'briefing @aitri-trace must include US-ID for full traceability');
+  });
+
+  it('briefing contains AC-ID in @aitri-trace example (BL-006)', () => {
+    assert.ok(briefing.includes('AC-ID'), 'briefing @aitri-trace must include AC-ID for full traceability');
+  });
+
+  it('briefing contains Human Review checklist', () => {
+    assert.ok(briefing.includes('Human Review'), 'briefing must include Human Review section');
+  });
+
+  it('Human Review checklist covers technical_debt and files_created', () => {
+    const reviewIdx = briefing.indexOf('Human Review');
+    const reviewSection = briefing.slice(reviewIdx);
+    assert.ok(reviewSection.includes('technical_debt') && reviewSection.includes('files_created'),
+      'Human Review must cover technical_debt and files_created checks');
+  });
 });
