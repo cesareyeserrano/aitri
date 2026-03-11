@@ -66,3 +66,44 @@ describe('Phase Discovery — validate()', () => {
     assert.equal(PHASE_DEFS['discovery'].artifact, '00_DISCOVERY.md');
   });
 });
+
+describe('Phase Discovery — buildBriefing()', () => {
+  const idea = 'A tool to help freelancers manage invoices automatically and send payment reminders.';
+  const briefing = PHASE_DEFS['discovery'].buildBriefing({
+    dir: '/tmp/test',
+    inputs: { 'IDEA.md': idea },
+    feedback: null,
+  });
+
+  it('briefing contains ROLE, CONSTRAINTS, and REASONING from discovery persona', () => {
+    assert.ok(briefing.includes('Discovery Facilitator'), 'ROLE must be present');
+    assert.ok(briefing.includes('Never'), 'CONSTRAINTS must be present');
+    assert.ok(briefing.includes('Before finalizing'), 'REASONING auto-check must be present');
+  });
+
+  it('briefing contains the idea content with word count', () => {
+    assert.ok(briefing.includes(idea), 'IDEA.md content must appear in briefing');
+    assert.ok(briefing.includes('words'), 'word count must be shown');
+  });
+
+  it('briefing contains required output sections instructions', () => {
+    assert.ok(briefing.includes('## Problem'), 'Problem section instruction must be present');
+    assert.ok(briefing.includes('## Users'), 'Users section instruction must be present');
+    assert.ok(briefing.includes('## Success Criteria'), 'Success Criteria section instruction must be present');
+    assert.ok(briefing.includes('## Out of Scope'), 'Out of Scope section instruction must be present');
+  });
+
+  it('applies feedback when provided', () => {
+    const withFeedback = PHASE_DEFS['discovery'].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { 'IDEA.md': idea },
+      feedback: 'Focus more on the pain point of late payments',
+    });
+    assert.ok(withFeedback.includes('Focus more on the pain point'), 'feedback must appear in briefing');
+  });
+
+  it('word count reflects actual idea length', () => {
+    const wordCount = idea.trim().split(/\s+/).length;
+    assert.ok(briefing.includes(`${wordCount} words`), `briefing must show correct word count (${wordCount})`);
+  });
+});

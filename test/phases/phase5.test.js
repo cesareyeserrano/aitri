@@ -84,6 +84,13 @@ describe('Phase 5 — validate()', () => {
     const d = JSON.parse(validP5());
     assert.doesNotThrow(() => PHASE_DEFS[5].validate(JSON.stringify(d)));
   });
+
+  it('rejects compliance level "Placeholder" (capital P) as invalid — not silently passed as valid', () => {
+    const d = JSON.parse(validP5());
+    d.requirement_compliance[0].level = 'Placeholder';
+    // "Placeholder" is not in validLevels (case-sensitive) → caught as invalid level
+    assert.throws(() => PHASE_DEFS[5].validate(JSON.stringify(d)), /Invalid compliance level/);
+  });
 });
 
 describe('Phase 5 — buildBriefing()', () => {

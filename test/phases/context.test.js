@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractRequirements, extractTestIndex, extractManifest, head } from '../../lib/phases/context.js';
+import { extractRequirements, extractTestIndex, extractTestResults, extractManifest, head } from '../../lib/phases/context.js';
 
 const fullRequirements = () => JSON.stringify({
   project_name: 'Test Project',
@@ -144,5 +144,134 @@ describe('head()', () => {
     const content = Array.from({ length: 200 }, (_, i) => `line ${i + 1}`).join('\n');
     const result = head(content);
     assert.equal(result.split('\n').length, 160);
+  });
+});
+
+const fullTestCases = () => JSON.stringify({
+  test_plan: { coverage_goal: '80%', type_matrix: 'per FR' },
+  test_cases: [
+    { id: 'TC-001', requirement_id: 'FR-001', title: 'Valid login returns 200', type: 'e2e', priority: 'high', given: 'user exists', when: 'POST /login', then: 'status 200' },
+    { id: 'TC-002', requirement_id: 'FR-002', title: 'Dashboard renders at 375px', type: 'unit', priority: 'medium', given: 'viewport 375px', when: 'render Dashboard', then: 'no overflow' },
+  ],
+});
+
+describe('extractTestIndex()', () => {
+
+  it('returns valid JSON', () => {
+    assert.doesNotThrow(() => JSON.parse(extractTestIndex(fullTestCases())));
+  });
+
+  it('includes test_plan', () => {
+    const out = JSON.parse(extractTestIndex(fullTestCases()));
+    assert.ok(out.test_plan, 'test_plan must be present');
+    assert.equal(out.test_plan.coverage_goal, '80%');
+  });
+
+  it('includes test_cases with id, requirement_id, title, type, priority', () => {
+    const out = JSON.parse(extractTestIndex(fullTestCases()));
+    assert.ok(Array.isArray(out.test_cases));
+    const tc = out.test_cases[0];
+    assert.equal(tc.id, 'TC-001');
+    assert.equal(tc.requirement_id, 'FR-001');
+    assert.equal(tc.type, 'e2e');
+    assert.equal(tc.priority, 'high');
+  });
+
+  it('strips given/when/then from test_cases', () => {
+    const out = JSON.parse(extractTestIndex(fullTestCases()));
+    const tc = out.test_cases[0];
+    assert.equal(tc.given, undefined);
+    assert.equal(tc.when, undefined);
+    assert.equal(tc.then, undefined);
+  });
+
+  it('handles missing test_cases gracefully (no throw)', () => {
+    const d = JSON.parse(fullTestCases());
+    delete d.test_cases;
+    assert.doesNotThrow(() => extractTestIndex(JSON.stringify(d)));
+  });
+
+  it('returns raw content on malformed JSON', () => {
+    const raw = '{not valid json}';
+    assert.equal(extractTestIndex(raw), raw);
+  });
+});
+
+const fullTestResults = () => JSON.stringify({
+  executed_at: '2026-03-10T10:00:00Z',
+  test_runner: 'node:test',
+  summary: { total: 3, passed: 2, failed: 1 },
+  fr_coverage: { 'FR-001': { tests_passing: 2, tests_failing: 0 }, 'FR-002': { tests_passing: 0, tests_failing: 1 } },
+  results: [
+    { tc_id: 'TC-001', status: 'pass', notes: '' },
+    { tc_id: 'TC-002', status: 'pass', notes: '' },
+    { tc_id: 'TC-003', status: 'fail', notes: 'Expected 200, got 404' },
+  ],
+});
+
+describe('extractTestResults()', () => {
+
+  it('returns valid JSON', () => {
+    assert.doesNotThrow(() => JSON.parse(extractTestResults(fullTestResults())));
+  });
+
+  it('includes summary and fr_coverage', () => {
+    const out = JSON.parse(extractTestResults(fullTestResults()));
+    assert.ok(out.summary, 'summary must be present');
+    assert.equal(out.summary.total, 3);
+    assert.ok(out.fr_coverage, 'fr_coverage must be present');
+  });
+
+  it('failed_tests contains only failed results', () => {
+    const out = JSON.parse(extractTestResults(fullTestResults()));
+    assert.ok(Array.isArray(out.failed_tests));
+    assert.equal(out.failed_tests.length, 1);
+    assert.equal(out.failed_tests[0].tc_id, 'TC-003');
+  });
+
+  it('failed_tests excludes passing results', () => {
+    const out = JSON.parse(extractTestResults(fullTestResults()));
+    const tcIds = out.failed_tests.map(f => f.tc_id);
+    assert.ok(!tcIds.includes('TC-001'), 'TC-001 (pass) must not appear in failed_tests');
+  });
+
+  it('handles missing results gracefully (no throw)', () => {
+    const d = JSON.parse(fullTestResults());
+    delete d.results;
+    assert.doesNotThrow(() => extractTestResults(JSON.stringify(d)));
+    const out = JSON.parse(extractTestResults(JSON.stringify(d)));
+    assert.equal(out.failed_tests, undefined);
+  });
+
+  it('returns raw content on malformed JSON', () => {
+    const raw = '{not valid json}';
+    assert.equal(extractTestResults(raw), raw);
+  });
+});
+
+const fullManifest = () => JSON.stringify({
+  files_created: ['src/index.js', 'src/db.js'],
+  setup_commands: ['npm install', 'npm run migrate'],
+  environment_variables: [{ name: 'DB_URL', type: 'string', required: true, example: 'postgres://localhost/mydb' }],
+  technical_debt: [{ fr_id: 'FR-001', substitution: 'static token', reason: 'time constraint', effort_to_fix: '2 days' }],
+});
+
+describe('extractManifest()', () => {
+
+  it('returns valid JSON', () => {
+    assert.doesNotThrow(() => JSON.parse(extractManifest(fullManifest())));
+  });
+
+  it('includes files_created, setup_commands, environment_variables, technical_debt', () => {
+    const out = JSON.parse(extractManifest(fullManifest()));
+    assert.deepEqual(out.files_created, ['src/index.js', 'src/db.js']);
+    assert.deepEqual(out.setup_commands, ['npm install', 'npm run migrate']);
+    assert.ok(Array.isArray(out.environment_variables));
+    assert.ok(Array.isArray(out.technical_debt));
+  });
+
+  it('returns raw content on malformed JSON', () => {
+    const raw = '{not valid json}';
+    assert.equal(extractManifest(raw), raw);
   });
 });

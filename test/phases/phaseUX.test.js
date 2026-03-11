@@ -71,3 +71,67 @@ describe('Phase UX — validate()', () => {
     assert.equal(PHASE_DEFS['ux'].artifact, '01_UX_SPEC.md');
   });
 });
+
+const validRequirements = JSON.stringify({
+  project_name: 'Test Project',
+  user_personas: [{ role: 'End User', tech_level: 'low', goal: 'track expenses', pain_point: 'forgetting' }],
+  functional_requirements: [
+    { id: 'FR-001', title: 'Login Screen', priority: 'MUST', type: 'ux', acceptance_criteria: ['renders at 375px'] },
+    { id: 'FR-002', title: 'Export', priority: 'MUST', type: 'logic', acceptance_criteria: ['exports CSV'] },
+  ],
+  user_stories: [],
+  non_functional_requirements: [],
+  no_go_zone: [],
+});
+
+describe('Phase UX — buildBriefing()', () => {
+  const briefing = PHASE_DEFS['ux'].buildBriefing({
+    dir: '/tmp/test',
+    inputs: { 'IDEA.md': 'A simple app idea.', '01_REQUIREMENTS.json': validRequirements },
+    feedback: null,
+  });
+
+  it('briefing contains ROLE, CONSTRAINTS, and REASONING from ux persona', () => {
+    assert.ok(briefing.includes('UX/UI Designer'), 'ROLE must be present');
+    assert.ok(briefing.includes('Nielsen'), 'REASONING with Nielsen heuristics must be present');
+    assert.ok(briefing.includes('Never'), 'CONSTRAINTS must be present');
+  });
+
+  it('briefing contains User Personas section', () => {
+    assert.ok(briefing.includes('User Personas'), 'User Personas section must be present');
+    assert.ok(briefing.includes('End User'), 'persona role must appear in briefing');
+  });
+
+  it('UX/Visual/Audio Requirements section contains UX FR but not logic FR', () => {
+    const uxIdx = briefing.indexOf('## UX/Visual/Audio Requirements');
+    const fullReqIdx = briefing.indexOf('## Full Requirements');
+    const uxSection = briefing.slice(uxIdx, fullReqIdx);
+    assert.ok(uxSection.includes('FR-001'), 'UX FR must appear in UX section');
+    assert.ok(!uxSection.includes('FR-002'), 'logic FR must not appear in UX section');
+  });
+
+  it('briefing contains required output sections', () => {
+    assert.ok(briefing.includes('User Flows'), 'User Flows section instruction must be present');
+    assert.ok(briefing.includes('Component Inventory'), 'Component Inventory section instruction must be present');
+    assert.ok(briefing.includes('Nielsen Compliance'), 'Nielsen Compliance section instruction must be present');
+  });
+
+  it('applies feedback when provided', () => {
+    const withFeedback = PHASE_DEFS['ux'].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { 'IDEA.md': 'A simple app idea.', '01_REQUIREMENTS.json': validRequirements },
+      feedback: 'Make error states more explicit',
+    });
+    assert.ok(withFeedback.includes('Make error states more explicit'), 'feedback must appear in briefing');
+  });
+
+  it('handles missing user_personas in requirements gracefully', () => {
+    const reqsNoPerson = JSON.parse(validRequirements);
+    delete reqsNoPerson.user_personas;
+    assert.doesNotThrow(() => PHASE_DEFS['ux'].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { 'IDEA.md': 'idea', '01_REQUIREMENTS.json': JSON.stringify(reqsNoPerson) },
+      feedback: null,
+    }));
+  });
+});
