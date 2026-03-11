@@ -1,93 +1,67 @@
-# Aitri — GitHub & npm Publishing Guide
+# Aitri — Release Flow
 
-> Operational reference for publishing releases. Run `npm test` before any publish.
+> Operational reference. Follow this exactly before every release.
 
 ---
 
-## Prerequisites
+## Release checklist
 
 ```bash
-# Verify tests pass
-npm test              # 34/34 required
+# 1. Run full test suite — must be 0 failures
+npm run test:all
 
-# Verify local install works
+# 2. Bump version in both files (must stay in sync):
+#    - package.json  → "version": "x.x.x"
+#    - bin/aitri.js  → const VERSION = 'x.x.x'
+
+# 3. Verify install and version
 npm i -g .
-aitri --version       # must match package.json version
+aitri --version   # must match the bumped version
+
+# 4. Commit and push
+git add bin/ lib/ templates/ test/ docs/ package.json README.md
+git commit -m "vX.X.X — <summary>"
+git push
+```
+
+That's the full release. No tag required unless publishing to npm.
+
+---
+
+## Version policy
+
+| Change type | Bump |
+|---|---|
+| Bug fixes, briefing wording, test additions | `patch` |
+| New commands, new validation rules, new phases | `minor` |
+| Breaking schema changes, removed commands | `major` |
+
+```bash
+npm version patch --no-git-tag-version   # then sync bin/aitri.js manually
 ```
 
 ---
 
-## Version bump
-
-Follow the policy in `docs/Aitri_Design_Notes/ARCHITECTURE.md` — Development Pipeline section.
+## npm publish (when ready)
 
 ```bash
-# Patch: bug fixes, warnings, docs — no behavior change
-npm version patch --no-git-tag-version
-
-# Minor: new commands, new validation rules — backward compatible
-npm version minor --no-git-tag-version
-
-# Major: breaking schema changes, removed commands
-npm version major --no-git-tag-version
-```
-
-After bumping:
-1. Update `bin/aitri.js` — `const VERSION = 'x.x.x'`
-2. Update `CHANGELOG.md` — move "Next release" items to new version entry
-3. Run `npm test` again
-4. Run `npm i -g .` and smoke test
-
----
-
-## Publish to npm
-
-```bash
-# Login (first time or session expired)
 npm login
-
-# Dry run — review what gets published
-npm publish --dry-run
-
-# Publish
+npm publish --dry-run    # review what gets published
 npm publish --access public
+git tag vX.X.X && git push origin main --tags
 ```
 
 **Files published** (controlled by `package.json > files`):
 ```
-bin/
-lib/
-templates/
-README.md
-LICENSE
+bin/  lib/  templates/  README.md  LICENSE
 ```
 
 `docs/`, `test/`, `.claude/` are NOT published.
 
 ---
 
-## Push to GitHub
+## When to add CI/CD
 
-```bash
-# Stage and commit
-git add bin/ lib/ templates/ test/ docs/ package.json README.md CHANGELOG.md
-git commit -m "release: vX.X.X — <summary>"
-
-# Tag the release
-git tag vX.X.X
-git push origin main --tags
-```
-
----
-
-## GitHub repo
-
-Repo: `github.com/cesareyeserrano/aitri`
-
-Current published versions: `0.4.0` (deprecated), `1.0.0` (deprecated), `2.0.0` (latest)
-
-To deprecate an old version:
-```bash
-npm deprecate aitri@0.4.0 "Superseded by v2.0.0 — install: npm i -g aitri"
-npm deprecate aitri@1.0.0 "Superseded by v2.0.0 — install: npm i -g aitri"
-```
+Not needed while solo. Add GitHub Actions when:
+- A second contributor opens PRs
+- npm publish is automated on tag
