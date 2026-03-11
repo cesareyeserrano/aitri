@@ -65,7 +65,13 @@ describe('Phase 3 — validate()', () => {
     const d = JSON.parse(validP3());
     // Agent mistake: using type for scenario classification instead of unit|integration|e2e
     d.test_cases = d.test_cases.map(tc => ({ ...tc, type: 'happy_path' }));
-    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /0 e2e test.*min 2/);
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /Invalid type value.*unit.*integration.*e2e/);
+  });
+
+  it('throws when test_plan field is missing', () => {
+    const d = JSON.parse(validP3());
+    delete d.test_plan;
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /test_plan field is required/);
   });
 });
 

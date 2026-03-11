@@ -75,6 +75,9 @@ describe('Phase 2 — validate()', () => {
       '## Data Model', 'Minimal.',
       '## API Design', 'Basic.',
       '## Security Design', 'None.',
+      '## Performance & Scalability', 'N/A.',
+      '## Deployment Architecture', 'N/A.',
+      '## Risk Analysis', 'None.',
     ].join('\n');
     assert.throws(() => PHASE_DEFS[2].validate(short), /too short.*min 40 lines/);
   });
