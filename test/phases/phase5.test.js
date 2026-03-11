@@ -14,7 +14,7 @@ const validP5 = () => JSON.stringify({
     { id: 'FR-004', title: 'Save',      level: 'functionally_present', notes: 'No persistence test' },
   ],
   technical_debt_inherited: [],
-  overall_status: 'PARTIAL',
+  overall_status: 'partial',
   approved_by: 'Aitri v2',
 });
 
