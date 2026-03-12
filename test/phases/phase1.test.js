@@ -99,10 +99,38 @@ describe('Phase 1 — validate()', () => {
     d.functional_requirements.push({ id: 'FR-006', title: 'Sound design', priority: 'MUST', type: 'audio', acceptance_criteria: ['audio plays within 100ms of trigger'] });
     assert.doesNotThrow(() => PHASE_DEFS[1].validate(JSON.stringify(d)));
   });
+
+  it('[ASSUMPTION] does not throw when FRs contain [ASSUMPTION] marker', () => {
+    const d = JSON.parse(validP1());
+    d.functional_requirements[0].title = 'Login [ASSUMPTION: needs user confirmation]';
+    assert.doesNotThrow(() => PHASE_DEFS[1].validate(JSON.stringify(d)));
+  });
+
+  it('[ASSUMPTION] warning is emitted on stderr when FR title contains [ASSUMPTION]', () => {
+    const d = JSON.parse(validP1());
+    d.functional_requirements[0].title = 'Notifications [ASSUMPTION: needs user confirmation]';
+    d.functional_requirements[1].title = 'Analytics [ASSUMPTION: needs user confirmation]';
+    const stderrChunks = [];
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk) => { stderrChunks.push(chunk); return true; };
+    try {
+      PHASE_DEFS[1].validate(JSON.stringify(d));
+    } finally {
+      process.stderr.write = origWrite;
+    }
+    const stderrOut = stderrChunks.join('');
+    assert.match(stderrOut, /2 FR\(s\) marked as assumptions/);
+    assert.match(stderrOut, /FR-001/);
+    assert.match(stderrOut, /FR-002/);
+  });
 });
 
 describe('Phase 1 — buildBriefing() (BL-001)', () => {
   const briefing = PHASE_DEFS[1].buildBriefing({ dir: '/tmp/test', inputs: { 'IDEA.md': 'A simple app idea.' }, feedback: null });
+
+  it('[ASSUMPTION] briefing PM persona instructs agent to use [ASSUMPTION] marker', () => {
+    assert.ok(briefing.includes('[ASSUMPTION'), 'PM persona must instruct agent to use [ASSUMPTION] marker for inferred requirements');
+  });
 
   it('briefing contains no-go zone instruction', () => {
     assert.ok(briefing.includes('no-go'), 'briefing must mention no-go zone');

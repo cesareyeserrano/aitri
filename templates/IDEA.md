@@ -1,73 +1,66 @@
-# Project Specification Template
+# Project Idea
 
-## Overview
-[Describe your project in 2-3 sentences. What problem does it solve? Who is the user?]
+> Fill in each section below. The more specific you are, the fewer assumptions the AI will make.
+> Sections left blank will be flagged as [ASSUMPTION] by the PM agent — review them before approving.
 
-## Functional Requirements
+---
 
-FR-001: [Requirement Title]
-- [Detail about what the system must do]
-- [Another detail]
-- Acceptance: [How to test/verify this requirement]
+## Problem
 
-FR-002: [Requirement Title]
-- [Detail]
-- Acceptance: [How to test]
+<!-- What problem does this project solve? Why does it need to exist now?
+     Write at least 2 sentences.
+     Example: "Freelancers lose track of client invoices and miss payment deadlines.
+     Existing tools are too complex or too expensive for solo operators." -->
 
-FR-003: [Requirement Title]
-- [Detail]
-- Acceptance: [How to test]
 
-FR-004: [Requirement Title]
-- [Detail]
-- Acceptance: [How to test]
+## Target Users
 
-FR-005: [Requirement Title]
-- [Detail]
-- Acceptance: [How to test]
+<!-- Who uses this? Describe their role and give a concrete example.
+     Example: "Independent freelancers (1-3 person studios) managing 5-20 active clients.
+     They are comfortable with basic web tools but not accounting software." -->
 
-[Add more FR-* as needed — minimum 5 for a real project]
 
-## Non-Functional Requirements
+## Current Pain / Baseline
 
-NFR-001: Performance
-- [e.g., API must respond in < 200ms for 95% of requests]
-- Acceptance: [Load test with k6 showing p95 < 200ms]
+<!-- How is this problem solved today? What is the current metric (time, cost, error rate)?
+     Example: "Users track invoices in spreadsheets. Average 45 min/week reconciling.
+     Roughly 20% of users miss at least one payment per quarter." -->
 
-NFR-002: Security
-- [e.g., All endpoints must require authentication]
-- Acceptance: [Unauthenticated requests return 401]
 
-NFR-003: Reliability
-- [e.g., System uptime must be ≥ 99.5%]
-- Acceptance: [Monitoring dashboard showing uptime]
+## Business Rules
 
-[Add more NFR-* as needed — minimum 3]
+<!-- List behaviors the system MUST implement. One rule per line.
+     Each line should start with "The system must…"
+     Example:
+     The system must allow users to create an invoice with line items and a due date.
+     The system must send an email reminder 3 days before the due date.
+     The system must mark an invoice as paid when the user confirms receipt. -->
 
-## Critical Constraints
 
-<!-- Optional but highly recommended. Explicit constraints reduce scope ambiguity across all agents.
-     Without this section, agents may infer a backend, authentication, or database you didn't want.
-     Examples of useful constraints: -->
+## Success Criteria
 
-- NO backend — frontend-only, no server process
-- NO authentication — no login, no sessions, no user accounts
-- MUST use localStorage — never a database
-- NO third-party API calls at runtime
-- First delivery must run with a single command (e.g., npm run dev)
+<!-- How do you know this worked? One criterion per line in Given/When/Then format.
+     Example:
+     Given a new invoice, when the user sets a due date, then a reminder is scheduled automatically.
+     Given an overdue invoice, when 7 days pass, then the invoice status changes to "overdue".
+     Given a paid invoice, when the user marks it paid, then it disappears from the active list. -->
 
-<!-- Remove examples and replace with your actual constraints, or delete this section if none apply. -->
 
-## Constraints
+## Hard Constraints
 
-- Timeline: [e.g., 4 weeks]
-- Budget: [e.g., $0 / open source]
-- Team size: [e.g., 1 developer]
-- Technology preferences: [e.g., Node.js, PostgreSQL, Docker]
+<!-- Budget, legal requirements, legacy systems, required tech stack, deadlines.
+     Leave blank if none apply.
+     Example: Must run on existing AWS account. No new paid SaaS. Launch by 2026-06-01. -->
 
-## Technology Stack
 
-- Language: [Python / JavaScript / TypeScript / Go / etc.]
-- Framework: [FastAPI / Express / Next.js / etc.]
-- Database: [PostgreSQL / MongoDB / SQLite / etc.]
-- Deployment: [Docker / Railway / Fly.io / AWS / etc.]
+## Out of Scope
+
+<!-- Explicit exclusions for this version. What will NOT be built?
+     Example: No mobile app. No multi-currency. No team collaboration features.
+     The more explicit, the fewer unwanted FRs the PM agent will generate. -->
+
+
+## Tech Stack
+
+<!-- Optional. Leave blank and the Architect will choose based on requirements.
+     Example: Node.js, PostgreSQL, Docker, React. -->
