@@ -284,6 +284,66 @@ describe('Aitri CLI — Smoke Test', () => {
     assert.ok(fs.existsSync(path.join(absTarget, '.aitri')), '.aitri should be in relative target dir');
   });
 
+  // ─── v0.1.26 — Drift Detection + Approval Hashing ──────────────────────────
+
+  it('[v0.1.26] approve stores artifactHashes in .aitri', () => {
+    // Phase 1 was approved earlier in this suite
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.aitri'), 'utf8'));
+    assert.ok(config.artifactHashes, 'artifactHashes must exist in .aitri after approve');
+    assert.ok(config.artifactHashes['1'], 'artifactHashes["1"] must be set after approve 1');
+    assert.match(config.artifactHashes['1'], /^[a-f0-9]{64}$/, 'hash must be 64-char hex (SHA-256)');
+  });
+
+  it('[v0.1.26] aitri status shows DRIFT when artifact modified after approval', () => {
+    // Modify 01_REQUIREMENTS.json after Phase 1 was approved
+    const artifactPath = path.join(tmpDir, '01_REQUIREMENTS.json');
+    const original = fs.readFileSync(artifactPath, 'utf8');
+    const modified = JSON.parse(original);
+    modified.project_name = 'MODIFIED AFTER APPROVAL';
+    fs.writeFileSync(artifactPath, JSON.stringify(modified, null, 2));
+
+    try {
+      const out = aitri('status', tmpDir);
+      assert.match(out, /DRIFT/, 'status must show DRIFT when artifact was modified after approval');
+    } finally {
+      fs.writeFileSync(artifactPath, original); // restore so subsequent tests are not affected
+    }
+  });
+
+  it('[v0.1.26] aitri validate shows DRIFT when artifact modified after approval', () => {
+    const artifactPath = path.join(tmpDir, '01_REQUIREMENTS.json');
+    const original = fs.readFileSync(artifactPath, 'utf8');
+    const modified = JSON.parse(original);
+    modified.project_name = 'MODIFIED AFTER APPROVAL';
+    fs.writeFileSync(artifactPath, JSON.stringify(modified, null, 2));
+
+    try {
+      const out = aitri('validate', tmpDir);
+      assert.match(out, /DRIFT/, 'validate must show DRIFT when artifact was modified after approval');
+      // allGood must be false — "Pipeline complete" message must NOT appear
+      assert.doesNotMatch(out, /Pipeline complete/, 'validate must not declare pipeline complete when drift exists');
+    } finally {
+      fs.writeFileSync(artifactPath, original);
+    }
+  });
+
+  it('[v0.1.26] aitri approve 1 warns on stderr when requirements JSON is unparseable', () => {
+    // Set up a fresh isolated dir for this test to avoid polluting the shared tmpDir state
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-ux-warn-'));
+    try {
+      // Init + write valid requirements + complete phase 1
+      execSync('aitri init', { cwd: dir, encoding: 'utf8' });
+      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
+      execSync('aitri complete 1', { cwd: dir, encoding: 'utf8' });
+      // Now corrupt the JSON — approve must warn, not silently skip
+      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), '{not valid json}');
+      const out = execSync('aitri approve 1 2>&1', { cwd: dir, encoding: 'utf8' });
+      assert.match(out, /Warning.*UX|UX.*Warning/i, 'approve must warn about unreadable requirements JSON');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('[regression] phase2 complete passes with numbered section headers', () => {
     // Write a 02_SYSTEM_DESIGN.md with numbered headers (## 1. Executive Summary style)
     const design = [

@@ -5,6 +5,48 @@
 
 ---
 
+## [0.1.26] — 2026-03-12
+
+### Bug Fixes
+- **fix(state):** Atomic write temp file moved from `os.tmpdir()` to project directory — eliminates `EXDEV: cross-device link not permitted` on systems where `/tmp` is a separate tmpfs mount. Removes `os` import from `state.js`; replaces with per-pid temp name `.aitri-<pid>.tmp` in project dir.
+- **fix(approve):** UX/visual FR detection silent catch replaced with explicit stderr warning — when `01_REQUIREMENTS.json` fails to parse, user now sees: "Could not read 01_REQUIREMENTS.json to check for UX/visual FRs. If your project has UX or visual requirements, run: aitri run-phase ux". Previously a silent `catch {}` skipped the gate with no feedback.
+- **fix(phaseReview):** Added missing `extractContext: (content) => head(content, 80)` — phaseReview was the only phase not implementing the `extractContext` contract. TypeError would have occurred if review artifact was used as input via `run-phase.js` line 49. Now consistent with all other 7 phases.
+
+### Features
+- **feat(state):** New export `hashArtifact(content)` — SHA-256 hash of artifact content via `node:crypto`. Used for drift detection.
+- **feat(approve):** Stores `artifactHashes[phase]` in `.aitri` at approval time — SHA-256 of the artifact file content at the moment the human approves.
+- **feat(status):** Drift detection — if an approved artifact's current hash differs from the stored approval hash, displays `⚠️ DRIFT: artifact modified after approval` inline with the phase row.
+- **feat(validate):** Drift detection — same hash check as `status`; drift causes `allGood = false` and blocks the "Pipeline complete" message. Both commands now derive from the same source of truth (resolves the `status`/`validate` inconsistency).
+- **feat(validate):** Close-out message updated — "Pipeline complete. Your project is ready to deploy." → "Pipeline complete. Deployment artifacts are ready — run your deploy commands to ship." Distinguishes pipeline completion from actual deployment.
+
+### Tests
+- **test(state):** `saveConfig() — atomic write location` — verifies `.aitri` is written to project dir and no `.aitri-*.tmp` file remains after save.
+- **test(state):** `hashArtifact()` — 4 tests: hex format, determinism, collision resistance, empty string.
+- **test(smoke):** `[v0.1.26] approve stores artifactHashes in .aitri` — SHA-256 hash persisted after `approve 1`.
+- **test(smoke):** `[v0.1.26] aitri status shows DRIFT` — modify artifact post-approval → DRIFT visible in status.
+- **test(smoke):** `[v0.1.26] aitri validate shows DRIFT` — DRIFT blocks "Pipeline complete" message.
+- **test(smoke):** `[v0.1.26] aitri approve 1 warns on unparseable JSON` — UX fallback warning is non-silent.
+- **Total: 254 tests (up from 245)**
+
+---
+
+## [0.1.25] — 2026-03-11
+
+### Bug Fixes
+- **fix(verify):** BUG-3 — `flagValue` returns `null` when flag absent; old guard `!== undefined` was true for `null` → `parseFloat(null)` = `NaN` → `--coverage` injected on every `verify-run` → unit tests failed with "bad option" on Node 24. Fix: `rawThreshold !== null && rawThreshold !== undefined`
+
+### Features
+- **feat(templates/phase2):** Output section now lists exact `##` header names required by validator with note "validates by exact match"; added frontend-only guidance for API Design and Data Model; Human Review checklist corrected from "All 5" to "All 8 required sections"
+- **feat(templates/phase5):** Explicit warning in schema — `"id"` not `"fr_id"` for `requirement_compliance` entries; `04_TEST_RESULTS.json` uses `fr_id` internally, `05_PROOF_OF_COMPLIANCE.json` uses `id`
+- **feat(validate):** `DEPLOYMENT.md` and `.env.example` downgraded from `⚠️` to `ℹ️ optional` — only `Dockerfile` and `docker-compose.yml` are required
+- **feat(verify-complete):** Passing message now shows e2e breakdown — e.g. `23/25 passing (21 unit + 2 e2e)`
+
+### Tests
+- **test(verify):** 2 new BUG-3 regression tests — confirm `parseFloat(null)` = NaN root cause and that fixed guard returns `null`
+- **Total: 245 tests (up from 243)**
+
+---
+
 ## [0.1.24] — 2026-03-11
 
 ### Bug Fixes

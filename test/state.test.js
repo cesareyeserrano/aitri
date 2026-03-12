@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadConfig, saveConfig, readArtifact } from '../lib/state.js';
+import { loadConfig, saveConfig, readArtifact, hashArtifact } from '../lib/state.js';
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-state-test-'));
@@ -102,6 +102,42 @@ describe('saveConfig()', () => {
     const cfg = loadConfig(dir);
     assert.deepEqual(cfg.approvedPhases, [1, 2]);
     fs.rmSync(dir, { recursive: true });
+  });
+});
+
+describe('saveConfig() — atomic write location', () => {
+
+  it('temp file is created in project dir, not os.tmpdir()', () => {
+    const dir = tmpDir();
+    // We can't observe the temp file directly (it's deleted after rename),
+    // but we can verify saveConfig succeeds and .aitri lands in the project dir.
+    saveConfig(dir, { approvedPhases: [1] });
+    assert.ok(fs.existsSync(path.join(dir, '.aitri')), '.aitri must be in project dir');
+    // No leftover .aitri-<pid>.tmp file should remain
+    const leftovers = fs.readdirSync(dir).filter(f => f.startsWith('.aitri-') && f.endsWith('.tmp'));
+    assert.equal(leftovers.length, 0, 'no temp file must remain after save');
+    fs.rmSync(dir, { recursive: true });
+  });
+});
+
+describe('hashArtifact()', () => {
+
+  it('returns a 64-char hex string for any content', () => {
+    const h = hashArtifact('hello world');
+    assert.match(h, /^[a-f0-9]{64}$/, 'must be SHA-256 hex');
+  });
+
+  it('same content produces same hash', () => {
+    assert.equal(hashArtifact('abc'), hashArtifact('abc'));
+  });
+
+  it('different content produces different hash', () => {
+    assert.notEqual(hashArtifact('abc'), hashArtifact('abcd'));
+  });
+
+  it('empty string produces a valid hash', () => {
+    const h = hashArtifact('');
+    assert.match(h, /^[a-f0-9]{64}$/);
   });
 });
 
