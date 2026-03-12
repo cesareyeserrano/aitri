@@ -36,7 +36,7 @@
 - {{DIR}}/Dockerfile — correct base image, multi-stage, non-root user, HEALTHCHECK
 - {{DIR}}/docker-compose.yml — all services, ${ENV_VAR} substitution, health checks
 - {{DIR}}/.env.example — all required env vars with example values
-- {{DIR}}/05_PROOF_OF_COMPLIANCE.json
+- {{ARTIFACTS_BASE}}/05_PROOF_OF_COMPLIANCE.json
   REQUIRED fields — validator will reject if any are missing:
     "project":                string  — project name
     "version":                string  — e.g. "1.0.0"
@@ -59,7 +59,7 @@
 1. Create all deployment files
 2. Assign compliance level per FR using fr_coverage from Test Results
 3. Copy technical_debt from 04_IMPLEMENTATION_MANIFEST.json into technical_debt_inherited
-4. Save 05_PROOF_OF_COMPLIANCE.json to: {{DIR}}/05_PROOF_OF_COMPLIANCE.json
+4. Save 05_PROOF_OF_COMPLIANCE.json to: {{ARTIFACTS_BASE}}/05_PROOF_OF_COMPLIANCE.json
 5. Run: aitri complete 5
 6. Document setup commands in DEPLOYMENT.md — do NOT run npm install or start the app
 

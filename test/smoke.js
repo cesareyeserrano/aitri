@@ -103,7 +103,7 @@ describe('Aitri CLI — Smoke Test', () => {
   });
 
   it('aitri complete 1 fails when artifact has too few FRs', () => {
-    fs.writeFileSync(path.join(tmpDir, '01_REQUIREMENTS.json'), INVALID_REQUIREMENTS_FEW_FRS);
+    fs.writeFileSync(path.join(tmpDir, 'spec', '01_REQUIREMENTS.json'), INVALID_REQUIREMENTS_FEW_FRS);
     const out = aitriShouldFail('complete 1', tmpDir);
     assert.match(out, /Min 5 functional_requirements/);
   });
@@ -115,7 +115,7 @@ describe('Aitri CLI — Smoke Test', () => {
   });
 
   it('aitri complete 1 succeeds with valid artifact', () => {
-    fs.writeFileSync(path.join(tmpDir, '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
+    fs.writeFileSync(path.join(tmpDir, 'spec', '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
     const out = aitri('complete 1', tmpDir);
     assert.match(out, /Phase 1.*complete/i);
   });
@@ -168,7 +168,7 @@ describe('Aitri CLI — Smoke Test', () => {
       '## Success Criteria\n- Invoice created in under 2 minutes.\n- Reminder sent within 24h.\n',
       '## Out of Scope\n- No payroll. No multi-currency. No accounting integration.\n',
     ].join('\n').repeat(2);
-    fs.writeFileSync(path.join(tmpDir, '00_DISCOVERY.md'), discoveryContent);
+    fs.writeFileSync(path.join(tmpDir, 'spec', '00_DISCOVERY.md'), discoveryContent);
     const out = aitri('complete discovery', tmpDir);
     assert.match(out, /complete/i);
     const out2 = aitri('approve discovery', tmpDir);
@@ -181,7 +181,7 @@ describe('Aitri CLI — Smoke Test', () => {
       '## Component Inventory\n| Component | Default | Loading | Error | Empty | Disabled |\n|---|---|---|---|---|---|\n| List | rows | skeleton | error+retry | empty msg | N/A |\n',
       '## Nielsen Compliance\n### Dashboard\n- H1: status updates within 1s\n- H8: minimal controls visible\n',
     ].join('\n').repeat(2);
-    fs.writeFileSync(path.join(tmpDir, '01_UX_SPEC.md'), uxContent);
+    fs.writeFileSync(path.join(tmpDir, 'spec', '01_UX_SPEC.md'), uxContent);
     const out = aitri('complete ux', tmpDir);
     assert.match(out, /complete/i);
     const out2 = aitri('approve ux', tmpDir);
@@ -296,7 +296,7 @@ describe('Aitri CLI — Smoke Test', () => {
 
   it('[v0.1.26] aitri status shows DRIFT when artifact modified after approval', () => {
     // Modify 01_REQUIREMENTS.json after Phase 1 was approved
-    const artifactPath = path.join(tmpDir, '01_REQUIREMENTS.json');
+    const artifactPath = path.join(tmpDir, 'spec', '01_REQUIREMENTS.json');
     const original = fs.readFileSync(artifactPath, 'utf8');
     const modified = JSON.parse(original);
     modified.project_name = 'MODIFIED AFTER APPROVAL';
@@ -311,7 +311,7 @@ describe('Aitri CLI — Smoke Test', () => {
   });
 
   it('[v0.1.26] aitri validate shows DRIFT when artifact modified after approval', () => {
-    const artifactPath = path.join(tmpDir, '01_REQUIREMENTS.json');
+    const artifactPath = path.join(tmpDir, 'spec', '01_REQUIREMENTS.json');
     const original = fs.readFileSync(artifactPath, 'utf8');
     const modified = JSON.parse(original);
     modified.project_name = 'MODIFIED AFTER APPROVAL';
@@ -333,10 +333,10 @@ describe('Aitri CLI — Smoke Test', () => {
     try {
       // Init + write valid requirements + complete phase 1
       execSync('aitri init', { cwd: dir, encoding: 'utf8' });
-      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
+      fs.writeFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
       execSync('aitri complete 1', { cwd: dir, encoding: 'utf8' });
       // Now corrupt the JSON — approve must warn, not silently skip
-      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), '{not valid json}');
+      fs.writeFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), '{not valid json}');
       const out = execSync('aitri approve 1 2>&1', { cwd: dir, encoding: 'utf8' });
       assert.match(out, /Warning.*UX|UX.*Warning/i, 'approve must warn about unreadable requirements JSON');
     } finally {
@@ -376,7 +376,7 @@ describe('Aitri CLI — Smoke Test', () => {
       'Risk 3: Spike — horizontal scale',
       ...Array(15).fill('Extra design content line.'),
     ].join('\n');
-    fs.writeFileSync(path.join(tmpDir, '02_SYSTEM_DESIGN.md'), design);
+    fs.writeFileSync(path.join(tmpDir, 'spec', '02_SYSTEM_DESIGN.md'), design);
     // complete 2 requires phase 1 approved (already done) and the artifact to exist
     const out = aitri('complete 2', tmpDir);
     assert.match(out, /Phase 2.*complete/i);

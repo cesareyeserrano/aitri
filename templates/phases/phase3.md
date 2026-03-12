@@ -24,7 +24,7 @@
 ## System Design (architecture + API)
 {{SYSTEM_DESIGN}}
 
-## Output: `{{DIR}}/03_TEST_CASES.json`
+## Output: `{{ARTIFACTS_BASE}}/03_TEST_CASES.json`
 Schema:
 { test_plan: { strategy, coverage_goal: "80%", test_types: ["unit","integration","e2e"] },
   test_cases: [{
@@ -112,7 +112,7 @@ Copy the metric directly from the FR's acceptance_criteria into expected_result.
 1. Build Type Coverage Matrix for all FRs
 2. Write test cases with concrete Given/When/Then (SPEC-SEALED)
 3. Generate complete 03_TEST_CASES.json
-4. Save to: {{DIR}}/03_TEST_CASES.json
+4. Save to: {{ARTIFACTS_BASE}}/03_TEST_CASES.json
 5. Run: aitri complete 3
 
 ## Human Review — Before approving phase 3

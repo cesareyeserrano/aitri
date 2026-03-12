@@ -16,7 +16,7 @@
 ## Source Idea ({{IDEA_WORD_COUNT}} words)
 {{IDEA_MD}}
 
-## Output: `{{DIR}}/00_DISCOVERY.md`
+## Output: `{{ARTIFACTS_BASE}}/00_DISCOVERY.md`
 Required sections (in order):
 1. ## Problem — what situation forces users to act? What pain do they experience today?
 2. ## Users — who are the actual people using this? Describe each type with their context and goal.
@@ -30,5 +30,5 @@ Required sections (in order):
 
 ## Instructions
 1. Generate complete 00_DISCOVERY.md
-2. Save to: {{DIR}}/00_DISCOVERY.md
+2. Save to: {{ARTIFACTS_BASE}}/00_DISCOVERY.md
 3. Run: aitri complete discovery

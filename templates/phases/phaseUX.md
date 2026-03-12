@@ -24,7 +24,7 @@
 {{REQUIREMENTS_JSON}}
 ```
 
-## Output: `{{DIR}}/01_UX_SPEC.md`
+## Output: `{{ARTIFACTS_BASE}}/01_UX_SPEC.md`
 Required sections (in order):
 1. ## User Flows — per screen, per user persona. For each flow: entry point, steps, exit point, error path
 2. ## Component Inventory — table per screen: component | states (default/loading/error/empty/disabled) | behavior | Nielsen heuristics applied
@@ -40,5 +40,5 @@ Required sections (in order):
 
 ## Instructions
 1. Generate complete 01_UX_SPEC.md
-2. Save to: {{DIR}}/01_UX_SPEC.md
+2. Save to: {{ARTIFACTS_BASE}}/01_UX_SPEC.md
 3. Run: aitri complete ux

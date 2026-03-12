@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadConfig, saveConfig, readArtifact, hashArtifact } from '../lib/state.js';
+import { loadConfig, saveConfig, readArtifact, artifactPath, hashArtifact } from '../lib/state.js';
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-state-test-'));
@@ -156,5 +156,46 @@ describe('readArtifact()', () => {
     const content = readArtifact(dir, 'nonexistent.json');
     assert.equal(content, null);
     fs.rmSync(dir, { recursive: true });
+  });
+
+  it('reads from artifactsDir subdirectory when specified', () => {
+    const dir = tmpDir();
+    fs.mkdirSync(path.join(dir, 'spec'));
+    fs.writeFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), '{"spec":true}');
+    const content = readArtifact(dir, '01_REQUIREMENTS.json', 'spec');
+    assert.equal(content, '{"spec":true}');
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it('returns null when file is in root but artifactsDir is spec', () => {
+    const dir = tmpDir();
+    fs.mkdirSync(path.join(dir, 'spec'));
+    fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), '{"root":true}');
+    const content = readArtifact(dir, '01_REQUIREMENTS.json', 'spec');
+    assert.equal(content, null);
+    fs.rmSync(dir, { recursive: true });
+  });
+});
+
+describe('artifactPath()', () => {
+
+  it('returns path.join(dir, name) when config has no artifactsDir', () => {
+    const p = artifactPath('/project', {}, '01_REQUIREMENTS.json');
+    assert.equal(p, path.join('/project', '01_REQUIREMENTS.json'));
+  });
+
+  it('returns path.join(dir, artifactsDir, name) when config.artifactsDir is set', () => {
+    const p = artifactPath('/project', { artifactsDir: 'spec' }, '01_REQUIREMENTS.json');
+    assert.equal(p, path.join('/project', 'spec', '01_REQUIREMENTS.json'));
+  });
+
+  it('falls back to root path when artifactsDir is empty string', () => {
+    const p = artifactPath('/project', { artifactsDir: '' }, '03_TEST_CASES.json');
+    assert.equal(p, path.join('/project', '03_TEST_CASES.json'));
+  });
+
+  it('handles null/undefined config gracefully', () => {
+    const p = artifactPath('/project', null, '02_SYSTEM_DESIGN.md');
+    assert.equal(p, path.join('/project', '02_SYSTEM_DESIGN.md'));
   });
 });

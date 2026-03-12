@@ -23,7 +23,7 @@
 {{UX_SPEC}}
 {{/IF_UX_SPEC}}
 
-## Output: `{{DIR}}/02_SYSTEM_DESIGN.md`
+## Output: `{{ARTIFACTS_BASE}}/02_SYSTEM_DESIGN.md`
 Required sections — use these EXACT names as `##` level-2 headers (aitri complete 2 validates by exact match):
 1. `## Executive Summary` — tech choices with justification
 2. `## System Architecture` — ASCII/Mermaid diagram + components
@@ -77,7 +77,7 @@ Before completing this phase, verify:
 2. Document failure blast radius for critical components
 3. Verify traceability checklist before saving
 4. Generate complete 02_SYSTEM_DESIGN.md
-5. Save to: {{DIR}}/02_SYSTEM_DESIGN.md
+5. Save to: {{ARTIFACTS_BASE}}/02_SYSTEM_DESIGN.md
 6. Run: aitri complete 2
 
 ## Human Review — Before approving phase 2

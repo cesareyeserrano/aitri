@@ -18,7 +18,7 @@
 {{IDEA_MD}}
 ```
 
-## Output: `{{DIR}}/01_REQUIREMENTS.json`
+## Output: `{{ARTIFACTS_BASE}}/01_REQUIREMENTS.json`
 Schema: { project_name, project_summary,
   functional_requirements: [{
     id:"FR-001", title, description, priority:"MUST|SHOULD|NICE",
@@ -79,7 +79,7 @@ Include these as comments in project_summary or as a separate "product_analysis"
 1. Declare no_go_zone (≥3 items) before writing any FR
 2. Identify North Star KPI + JTBD + guardrail metric
 3. Generate complete 01_REQUIREMENTS.json
-4. Save to: {{DIR}}/01_REQUIREMENTS.json
+4. Save to: {{ARTIFACTS_BASE}}/01_REQUIREMENTS.json
 5. Run: aitri complete 1
 
 ## Human Review — Before approving phase 1

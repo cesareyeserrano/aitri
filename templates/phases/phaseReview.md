@@ -37,10 +37,10 @@
 5. Write ## Issues Found — list each issue with FR-ID, TC-ID, file, line range, and what is wrong
 6. Write ## FR Coverage — one row per FR: status (implemented|partial|missing|substituted)
 7. Write ## Verdict — PASS | CONDITIONAL_PASS | FAIL with justification
-8. Save to: {{DIR}}/04_CODE_REVIEW.md
+8. Save to: {{ARTIFACTS_BASE}}/04_CODE_REVIEW.md
 9. Run: aitri complete review
 
-## Output: `{{DIR}}/04_CODE_REVIEW.md`
+## Output: `{{ARTIFACTS_BASE}}/04_CODE_REVIEW.md`
 Required sections:
   ## Issues Found       — one entry per gap (empty section if none)
   ## FR Coverage        — table with FR-ID, implementation status, TC-ID

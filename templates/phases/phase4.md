@@ -107,7 +107,7 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
 - Source code: {{DIR}}/src/
 - Tests: {{DIR}}/tests/
 - {{DIR}}/package.json (or equivalent) + {{DIR}}/.env.example
-- Manifest: {{DIR}}/04_IMPLEMENTATION_MANIFEST.json
+- Manifest: {{ARTIFACTS_BASE}}/04_IMPLEMENTATION_MANIFEST.json
   { files_created:[], setup_commands:[], environment_variables:[{name, default}],
     technical_debt:[{fr_id, substitution, reason, effort_to_fix:"low|medium|high"}],
     test_runner: "npm test",
@@ -121,7 +121,7 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
 3. Phase hardening: error handling, validation, boundary cases
 4. Add @aitri-trace headers to key functions
 5. Verify Technical Definition of Done checklist
-6. Save manifest (with technical_debt) to: {{DIR}}/04_IMPLEMENTATION_MANIFEST.json
+6. Save manifest (with technical_debt) to: {{ARTIFACTS_BASE}}/04_IMPLEMENTATION_MANIFEST.json
 7. Run: aitri complete 4
 
 ## Human Review — Before approving phase 4
