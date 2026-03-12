@@ -23,6 +23,7 @@ import { cmdApprove }        from '../lib/commands/approve.js';
 import { cmdReject }         from '../lib/commands/reject.js';
 import { cmdVerify, cmdVerifyRun, cmdVerifyComplete } from '../lib/commands/verify.js';
 import { cmdStatus }         from '../lib/commands/status.js';
+import { cmdResume }         from '../lib/commands/resume.js';
 import { cmdValidate }       from '../lib/commands/validate.js';
 import { cmdHelp }           from '../lib/commands/help.js';
 
@@ -86,6 +87,7 @@ switch (cmd) {
   case 'verify-run':       cmdVerifyRun(ctx);       break;
   case 'verify-complete':  cmdVerifyComplete(ctx);  break;
   case 'status':           cmdStatus(ctx);          break;
+  case 'resume':           cmdResume(ctx);          break;
   case 'validate':         cmdValidate(ctx);        break;
   case '--version':        console.log(`Aitri v${VERSION}`); break;
   default:                 cmdHelp(ctx);            break;
