@@ -28,7 +28,7 @@ import { cmdCheckpoint }     from '../lib/commands/checkpoint.js';
 import { cmdValidate }       from '../lib/commands/validate.js';
 import { cmdHelp }           from '../lib/commands/help.js';
 
-const VERSION   = '0.1.28';
+const VERSION   = '0.1.30';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir   = path.dirname(__dirname);
 const cwd       = process.cwd();

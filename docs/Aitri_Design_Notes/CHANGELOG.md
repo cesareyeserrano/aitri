@@ -5,6 +5,29 @@
 
 ---
 
+## [0.1.30] — 2026-03-12
+
+### Features
+- **feat(phase3):** Rank 3 — Three Amigos gate complete. Cross-phase AC check: `aitri complete 3` now verifies each TC's `ac_id` exists in `user_stories[*].acceptance_criteria[*].id` from `01_REQUIREMENTS.json`. Missing file → stderr warning + skip (non-blocking). Invalid ac_id → exit 1 with specific TC reference.
+- **feat(complete):** `p.validate(content, { dir, config })` — context object passed to all phase validators, enabling cross-phase file reads without signature breakage.
+
+### Tests
+- **test(phase3):** 5 new cross-phase tests: backward compat (no dir), missing requirements file (graceful), valid ac_ids pass, invalid ac_id fails, briefing mentions ac_id.
+- **Total: 313 tests (up from 308)**
+
+---
+
+## [0.1.29] — 2026-03-12
+
+### Features
+- **feat(phase1/templates):** Rank 2 — Structured IDEA.md template complete. `templates/IDEA.md` has 8 sections (Problem, Target Users, Current Pain, Business Rules, Success Criteria, Hard Constraints, Out of Scope, Tech Stack) with instructional HTML comments. `buildBriefing()` warns on stderr (non-blocking) when any required section is absent or contains only placeholder comment text.
+
+### Tests
+- **test(phase1):** 5 new tests for empty-section warnings: absent section fires warning, comment-only section fires warning, populated sections produce no warning, warning is non-blocking (buildBriefing still returns briefing string)
+- **Total: 308 tests (up from 303)**
+
+---
+
 ## [0.1.26] — 2026-03-12
 
 ### Bug Fixes

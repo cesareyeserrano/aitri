@@ -1,5 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { PHASE_DEFS } from '../../lib/phases/index.js';
 
 const makeTC = (id, reqId, type, scenario = 'happy_path') => ({
@@ -133,6 +136,66 @@ describe('Phase 3 — validate()', () => {
   it('[Rank 11] passes when all FRs have both h and f suffixed TCs', () => {
     assert.doesNotThrow(() => PHASE_DEFS[3].validate(validP3()));
   });
+
+  // Rank 3 — cross-phase AC check
+  it('[Rank 3] cross-phase check passes when no dir provided (backward compat)', () => {
+    assert.doesNotThrow(() => PHASE_DEFS[3].validate(validP3()));
+  });
+
+  it('[Rank 3] cross-phase check passes when 01_REQUIREMENTS.json does not exist', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-p3-'));
+    try {
+      assert.doesNotThrow(() => PHASE_DEFS[3].validate(validP3(), { dir, config: {} }));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('[Rank 3] cross-phase check passes when all ac_ids are found in user_stories', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-p3-'));
+    try {
+      const reqs = {
+        functional_requirements: [
+          { id: 'FR-001', acceptance_criteria: ['passes 375px test'] },
+          { id: 'FR-002', acceptance_criteria: ['returns 401'] },
+        ],
+        user_stories: [
+          { id: 'US-001', requirement_id: 'FR-001', acceptance_criteria: [{ id: 'AC-001', given: 'g', when: 'w', then: 't' }] },
+          { id: 'US-002', requirement_id: 'FR-002', acceptance_criteria: [{ id: 'AC-001', given: 'g', when: 'w', then: 't' }] },
+        ],
+      };
+      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), JSON.stringify(reqs), 'utf8');
+      assert.doesNotThrow(() => PHASE_DEFS[3].validate(validP3(), { dir, config: {} }));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('[Rank 3] cross-phase check fails when ac_id not found in requirements', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-p3-'));
+    try {
+      const reqs = {
+        functional_requirements: [
+          { id: 'FR-001', acceptance_criteria: ['passes 375px test'] },
+          { id: 'FR-002', acceptance_criteria: ['returns 401'] },
+        ],
+        user_stories: [
+          // no AC-001 entries here
+          { id: 'US-001', requirement_id: 'FR-001', acceptance_criteria: [{ id: 'AC-999', given: 'g', when: 'w', then: 't' }] },
+        ],
+      };
+      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), JSON.stringify(reqs), 'utf8');
+      const d = JSON.parse(validP3());
+      // Force an ac_id that doesn't exist
+      d.test_cases.forEach(tc => { tc.ac_id = 'AC-001'; });
+      assert.throws(
+        () => PHASE_DEFS[3].validate(JSON.stringify(d), { dir, config: {} }),
+        /Three Amigos gate.*AC references not found/
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('Phase 3 — buildBriefing() (BL-003)', () => {
@@ -189,6 +252,11 @@ describe('Phase 3 — buildBriefing() (BL-003)', () => {
     });
     assert.ok(b.includes('/tmp/test/spec/03_TEST_CASES.json'), 'artifact path must use artifactsBase/spec');
     assert.ok(!b.includes('/tmp/test/03_TEST_CASES.json'), 'artifact path must NOT use bare dir');
+  });
+
+  it('[Rank 3] briefing mentions ac_id cross-reference', () => {
+    const b = PHASE_DEFS[3].buildBriefing({ dir: '/tmp/test', inputs: { '01_REQUIREMENTS.json': '{}', '02_SYSTEM_DESIGN.md': '' }, feedback: null });
+    assert.ok(b.includes('ac_id'), 'briefing must reference ac_id field');
   });
 
   it('[v0.1.28] injects bestPractices content when provided', () => {

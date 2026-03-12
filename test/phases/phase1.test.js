@@ -125,6 +125,52 @@ describe('Phase 1 — validate()', () => {
   });
 });
 
+// ── Rank 2: Structured IDEA.md — empty-section warning tests ─────────────────
+
+function captureStderr(fn) {
+  const chunks = [];
+  const orig = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (chunk) => { chunks.push(chunk); return true; };
+  try { fn(); } finally { process.stderr.write = orig; }
+  return chunks.join('');
+}
+
+describe('Phase 1 — buildBriefing() empty-section warnings (Rank 2)', () => {
+
+  it('warns on stderr when Problem section is absent from IDEA.md', () => {
+    // No ## Problem header at all → m=null → body='' → warning fires
+    const idea = '## Target Users\nReal users here.\n## Business Rules\nThe system must do X.\n## Success Criteria\nGiven A when B then C.\n';
+    const stderr = captureStderr(() => PHASE_DEFS[1].buildBriefing({ dir: '/tmp', inputs: { 'IDEA.md': idea }, feedback: null }));
+    assert.match(stderr, /Problem/);
+  });
+
+  it('warns on stderr when Business Rules section has only HTML comment placeholder', () => {
+    // Comment-only section → comment stripped → body='' → warning fires
+    const idea = '## Problem\nReal problem here.\n## Target Users\nReal users here.\n## Business Rules\n<!-- list rules -->\n## Success Criteria\nGiven A when B then C.\n';
+    const stderr = captureStderr(() => PHASE_DEFS[1].buildBriefing({ dir: '/tmp', inputs: { 'IDEA.md': idea }, feedback: null }));
+    assert.match(stderr, /Business Rules/);
+  });
+
+  it('warns on stderr when section contains only HTML comment placeholder', () => {
+    const idea = '## Problem\n<!-- What problem does this solve? -->\n\n## Target Users\nReal users\n## Business Rules\nThe system must do X.\n## Success Criteria\nGiven X when Y then Z.\n';
+    const stderr = captureStderr(() => PHASE_DEFS[1].buildBriefing({ dir: '/tmp', inputs: { 'IDEA.md': idea }, feedback: null }));
+    assert.match(stderr, /Problem/);
+  });
+
+  it('does not warn when all required sections are populated', () => {
+    const idea = '## Problem\nThis is a real problem.\n## Target Users\nReal users\n## Business Rules\nThe system must do X.\n## Success Criteria\nGiven X when Y then Z.\n';
+    const stderr = captureStderr(() => PHASE_DEFS[1].buildBriefing({ dir: '/tmp', inputs: { 'IDEA.md': idea }, feedback: null }));
+    assert.equal(stderr, '', 'no warning when all required sections have content');
+  });
+
+  it('empty section warning is non-blocking — buildBriefing still returns a string', () => {
+    const idea = '## Problem\n\n';
+    let result;
+    captureStderr(() => { result = PHASE_DEFS[1].buildBriefing({ dir: '/tmp', inputs: { 'IDEA.md': idea }, feedback: null }); });
+    assert.ok(typeof result === 'string' && result.length > 0, 'briefing must be returned even when sections are empty');
+  });
+});
+
 describe('Phase 1 — buildBriefing() (BL-001)', () => {
   const briefing = PHASE_DEFS[1].buildBriefing({ dir: '/tmp/test', inputs: { 'IDEA.md': 'A simple app idea.' }, feedback: null });
 

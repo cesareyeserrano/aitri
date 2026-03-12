@@ -16,10 +16,10 @@ Fix active bugs and secure the pipeline's input quality before adding features.
 | Rank | Item | Score | Why first |
 | ---: | :--- | :---: | :--- |
 | 1 | `status` / `validate` inconsistency + Artifact drift detection | 43 | Active trust-breaking bug — merged with Rank 9 (same fix: hash at approve, check at status/validate) |
-| 2 | Structured IDEA.md template | 40 | Every project starts here; fixes agent-invented requirements at the source |
-| 3 | Three Amigos gate (ac_id validation) | 38 | `ac_id` in schema but unenforced — low-risk validate() tightening |
-| 4 | Requirement Source Integrity (PM persona) | 37 | Completes item 2 — makes assumption FRs visible at complete 1 |
-| 5 | verify-run Vitest / parser fragility | 35 | **Promoted from Tier 2** — adoption blocker; Vitest projects get 0 TCs detected today |
+| ~~2~~ | ~~Structured IDEA.md template~~ | 40 | ✅ **Done v0.1.29** |
+| ~~3~~ | ~~Three Amigos gate (ac_id validation)~~ | 38 | ✅ **Done v0.1.30** |
+| ~~4~~ | ~~Requirement Source Integrity (PM persona)~~ | 37 | ✅ **Done (pre-existing)** |
+| ~~5~~ | ~~verify-run Vitest / parser fragility~~ | 35 | ✅ **Done (pre-existing)** |
 
 ### Tier 2 — Short-term (quality + adoption)
 High value, contained implementations. No item here blocks another.
@@ -150,7 +150,8 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 > Core problem: current Discovery phase is agent-invented. No mechanism to enforce that FRs, actors,
 > and success metrics trace to explicit user input.
 
-- [ ] P1 — **Structured IDEA.md template** — `aitri init` produces free-text IDEA.md; agent invents what the user didn't say.
+- [x] P1 — **Structured IDEA.md template** — `aitri init` produces free-text IDEA.md; agent invents what the user didn't say.
+  **Status: ✅ Done in v0.1.29**
   Problem: PM persona has no structure to reference — infers actors, FRs, and success metrics from vague prose. Agent-invented requirements flow into every downstream phase undetected.
   Files: `templates/IDEA.md` (rewrite), `lib/commands/init.js` (copy new template), `lib/phases/phase1.js` (warn on empty sections in `extractContext`)
   Behavior:
@@ -170,7 +171,8 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
   Decisions: Non-blocking warn (not hard block) preserves usability for projects where some sections are intentionally open.
   Acceptance: `aitri init` in a temp dir produces the new 8-section IDEA.md. Running `aitri run-phase 1` with an empty section prints a visible warning but does not exit 1.
 
-- [ ] P1 — **Requirement Source Integrity in PM persona** — PM silently invents FRs and actors not mentioned by the user.
+- [x] P1 — **Requirement Source Integrity in PM persona** — PM silently invents FRs and actors not mentioned by the user.
+  **Status: ✅ Pre-existing — pm.js CONSTRAINTS + phase1.js validate() [ASSUMPTION] warning**
   Problem: No mechanism distinguishes user-stated requirements from agent-inferred ones. Downstream phases build on invented requirements without knowing they are assumptions.
   Files: `lib/personas/pm.js` (add constraint), `lib/phases/phase1.js` (add assumption warning in `validate()`)
   Behavior:
@@ -259,7 +261,23 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
   Decisions: SHA-256 via `node:crypto` (built-in). String key for phase (String(phase)) to handle both numeric and string phases uniformly.
   **Status: ✅ Fixed in v0.1.26**
 
-- [ ] P1 — **verify-run parser fragility / Vitest support** — agent had to rewrite tests to match Aitri's expected output format. Aitri should adapt to common runners, not the other way around.
+- [ ] P2 — **Phase 4 manifest required fields not documented in briefing** — `aitri complete 4` rejected a valid-looking manifest twice because `setup_commands` and `test_runner` fields were missing. Neither field appears in the Phase 4 template instructions or the Output section.
+  Problem: Agent writes manifest without `setup_commands` / `test_runner`, `aitri complete 4` rejects, agent iterates twice to discover the required fields. Two unnecessary round-trips per project.
+  Files: `templates/phases/phase4.md` (add explicit manifest schema example), `lib/phases/phase4.js` (`validate()` — confirm both fields are indeed required)
+  Behavior: Add a concrete manifest schema snippet to the Phase 4 template `## Output` section:
+    ```json
+    {
+      "files_created": ["server.js", "..."],
+      "test_runner": "npm test",
+      "setup_commands": ["node server.js"],
+      "environment_variables": [...]
+    }
+    ```
+  Decisions: Do not remove the validator — the field is legitimately required. Fix is documentation only: show the required schema in the briefing so the agent produces a compliant manifest on the first attempt. No behavior change to `validate()`.
+  Acceptance: `aitri run-phase 4` output shows a concrete manifest skeleton with all required fields. Agent following the briefing produces a manifest that passes `aitri complete 4` on the first attempt.
+
+- [x] P1 — **verify-run parser fragility / Vitest support** — agent had to rewrite tests to match Aitri's expected output format. Aitri should adapt to common runners, not the other way around.
+  **Status: ✅ Pre-existing — parseVitestOutput() + auto-detect by test_runner field**
   Problem: `parseRunnerOutput` only handles `node --test` checkmark format (✔/✖). Teams using Vitest, Jest, or other common runners get 0 TCs detected unless they manually adapt output. This is ergonomic friction and reduces adoption.
   Files: `lib/commands/verify.js` (`parseRunnerOutput`, possibly new `parseVitestOutput`), `templates/phases/phase4.md` (update runner guidance)
   Behavior:
@@ -447,7 +465,8 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
   Decisions: Best practices are injected as context to the agent — they are guidelines, not validated by `complete`. This avoids adding brittle string-matching validators for quality concepts. Reference: SDLC Studio uses same injection pattern for 15 domain-specific files. Content is opinionated but grounded in established engineering principles (12-factor, SOLID fundamentals).
   Acceptance: `aitri run-phase 2` output includes a `## Engineering Standards` section sourced from `templates/best-practices/architecture.md`. `aitri run-phase 4` includes a `## Coding Standards` section. Removing the best-practices file → section absent → no error (graceful).
 
-- [ ] P1 — **Three Amigos gate — Phase 3 TCs must trace to Phase 1 ACs, not just FRs** — Phase 3 test cases reference `requirement_id` (FR level) but not the specific acceptance criterion (`ac_id`) that the test validates.
+- [x] P1 — **Three Amigos gate — Phase 3 TCs must trace to Phase 1 ACs, not just FRs**
+  **Status: ✅ Done in v0.1.30** — Phase 3 test cases reference `requirement_id` (FR level) but not the specific acceptance criterion (`ac_id`) that the test validates.
   Problem: A TC can claim to cover FR-001 but test a different behavior than what AC-001 defines. There is no cross-phase check that the QA engineer's test aligns with the PM's exact acceptance criterion. This breaks the "three amigos" principle: Business (PM), QA, and Dev must agree on the same observable outcome.
   Files: `lib/phases/phase3.js` (`validate()` update), `templates/phases/phase3.md` (update instructions), `lib/phases/phase1.js` (`extractContext()` — ensure AC ids are passed to Phase 3)
   Behavior:
