@@ -2,20 +2,21 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { PHASE_DEFS } from '../../lib/phases/index.js';
 
-const makeTC = (id, reqId, type) => ({
+const makeTC = (id, reqId, type, scenario = 'happy_path') => ({
   id, requirement_id: reqId, title: `Test ${id}`, type,
+  scenario, user_story_id: 'US-001', ac_id: 'AC-001',
   priority: 'high', preconditions: [], steps: ['step'], expected_result: 'ok', test_data: {},
 });
 
 const validP3 = () => JSON.stringify({
   test_plan: { strategy: 'unit + e2e', coverage_goal: '80%', test_types: ['unit', 'e2e'] },
   test_cases: [
-    makeTC('TC-001', 'FR-001', 'unit'),
-    makeTC('TC-002', 'FR-001', 'integration'),
-    makeTC('TC-003', 'FR-001', 'e2e'),
-    makeTC('TC-004', 'FR-002', 'unit'),
-    makeTC('TC-005', 'FR-002', 'integration'),
-    makeTC('TC-006', 'FR-002', 'e2e'),
+    makeTC('TC-001', 'FR-001', 'unit',        'happy_path'),
+    makeTC('TC-002', 'FR-001', 'integration', 'edge_case'),
+    makeTC('TC-003', 'FR-001', 'e2e',         'negative'),
+    makeTC('TC-004', 'FR-002', 'unit',        'happy_path'),
+    makeTC('TC-005', 'FR-002', 'integration', 'edge_case'),
+    makeTC('TC-006', 'FR-002', 'e2e',         'negative'),
   ],
 });
 
@@ -72,6 +73,48 @@ describe('Phase 3 — validate()', () => {
     const d = JSON.parse(validP3());
     delete d.test_plan;
     assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /test_plan field is required/);
+  });
+
+  // Rank 3 — ac_id / user_story_id traceability gate
+  it('throws when TC is missing ac_id', () => {
+    const d = JSON.parse(validP3());
+    delete d.test_cases[0].ac_id;
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /Missing ac_id.*TC-001/);
+  });
+
+  it('throws when TC is missing user_story_id', () => {
+    const d = JSON.parse(validP3());
+    delete d.test_cases[0].user_story_id;
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /Missing user_story_id.*TC-001/);
+  });
+
+  it('throws when TC has empty ac_id string', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[1].ac_id = '';
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /Missing ac_id.*TC-002/);
+  });
+
+  // Rank 11 — scenario enum + Three Amigos coverage gate
+  it('throws when TC has invalid scenario value', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[0].scenario = 'positive';
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /Invalid scenario.*happy_path.*edge_case.*negative/);
+  });
+
+  it('throws when FR has no happy_path TC (Three Amigos gate)', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[0].scenario = 'edge_case'; // FR-001 loses its happy_path
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /FR-001.*no happy_path/);
+  });
+
+  it('throws when FR has no negative TC (Three Amigos gate)', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[2].scenario = 'edge_case'; // FR-001 loses its negative
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /FR-001.*no negative/);
+  });
+
+  it('passes when all FRs have happy_path and negative scenarios', () => {
+    assert.doesNotThrow(() => PHASE_DEFS[3].validate(validP3()));
   });
 });
 
