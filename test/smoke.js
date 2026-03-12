@@ -382,3 +382,210 @@ describe('Aitri CLI — Smoke Test', () => {
     assert.match(out, /Phase 2.*complete/i);
   });
 });
+
+// ─── run-phase smoke ──────────────────────────────────────────────────────────
+
+describe('Aitri CLI — run-phase smoke', () => {
+  let rpDir;
+
+  const LONG_IDEA = [
+    'Invoice management app for freelancers.',
+    'Freelancers currently track invoices in spreadsheets.',
+    'When a payment is late there is no automated reminder.',
+    'This causes late payments to go unnoticed for weeks.',
+    'The app must let users create invoices in under 2 minutes.',
+    'Overdue invoices should trigger an automated reminder within 24 hours.',
+    'Payment status must be visible at a glance from a single dashboard.',
+    'The app targets solo freelancers managing 5 to 20 clients.',
+    'No payroll, no multi-currency, no accounting integrations at launch.',
+    'Web only — no native mobile app in first version.',
+  ].join(' ');
+
+  const DESIGN_MD = [
+    '## Executive Summary',
+    'Node.js v20 + PostgreSQL 16.',
+    '',
+    '## System Architecture',
+    '```\nClient → API → DB\n```',
+    '',
+    '## Data Model',
+    'invoices: id, client_id, amount, due_date, status',
+    '',
+    '## API Design',
+    'POST /invoices — create invoice',
+    '',
+    '## Security Design',
+    'JWT HS256, bcrypt cost 12',
+    '',
+    '## Performance & Scalability',
+    'Connection pool 20, Redis cache',
+    '',
+    '## Deployment Architecture',
+    'Docker + docker-compose',
+    '',
+    '## Risk Analysis',
+    'Risk 1: DB exhaustion — pool cap',
+    'Risk 2: Token leak — short TTL',
+    'Risk 3: Load spike — horiz. scale',
+    ...Array(15).fill('Extra content.'),
+  ].join('\n');
+
+  before(() => {
+    rpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-rp-'));
+    execSync('aitri init', { cwd: rpDir, encoding: 'utf8' });
+    fs.writeFileSync(path.join(rpDir, 'IDEA.md'), LONG_IDEA);
+    fs.writeFileSync(path.join(rpDir, 'spec', '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
+    fs.writeFileSync(path.join(rpDir, 'spec', '02_SYSTEM_DESIGN.md'), DESIGN_MD);
+  });
+
+  after(() => fs.rmSync(rpDir, { recursive: true, force: true }));
+
+  it('[BUG-FIX] run-phase 1 reads IDEA.md from root, not spec/', () => {
+    const out = aitri('run-phase 1', rpDir);
+    assert.ok(out.length > 200, 'briefing must be non-trivially long');
+    assert.match(out, /Phase 1|PM Analysis|Product Manager/i);
+  });
+
+  it('[BUG-FIX] run-phase 2 reads IDEA.md from root when spec/ is configured', () => {
+    const out = aitri('run-phase 2', rpDir);
+    assert.ok(out.length > 200, 'briefing must be non-trivially long');
+    assert.match(out, /Phase 2|System Architecture|Architect/i);
+  });
+
+  it('run-phase 2 briefing injects architecture best-practices', () => {
+    const out = aitri('run-phase 2', rpDir);
+    assert.match(out, /Separation of concerns|Engineering Standards|12-factor/i);
+  });
+
+  it('run-phase 3 produces QA briefing with TC naming convention', () => {
+    const out = aitri('run-phase 3', rpDir);
+    assert.match(out, /Phase 3|QA|Test/i);
+    assert.match(out, /TC-001h|naming convention|ending in/i);
+  });
+
+  it('run-phase 3 briefing injects testing best-practices', () => {
+    const out = aitri('run-phase 3', rpDir);
+    assert.match(out, /One behavior per test case|Testing Standards|Concrete values/i);
+  });
+});
+
+// ─── complete 3 h/f gate smoke ────────────────────────────────────────────────
+
+describe('Aitri CLI — complete 3 h/f naming gate', () => {
+  let gateDir;
+
+  const makeTC = (id, reqId, type, scenario) => ({
+    id, requirement_id: reqId, title: `Test ${id}`, type,
+    scenario, user_story_id: 'US-001', ac_id: 'AC-001',
+    priority: 'high', preconditions: [], steps: ['step'],
+    expected_result: 'ok', test_data: {},
+    given: 'user=alice@example.com exists', when: 'POST /login', then: 'status 200',
+  });
+
+  const VALID_TCS = JSON.stringify({
+    test_plan: { strategy: 'unit+e2e', coverage_goal: '80%', test_types: ['unit', 'e2e'] },
+    test_cases: [
+      makeTC('TC-001h', 'FR-001', 'unit',        'happy_path'),
+      makeTC('TC-001e', 'FR-001', 'integration', 'edge_case'),
+      makeTC('TC-001f', 'FR-001', 'e2e',         'negative'),
+      makeTC('TC-002h', 'FR-002', 'unit',        'happy_path'),
+      makeTC('TC-002e', 'FR-002', 'integration', 'edge_case'),
+      makeTC('TC-002f', 'FR-002', 'e2e',         'negative'),
+    ],
+  }, null, 2);
+
+  const NO_H_TCS = JSON.stringify({
+    test_plan: { strategy: 'unit+e2e', coverage_goal: '80%', test_types: ['unit', 'e2e'] },
+    test_cases: [
+      makeTC('TC-001x', 'FR-001', 'unit',        'happy_path'), // no h suffix
+      makeTC('TC-001e', 'FR-001', 'integration', 'edge_case'),
+      makeTC('TC-001f', 'FR-001', 'e2e',         'negative'),
+      makeTC('TC-002h', 'FR-002', 'unit',        'happy_path'),
+      makeTC('TC-002e', 'FR-002', 'integration', 'edge_case'),
+      makeTC('TC-002f', 'FR-002', 'e2e',         'negative'),
+    ],
+  }, null, 2);
+
+  before(() => {
+    gateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-tc-'));
+    execSync('aitri init', { cwd: gateDir, encoding: 'utf8' });
+  });
+
+  after(() => fs.rmSync(gateDir, { recursive: true, force: true }));
+
+  it('complete 3 passes with valid h/f-suffixed TCs', () => {
+    fs.writeFileSync(path.join(gateDir, 'spec', '03_TEST_CASES.json'), VALID_TCS);
+    const out = aitri('complete 3', gateDir);
+    assert.match(out, /Phase 3.*complete/i);
+  });
+
+  it('complete 3 rejects TCs missing h suffix (Rank 11 gate)', () => {
+    fs.writeFileSync(path.join(gateDir, 'spec', '03_TEST_CASES.json'), NO_H_TCS);
+    const out = aitriShouldFail('complete 3', gateDir);
+    assert.match(out, /no TC id ending in 'h'/i);
+  });
+});
+
+// ─── resume + checkpoint smoke ────────────────────────────────────────────────
+
+describe('Aitri CLI — resume + checkpoint smoke', () => {
+  let rcDir;
+
+  before(() => {
+    rcDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-rc-'));
+    execSync('aitri init', { cwd: rcDir, encoding: 'utf8' });
+    fs.writeFileSync(path.join(rcDir, 'spec', '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
+    execSync('aitri complete 1', { cwd: rcDir, encoding: 'utf8' });
+    execSync('aitri approve 1', { cwd: rcDir, encoding: 'utf8' });
+  });
+
+  after(() => fs.rmSync(rcDir, { recursive: true, force: true }));
+
+  it('aitri resume prints structured markdown to stdout', () => {
+    const out = aitri('resume', rcDir);
+    assert.match(out, /AITRI SESSION RESUME/);
+    assert.match(out, /Pipeline State/);
+    assert.match(out, /Next Action/);
+  });
+
+  it('aitri resume shows Phase 1 as approved', () => {
+    const out = aitri('resume', rcDir);
+    assert.match(out, /Phase 1.*Approved/);
+  });
+
+  it('aitri resume shows open FRs', () => {
+    const out = aitri('resume', rcDir);
+    assert.match(out, /FR-001/);
+    assert.match(out, /Open Requirements/);
+  });
+
+  it('aitri resume is pipeable (stdout only, no stderr bleed)', () => {
+    const out = execSync('aitri resume 2>/dev/null', { cwd: rcDir, encoding: 'utf8' });
+    assert.match(out, /AITRI SESSION RESUME/);
+  });
+
+  it('aitri checkpoint creates a file in checkpoints/', () => {
+    aitri('checkpoint', rcDir);
+    assert.ok(fs.existsSync(path.join(rcDir, 'checkpoints')), 'checkpoints/ must be created');
+    const files = fs.readdirSync(path.join(rcDir, 'checkpoints'));
+    assert.equal(files.filter(f => f.endsWith('.md')).length, 1, 'one checkpoint file must exist');
+  });
+
+  it('aitri checkpoint --name creates file with label in name', () => {
+    aitri('checkpoint --name before-refactor', rcDir);
+    const files = fs.readdirSync(path.join(rcDir, 'checkpoints'));
+    assert.ok(files.some(f => f.includes('before-refactor')), 'labeled checkpoint must exist');
+  });
+
+  it('aitri checkpoint --list shows existing checkpoints', () => {
+    const out = aitri('checkpoint --list', rcDir);
+    assert.match(out, /\.md/);
+  });
+
+  it('checkpoint file contains resume content', () => {
+    const files    = fs.readdirSync(path.join(rcDir, 'checkpoints')).filter(f => f.endsWith('.md')).sort();
+    const cpContent = fs.readFileSync(path.join(rcDir, 'checkpoints', files[0]), 'utf8');
+    assert.match(cpContent, /AITRI SESSION RESUME/);
+    assert.match(cpContent, /Pipeline State/);
+  });
+});
