@@ -11,12 +11,12 @@ const makeTC = (id, reqId, type, scenario = 'happy_path') => ({
 const validP3 = () => JSON.stringify({
   test_plan: { strategy: 'unit + e2e', coverage_goal: '80%', test_types: ['unit', 'e2e'] },
   test_cases: [
-    makeTC('TC-001', 'FR-001', 'unit',        'happy_path'),
-    makeTC('TC-002', 'FR-001', 'integration', 'edge_case'),
-    makeTC('TC-003', 'FR-001', 'e2e',         'negative'),
-    makeTC('TC-004', 'FR-002', 'unit',        'happy_path'),
-    makeTC('TC-005', 'FR-002', 'integration', 'edge_case'),
-    makeTC('TC-006', 'FR-002', 'e2e',         'negative'),
+    makeTC('TC-001h', 'FR-001', 'unit',        'happy_path'),
+    makeTC('TC-001e', 'FR-001', 'integration', 'edge_case'),
+    makeTC('TC-001f', 'FR-001', 'e2e',         'negative'),
+    makeTC('TC-002h', 'FR-002', 'unit',        'happy_path'),
+    makeTC('TC-002e', 'FR-002', 'integration', 'edge_case'),
+    makeTC('TC-002f', 'FR-002', 'e2e',         'negative'),
   ],
 });
 
@@ -33,7 +33,7 @@ describe('Phase 3 — validate()', () => {
 
   it('throws when a requirement has fewer than 3 test cases', () => {
     const d = JSON.parse(validP3());
-    d.test_cases = d.test_cases.filter(tc => !(tc.requirement_id === 'FR-001' && tc.id === 'TC-003'));
+    d.test_cases = d.test_cases.filter(tc => !(tc.requirement_id === 'FR-001' && tc.id === 'TC-001f'));
     assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /FR-001 has 2 test case.*min 3/);
   });
 
@@ -46,7 +46,7 @@ describe('Phase 3 — validate()', () => {
   it('throws when exactly 1 e2e test', () => {
     const d = JSON.parse(validP3());
     d.test_cases = d.test_cases.map(tc =>
-      tc.id === 'TC-006' ? { ...tc, type: 'integration' } : tc
+      tc.id === 'TC-002f' ? { ...tc, type: 'integration' } : tc
     );
     assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /1 e2e test.*min 2/);
   });
@@ -90,7 +90,7 @@ describe('Phase 3 — validate()', () => {
 
   it('throws when TC has empty ac_id string', () => {
     const d = JSON.parse(validP3());
-    d.test_cases[1].ac_id = '';
+    d.test_cases[3].ac_id = ''; // TC-002h
     assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /Missing ac_id.*TC-002/);
   });
 
@@ -114,6 +114,23 @@ describe('Phase 3 — validate()', () => {
   });
 
   it('passes when all FRs have happy_path and negative scenarios', () => {
+    assert.doesNotThrow(() => PHASE_DEFS[3].validate(validP3()));
+  });
+
+  // Rank 11 — TC ID naming convention gate (h/f suffix)
+  it('[Rank 11] throws when FR has no TC id ending in h', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[0].id = 'TC-001x'; // remove h suffix from FR-001's happy TC
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /FR-001.*no TC id ending in 'h'/);
+  });
+
+  it('[Rank 11] throws when FR has no TC id ending in f', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[2].id = 'TC-001z'; // remove f suffix from FR-001's failure TC
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /FR-001.*no TC id ending in 'f'/);
+  });
+
+  it('[Rank 11] passes when all FRs have both h and f suffixed TCs', () => {
     assert.doesNotThrow(() => PHASE_DEFS[3].validate(validP3()));
   });
 });
@@ -157,6 +174,12 @@ describe('Phase 3 — buildBriefing() (BL-003)', () => {
     const reviewSection = briefing.slice(reviewIdx);
     assert.ok(reviewSection.includes('no_go_zone') && reviewSection.includes('concrete'),
       'Human Review must cover no_go_zone and concrete value checks');
+  });
+
+  it('[Rank 11] briefing contains TC ID naming convention rule', () => {
+    const b = PHASE_DEFS[3].buildBriefing({ dir: '/tmp/test', inputs: { '01_REQUIREMENTS.json': '{}', '02_SYSTEM_DESIGN.md': '' }, feedback: null });
+    assert.ok(b.includes('TC-001h') || b.includes("ending in `h`") || b.includes('h suffix'), 'briefing must explain h suffix naming');
+    assert.ok(b.includes('TC-001f') || b.includes("ending in `f`") || b.includes('f suffix'), 'briefing must explain f suffix naming');
   });
 
   it('[v0.1.28] briefing renders artifact path using artifactsBase when provided', () => {

@@ -24,11 +24,17 @@
 ## System Design (architecture + API)
 {{SYSTEM_DESIGN}}
 
+## TC ID naming convention
+- Happy-path TCs: suffix ID with `h` — e.g., `TC-001h: user logs in with valid credentials`
+- Failure/negative TCs: suffix ID with `f` — e.g., `TC-001f: login rejected when password is wrong`
+- Edge cases: any other suffix — e.g., `TC-001e`
+- **Gate**: `aitri complete 3` requires every FR to have ≥1 TC id ending in `h` and ≥1 ending in `f`
+
 ## Output: `{{ARTIFACTS_BASE}}/03_TEST_CASES.json`
 Schema:
 { test_plan: { strategy, coverage_goal: "80%", test_types: ["unit","integration","e2e"] },
   test_cases: [{
-    id: "TC-001",
+    id: "TC-001h",
     requirement_id: "FR-001",
     user_story_id: "US-001",
     ac_id: "AC-001",
@@ -126,3 +132,4 @@ Copy the metric directly from the FR's acceptance_criteria into expected_result.
   [ ] user_story_id and ac_id in each TC reference real IDs from 01_REQUIREMENTS.json
   [ ] No test cases written for items declared in no_go_zone
   [ ] Type Coverage Matrix is present and FR types have correct required levels
+  [ ] Every FR has at least one TC id ending in `h` (happy path) and one ending in `f` (failure)
