@@ -105,6 +105,44 @@ describe('saveConfig()', () => {
   });
 });
 
+describe('saveConfig() — file locking', () => {
+
+  it('releases lock after successful save (no leftover .aitri.lock)', () => {
+    const dir = tmpDir();
+    saveConfig(dir, { approvedPhases: [1] });
+    assert.ok(!fs.existsSync(path.join(dir, '.aitri.lock')), '.aitri.lock must not exist after save');
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it('removes stale lock and proceeds when lock is older than 5s', () => {
+    const dir = tmpDir();
+    const lockPath = path.join(dir, '.aitri.lock');
+    // Write a stale lock by backdating its mtime
+    fs.writeFileSync(lockPath, '');
+    const staleTime = new Date(Date.now() - 6000);
+    fs.utimesSync(lockPath, staleTime, staleTime);
+
+    // Must not throw — stale lock should be removed and save should succeed
+    assert.doesNotThrow(() => saveConfig(dir, { approvedPhases: [1] }));
+    assert.ok(fs.existsSync(path.join(dir, '.aitri')), '.aitri must be written after stale lock removal');
+    assert.ok(!fs.existsSync(lockPath), 'lock must be gone after save');
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it('throws when a fresh lock file exists (concurrent writer)', () => {
+    const dir = tmpDir();
+    const lockPath = path.join(dir, '.aitri.lock');
+    // Write a fresh lock (simulates another process actively writing)
+    fs.writeFileSync(lockPath, '');
+
+    assert.throws(
+      () => saveConfig(dir, { approvedPhases: [1] }),
+      /locked/
+    );
+    fs.rmSync(dir, { recursive: true });
+  });
+});
+
 describe('saveConfig() — atomic write location', () => {
 
   it('temp file is created in project dir, not os.tmpdir()', () => {
