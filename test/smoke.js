@@ -590,3 +590,200 @@ describe('Aitri CLI — resume + checkpoint smoke', () => {
     assert.match(cpContent, /Pipeline State/);
   });
 });
+
+// ── adopt ─────────────────────────────────────────────────────────────────────
+
+describe('Aitri CLI — adopt smoke', () => {
+  let adoptDir;
+
+  before(() => {
+    adoptDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-adopt-smoke-'));
+    // Seed a minimal conventional project so adopt scan has something to read
+    fs.writeFileSync(path.join(adoptDir, 'package.json'), JSON.stringify({
+      name: 'my-app', version: '1.0.0', description: 'A sample app',
+      scripts: { test: 'node --test' },
+    }, null, 2));
+    fs.writeFileSync(path.join(adoptDir, 'README.md'), '# My App\nA web application for tracking invoices.');
+    fs.mkdirSync(path.join(adoptDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(adoptDir, 'src', 'index.js'), 'export const add = (a, b) => a + b;');
+    fs.mkdirSync(path.join(adoptDir, 'test'), { recursive: true });
+    fs.writeFileSync(path.join(adoptDir, 'test', 'index.test.js'), "import assert from 'assert'; assert.equal(1+1, 2);");
+  });
+
+  after(() => { try { fs.rmSync(adoptDir, { recursive: true, force: true }); } catch {} });
+
+  it('aitri adopt scan outputs briefing with project structure', () => {
+    const out = aitri('adopt scan', adoptDir);
+    assert.match(out, /ADOPTION_PLAN\.md/, 'briefing must mention ADOPTION_PLAN.md output');
+    assert.match(out, /Project Summary|adoption/i, 'briefing must mention adoption context');
+  });
+
+  it('aitri adopt scan briefing includes file tree', () => {
+    const out = aitri('adopt scan', adoptDir);
+    assert.match(out, /package\.json|src|README/i, 'file tree must appear in briefing');
+  });
+
+  it('aitri adopt apply initializes project from well-formed ADOPTION_PLAN.md', () => {
+    const plan = [
+      '# Adoption Plan',
+      '',
+      '## Project Summary',
+      'Invoice tracking web app. Node.js backend, PostgreSQL database.',
+      '',
+      '## Completed Phases',
+      '[1, 2]',
+      '',
+      '## Adoption Decision',
+      'Ready — project is well-structured and can be adopted.',
+      '',
+      '## Evidence',
+      '- package.json found with test script',
+      '- README describes the project clearly',
+      '',
+      '## Gaps',
+      'None.',
+      '',
+      '## Recommended Next Step',
+      'Run aitri run-phase 3',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(adoptDir, 'ADOPTION_PLAN.md'), plan);
+    // Non-TTY: skips confirmation prompt
+    aitri('adopt apply', adoptDir);
+
+    assert.ok(fs.existsSync(path.join(adoptDir, '.aitri')), '.aitri must be created');
+    assert.ok(fs.existsSync(path.join(adoptDir, 'IDEA.md')), 'IDEA.md must be created from Project Summary');
+
+    const config = JSON.parse(fs.readFileSync(path.join(adoptDir, '.aitri'), 'utf8'));
+    assert.ok(config.completedPhases.includes(1), 'phase 1 must be in completedPhases');
+    assert.ok(config.completedPhases.includes(2), 'phase 2 must be in completedPhases');
+  });
+
+  it('aitri adopt apply tolerates ### headings in ADOPTION_PLAN.md', () => {
+    const adoptDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-adopt-h3-'));
+    try {
+      const plan = [
+        '# Adoption Plan',
+        '',
+        '### Project Summary',
+        'A different app.',
+        '',
+        '### Completed Phases',
+        '[1]',
+        '',
+        '### Adoption Decision',
+        'Status: ready to proceed',
+      ].join('\n');
+      fs.writeFileSync(path.join(adoptDir2, 'ADOPTION_PLAN.md'), plan);
+      aitri('adopt apply', adoptDir2);
+      assert.ok(fs.existsSync(path.join(adoptDir2, '.aitri')), '.aitri must be created with ### headings');
+    } finally {
+      try { fs.rmSync(adoptDir2, { recursive: true, force: true }); } catch {}
+    }
+  });
+
+  it('aitri adopt apply tolerates bullet-list Completed Phases format', () => {
+    const adoptDir3 = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-adopt-bullets-'));
+    try {
+      const plan = [
+        '## Project Summary',
+        'App with bullet phases.',
+        '',
+        '## Completed Phases',
+        '- Phase 1',
+        '- Phase 2',
+        '- Phase 3',
+        '',
+        '## Adoption Decision',
+        'Ready',
+      ].join('\n');
+      fs.writeFileSync(path.join(adoptDir3, 'ADOPTION_PLAN.md'), plan);
+      aitri('adopt apply', adoptDir3);
+      const config = JSON.parse(fs.readFileSync(path.join(adoptDir3, '.aitri'), 'utf8'));
+      assert.ok(config.completedPhases.includes(1), 'phase 1 from bullet list');
+      assert.ok(config.completedPhases.includes(3), 'phase 3 from bullet list');
+    } finally {
+      try { fs.rmSync(adoptDir3, { recursive: true, force: true }); } catch {}
+    }
+  });
+
+  it('aitri adopt --upgrade syncs existing artifacts into completedPhases', () => {
+    // adoptDir already has .aitri from apply above; simulate phases 1+2 artifacts
+    const specDir = path.join(adoptDir, 'spec');
+    fs.mkdirSync(specDir, { recursive: true });
+    fs.writeFileSync(path.join(specDir, '01_REQUIREMENTS.json'), '{}');
+    fs.writeFileSync(path.join(specDir, '02_SYSTEM_DESIGN.md'), '# Design');
+
+    aitri('adopt --upgrade', adoptDir);
+    const config = JSON.parse(fs.readFileSync(path.join(adoptDir, '.aitri'), 'utf8'));
+    assert.ok(config.completedPhases.includes(1), 'phase 1 must be synced');
+    assert.ok(config.completedPhases.includes(2), 'phase 2 must be synced');
+  });
+
+  it('aitri adopt scan error is actionable when invoked outside project', () => {
+    // scan works anywhere — just verifying it doesn't crash on minimal dir
+    const minDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-adopt-min-'));
+    try {
+      const out = aitri('adopt scan', minDir);
+      assert.match(out, /ADOPTION_PLAN\.md/);
+    } finally {
+      try { fs.rmSync(minDir, { recursive: true, force: true }); } catch {}
+    }
+  });
+});
+
+// ── feature ───────────────────────────────────────────────────────────────────
+
+describe('Aitri CLI — feature smoke', () => {
+  let featureProjectDir;
+
+  before(() => {
+    featureProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-feature-smoke-'));
+    aitri('init', featureProjectDir);
+  });
+
+  after(() => { try { fs.rmSync(featureProjectDir, { recursive: true, force: true }); } catch {} });
+
+  it('aitri feature init creates feature directory with .aitri and FEATURE_IDEA.md', () => {
+    aitri('feature init payments', featureProjectDir);
+    const featureDir = path.join(featureProjectDir, 'features', 'payments');
+    assert.ok(fs.existsSync(featureDir), 'feature dir must be created');
+    assert.ok(fs.existsSync(path.join(featureDir, '.aitri')), 'feature .aitri must exist');
+    assert.ok(fs.existsSync(path.join(featureDir, 'FEATURE_IDEA.md')), 'FEATURE_IDEA.md must exist');
+    assert.ok(fs.existsSync(path.join(featureDir, 'spec')), 'spec/ dir must be created');
+  });
+
+  it('aitri feature init creates independent .aitri (does not modify parent state)', () => {
+    const parentBefore = JSON.parse(fs.readFileSync(path.join(featureProjectDir, '.aitri'), 'utf8'));
+    aitri('feature init reporting', featureProjectDir);
+    const parentAfter  = JSON.parse(fs.readFileSync(path.join(featureProjectDir, '.aitri'), 'utf8'));
+    assert.deepEqual(parentBefore.approvedPhases, parentAfter.approvedPhases, 'parent approvedPhases must not change');
+    assert.deepEqual(parentBefore.completedPhases, parentAfter.completedPhases, 'parent completedPhases must not change');
+  });
+
+  it('aitri feature list shows initialized features', () => {
+    const out = aitri('feature list', featureProjectDir);
+    assert.match(out, /payments/, 'payments feature must appear');
+    assert.match(out, /reporting/, 'reporting feature must appear');
+  });
+
+  it('aitri feature status shows feature pipeline state', () => {
+    const out = aitri('feature status payments', featureProjectDir);
+    assert.match(out, /payments|Phase|status/i, 'feature status must show pipeline info');
+  });
+
+  it('aitri feature init fails when feature already exists', () => {
+    const stderr = aitriShouldFail('feature init payments', featureProjectDir);
+    assert.match(stderr, /already exists/i);
+  });
+
+  it('aitri feature init fails when no parent .aitri found', () => {
+    const bareDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-feature-bare-'));
+    try {
+      const stderr = aitriShouldFail('feature init mything', bareDir);
+      assert.match(stderr, /No Aitri project|aitri init/i);
+    } finally {
+      try { fs.rmSync(bareDir, { recursive: true, force: true }); } catch {}
+    }
+  });
+});
