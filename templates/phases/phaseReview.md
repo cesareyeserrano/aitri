@@ -38,7 +38,26 @@
 6. Write ## FR Coverage — one row per FR: status (implemented|partial|missing|substituted)
 7. Write ## Verdict — PASS | CONDITIONAL_PASS | FAIL with justification
 8. Save to: {{ARTIFACTS_BASE}}/04_CODE_REVIEW.md
-9. Run: aitri complete review
+9. Present the Delivery Summary below to the user
+10. Run: aitri complete review
+
+## Delivery Summary
+After saving 04_CODE_REVIEW.md, present this report to the user:
+
+```
+─── Code Review Complete ─────────────────────────────────────
+Verdict:        [PASS | CONDITIONAL_PASS | FAIL]
+FR coverage:    [N]/[N] MUST FRs reviewed
+
+Issues found ([N]):
+  CRITICAL: [N]  — [list titles or "none"]
+  WARNING:  [N]  — [list titles or "none"]
+  INFO:     [N]
+
+[If CONDITIONAL_PASS or FAIL — list what must be fixed before approving]
+──────────────────────────────────────────────────────────────
+Next: aitri complete review   →   aitri approve review
+```
 
 ## Output: `{{ARTIFACTS_BASE}}/04_CODE_REVIEW.md`
 Required sections:

@@ -41,4 +41,29 @@ Required sections (in order):
 ## Instructions
 1. Generate complete 01_UX_SPEC.md
 2. Save to: {{ARTIFACTS_BASE}}/01_UX_SPEC.md
-3. Run: aitri complete ux
+3. Present the Delivery Summary below to the user
+4. Run: aitri complete ux
+
+## Delivery Summary
+After saving 01_UX_SPEC.md, present this report to the user:
+
+```
+─── UX Spec Complete ─────────────────────────────────────────
+Archetype:    [name] — [description]
+Screens:      [N] — [list names]
+Components:   [N] (each with 5 states: default/loading/error/empty/disabled)
+
+Design Tokens:
+  Background:   [hex]   Surface: [hex]
+  Primary:      [hex]   Accent:  [hex]   Error: [hex]
+  Text primary: [hex]   Text secondary: [hex]
+  Font:         [family] · [scale summary]
+  Contrast:     all roles ≥4.5:1 [confirmed | gaps: list]
+
+Responsive breakpoints: [375px · 768px · 1440px — behavior per screen]
+
+Nielsen compliance:    [N/10 heuristics applied]
+Nielsen violations:    [N found · N corrected · N accepted trade-off]
+──────────────────────────────────────────────────────────────
+Next: aitri complete ux   →   aitri approve ux
+```

@@ -123,7 +123,26 @@ Copy the metric directly from the FR's acceptance_criteria into expected_result.
 2. Write test cases with concrete Given/When/Then (SPEC-SEALED)
 3. Generate complete 03_TEST_CASES.json
 4. Save to: {{ARTIFACTS_BASE}}/03_TEST_CASES.json
-5. Run: aitri complete 3
+5. Present the Delivery Summary below to the user
+6. Run: aitri complete 3
+
+## Delivery Summary
+After saving 03_TEST_CASES.json, present this report to the user:
+
+```
+─── Phase 3 Complete — Test Cases ────────────────────────────
+Total TCs:       [N] — happy: [N] · edge: [N] · negative: [N]
+FR coverage:     [N]/[N] MUST FRs covered
+E2E tests:       [N] — targeting: [list flows]
+
+Coverage by FR:
+  [FR-ID]: [N] TCs — [h/f/e breakdown]
+  (list all MUST FRs)
+
+FRs with gaps (< 3 TCs): [list or "none"]
+──────────────────────────────────────────────────────────────
+Next: aitri complete 3   →   aitri approve 3
+```
 
 ## Human Review — Before approving phase 3
   [ ] Every MUST FR has ≥3 test cases (happy path, edge case, negative)

@@ -126,7 +126,27 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
 4. Add @aitri-trace headers to key functions
 5. Verify Technical Definition of Done checklist
 6. Save manifest (with technical_debt) to: {{ARTIFACTS_BASE}}/04_IMPLEMENTATION_MANIFEST.json
-7. Run: aitri complete 4
+7. Present the Delivery Summary below to the user
+8. Run: aitri complete 4
+
+## Delivery Summary
+After saving all files + 04_IMPLEMENTATION_MANIFEST.json, present this report to the user:
+
+```
+─── Phase 4 Complete — Implementation ────────────────────────
+Files created:   [N] — [list src files]
+Test files:      [N] — framework: [jest|vitest|etc] · command: [test_runner]
+@aitri-trace:    [N] functions tagged
+
+Technical debt ([N] items):
+  - [debt title 1] — [brief reason]
+  - [debt title 2] — [brief reason]
+  (list all; "none" only if genuinely zero)
+
+Environment variables required: [N] — [list names]
+──────────────────────────────────────────────────────────────
+Next: aitri verify-run   →   aitri verify-complete   →   aitri approve 4
+```
 
 ## Human Review — Before approving phase 4
   [ ] All files listed in files_created exist on disk

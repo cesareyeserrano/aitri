@@ -192,17 +192,23 @@ describe('runDiscoveryInterview()', () => {
 // ── cmdWizard ─────────────────────────────────────────────────────────────────
 
 describe('cmdWizard()', () => {
-  it('throws when stdin is not TTY and no _readLine injected', () => {
+  it('prints agent briefing when stdin is not TTY and no _readLine injected', () => {
     const dir = tmpDir();
     const origIsTTY = process.stdin.isTTY;
     process.stdin.isTTY = false;
-    const e = makeErr();
+    const output = [];
+    const origLog = console.log;
+    console.log = (...a) => output.push(a.join(' '));
     try {
-      assert.throws(
-        () => cmdWizard({ dir, args: [], flagValue: () => null, err: e.fn }),
-        /interactive terminal/
-      );
-    } finally { process.stdin.isTTY = origIsTTY; }
+      cmdWizard({ dir, args: [], flagValue: () => null, err: () => { throw new Error('err called'); } });
+      const text = output.join('\n');
+      assert.ok(text.includes('Agent Mode'), 'should mention Agent Mode');
+      assert.ok(text.includes('REQUIRED FIELDS'), 'should list questions');
+      assert.ok(text.includes('IDEA.md FORMAT:'), 'should include template');
+    } finally {
+      process.stdin.isTTY = origIsTTY;
+      console.log = origLog;
+    }
   });
 
   it('creates IDEA.md with answers from mock readLine', () => {
@@ -292,7 +298,7 @@ describe('cmdWizard()', () => {
 describe('run-phase discovery --guided', () => {
   it('injects interview context into discovery briefing', () => {
     const dir = tmpDir();
-    cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.36' });
+    cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.37' });
     fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Idea\nA tool for freelancers.');
 
     const rl = makeMockReadLine([
@@ -318,7 +324,7 @@ describe('run-phase discovery --guided', () => {
 
   it('--guided on non-discovery phase is silently ignored', () => {
     const dir = tmpDir();
-    cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.36' });
+    cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.37' });
     fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Idea\n' + 'A tool.\n'.repeat(20));
 
     // Phase 1 with --guided: no interview, no error

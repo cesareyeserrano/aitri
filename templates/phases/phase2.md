@@ -82,7 +82,31 @@ Before completing this phase, verify:
 3. Verify traceability checklist before saving
 4. Generate complete 02_SYSTEM_DESIGN.md
 5. Save to: {{ARTIFACTS_BASE}}/02_SYSTEM_DESIGN.md
-6. Run: aitri complete 2
+6. Present the Delivery Summary below to the user
+7. Run: aitri complete 2
+
+## Delivery Summary
+After saving 02_SYSTEM_DESIGN.md, present this report to the user:
+
+```
+─── Phase 2 Complete — System Architecture ───────────────────
+Stack:      [frontend] · [backend] · [database] · [infra]
+
+ADRs ([N] decisions):
+  - [decision title 1] → chose [option]
+  - [decision title 2] → chose [option]
+  (list all)
+
+Data model:  [N] entities — [list names]
+API:         [N] endpoints — [list key ones]
+Security:    [auth method] · [key controls]
+
+Top risks:
+  - [risk 1]
+  - [risk 2]
+──────────────────────────────────────────────────────────────
+Next: aitri complete 2   →   aitri approve 2
+```
 
 ## Human Review — Before approving phase 2
   [ ] All 8 required sections are present with exact header names (Executive Summary, System Architecture, Data Model, API Design, Security Design, Performance & Scalability, Deployment Architecture, Risk Analysis)

@@ -60,8 +60,27 @@
 2. Assign compliance level per FR using fr_coverage from Test Results
 3. Copy technical_debt from 04_IMPLEMENTATION_MANIFEST.json into technical_debt_inherited
 4. Save 05_PROOF_OF_COMPLIANCE.json to: {{ARTIFACTS_BASE}}/05_PROOF_OF_COMPLIANCE.json
-5. Run: aitri complete 5
-6. Document setup commands in DEPLOYMENT.md — do NOT run npm install or start the app
+5. Document setup commands in DEPLOYMENT.md — do NOT run npm install or start the app
+6. Present the Delivery Summary below to the user
+7. Run: aitri complete 5
+
+## Delivery Summary
+After saving all deployment files + 05_PROOF_OF_COMPLIANCE.json, present this report to the user:
+
+```
+─── Phase 5 Complete — Deployment ────────────────────────────
+Deployment files:  [list: Dockerfile, docker-compose.yml, DEPLOYMENT.md, etc.]
+Overall status:    [compliant | partial | non-compliant]
+
+FR compliance:
+  MUST:   [N]/[N] production_ready · [N] partial · [N] placeholder
+  SHOULD: [N]/[N] production_ready · [N] partial
+  (list any placeholder FRs — these block the pipeline)
+
+Technical debt inherited: [N] items from Phase 4
+──────────────────────────────────────────────────────────────
+Next: aitri complete 5   →   aitri approve 5   →   DONE
+```
 
 ## Human Review — Before approving phase 5
   [ ] Compliance levels match fr_coverage from test results — no manual upgrades without evidence

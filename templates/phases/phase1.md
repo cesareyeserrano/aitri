@@ -91,7 +91,28 @@ reuse IDs from the list below.
 2. Identify North Star KPI + JTBD + guardrail metric
 3. Generate complete 01_REQUIREMENTS.json
 4. Save to: {{ARTIFACTS_BASE}}/01_REQUIREMENTS.json
-5. Run: aitri complete 1
+5. Present the Delivery Summary below to the user
+6. Run: aitri complete 1
+
+## Delivery Summary
+After saving 01_REQUIREMENTS.json, present this report to the user:
+
+```
+─── Phase 1 Complete — Requirements ─────────────────────────
+Functional Requirements:  [N] MUST · [N] SHOULD · [N] COULD
+Non-functional:           [N]
+North Star KPI:           [value]
+JTBD:                     [statement]
+
+No-go zone ([N] items):
+  - [item 1]
+  - [item 2]
+  (list all)
+
+Assumptions flagged: [N] — review before approving
+──────────────────────────────────────────────────────────────
+Next: aitri complete 1   →   aitri approve 1
+```
 
 ## Human Review — Before approving phase 1
   [ ] no_go_zone has ≥3 explicit, specific items (not generic filler)

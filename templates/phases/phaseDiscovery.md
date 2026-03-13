@@ -55,4 +55,26 @@ Required sections (in order):
 ## Instructions
 1. Generate complete 00_DISCOVERY.md
 2. Save to: {{ARTIFACTS_BASE}}/00_DISCOVERY.md
-3. Run: aitri complete discovery
+3. Present the Delivery Summary below to the user
+4. Run: aitri complete discovery
+
+## Delivery Summary
+After saving 00_DISCOVERY.md, present this report to the user:
+
+```
+─── Discovery Complete ───────────────────────────────────────
+Problem:        [1-sentence summary]
+Target users:   [who + context]
+Core pain:      [current situation + metric if available]
+Confidence:     [low | medium | high] — [reason in one sentence]
+
+Key assumptions flagged:
+  - [assumption 1]
+  - [assumption 2]
+  (list all; none if confidence is high)
+
+Evidence gaps (if any):
+  - [gap 1]
+──────────────────────────────────────────────────────────────
+Next: aitri complete discovery   →   aitri approve discovery
+```

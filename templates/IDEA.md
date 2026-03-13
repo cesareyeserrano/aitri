@@ -64,3 +64,14 @@
 
 <!-- Optional. Leave blank and the Architect will choose based on requirements.
      Example: Node.js, PostgreSQL, Docker, React. -->
+
+
+## Assets
+
+<!-- Optional. List Figma links, mockup paths, reference docs, or any external context.
+     Files dropped in the idea/ folder are automatically listed in every phase briefing.
+     Example:
+     Figma: https://figma.com/file/abc123/MyApp
+     Mockup: idea/screens/home.png
+     Spec doc: idea/PRD-v2.pdf
+     Reference: idea/competitor-analysis.md -->
