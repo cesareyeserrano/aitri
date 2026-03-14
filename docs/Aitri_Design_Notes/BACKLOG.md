@@ -42,8 +42,8 @@ Valid, implementable, not urgent. No item blocks the core pipeline.
 | ~~13~~ | ~~Pipeline close-out clarity~~ | 20 | ✅ **Partially done in v0.1.26** |
 | ~~14~~ | ~~`aitri adopt` diagnostic~~ | 20 | ✅ **Done v0.1.34/v0.1.35** — scan + apply + --upgrade |
 | ~~15~~ | ~~Discovery Confidence gate~~ | 20 | ✅ **Done v0.1.33** |
-| 16 | `aitri wizard` | 20 | Ship together with guided interview (17) |
-| 17 | Discovery guided interview (`--guided`) | 20 | Ship together with wizard (16) |
+| ~~16~~ | ~~`aitri wizard`~~ | 20 | ✅ **Done v0.1.36** — TTY interview, depths quick/standard/deep, writes IDEA.md |
+| ~~17~~ | ~~Discovery guided interview (`--guided`)~~ | 20 | ✅ **Done v0.1.36** — injects interview context into discovery briefing |
 | ~~18~~ | ~~UX/UI precision — archetype detection~~ | 20 | ✅ **Done v0.1.33** |
 
 ### Tier 4 — Deferred
@@ -102,17 +102,36 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 
 ---
 
-### Next Features
+### Stabilization
 
-- [ ] P3 — **`aitri wizard` + `discovery --guided`** — interactive interview before any agent runs.
-  Problem: Users write 2-3 sentences in IDEA.md. Agent fills the gaps with invented requirements. A wizard captures requirements interactively before the briefing is generated.
-  Files: `bin/aitri.js` (add `wizard` case), `lib/commands/wizard.js` (new), `lib/commands/run-phase.js` (detect `--guided` for discovery), `lib/phases/phaseDiscovery.js` (add `collectInterview()`), `templates/phases/phaseDiscovery.md` (add `{{#IF_INTERVIEW}}`)
-  Behavior:
-  - `aitri wizard [--depth quick|standard|deep]` — interactive TTY interview via Node.js `readline`. Writes filled IDEA.md from user answers. Prompts: Problem, Target Users, Current Pain, Business Rules (multi-line), Success Criteria (multi-line), Out of Scope, Hard Constraints, Tech Stack (optional).
-  - `aitri run-phase discovery --guided` — same interview flow but injects answers into discovery briefing as `{{INTERVIEW_CONTEXT}}` block instead of writing IDEA.md. Backward compatible — without flag, no change.
-  - Both: `readline` only, zero new deps. `--guided` is opt-in so CI/CD is unaffected.
-  Decisions: Interactive prompts are allowed here as an explicit exception (ADR needed). Wizard writes IDEA.md; guided feeds the agent directly — complementary, not redundant. Deprecated reference: `collectDiscoveryInterview()` in `discovery-plan-helpers.js`.
-  Acceptance: `aitri wizard --depth quick` produces filled IDEA.md with all sections from user answers. `aitri run-phase discovery --guided` prints briefing with `## Interview Context` section. Without `--guided` flag: zero behavior change.
+- ✅ **Aitri Stabilization (v0.1.37–v0.1.44)** — Done v0.1.44. Full real-world adopt test (Ultron), wizard agent-mode, idea/ folder, Delivery Summary in all 8 templates, dead code audit, 3 real bugs fixed (resume.js fr_coverage array mismatch, adopt.js buf.slice deprecation, adopt.js process.exit(0) on abort). 443/443 tests passing. No known open bugs.
+
+---
+
+## Known Technical Debt (design trade-offs — v0.1.44)
+
+> These are not bugs. They are intentional trade-offs that have known failure modes. Documented so they are not rediscovered in future sessions.
+
+- [ ] P3 — **`JSON.parse()` in phase validators produces cryptic errors on malformed agent output**
+  Problem: `phase1/3/4/5.validate()` calls `JSON.parse(content)` directly. If the agent produces malformed JSON (truncated, markdown fences, trailing commas), the error message is a raw Node.js SyntaxError with a column number, not a user-actionable message.
+  Files: `lib/phases/phase1.js`, `phase3.js`, `phase4.js`, `phase5.js`
+  Behavior: Wrap `JSON.parse` in a try/catch inside each `validate()` and throw a friendly error: `"Phase N artifact is not valid JSON — check that the agent did not wrap the output in markdown fences or add trailing commas."` The caller in `complete.js` already has a try/catch but it just re-throws.
+  Decisions: `complete.js` try/catch is the right layer for catching IO errors; `validate()` is the right layer for catching semantic errors. Separating them avoids swallowing real crashes.
+  Acceptance: `aitri complete 1` with malformed JSON in the artifact shows a readable error, not a raw SyntaxError stack.
+
+- [ ] P3 — **`verify.js` coverage is empty if agent omits `@aitri-tc` markers**
+  Problem: `scanTestContent()` in `verify.js` relies on `// @aitri-tc TC-001` markers in test files to map tests to TCs. If the agent writes tests without the markers, `fr_coverage` entries all show `tests_passing: 0` even when tests pass. No warning is emitted.
+  Files: `lib/commands/verify.js`, `templates/phases/phase4.md`
+  Behavior: After building `frCoverage`, if every entry has `tests_passing === 0` and at least one TC result has `status: 'pass'`, emit a `process.stderr.write` warning: `"[aitri] Warning: all FR coverage is zero but tests passed — @aitri-tc markers may be missing from test files."`. Non-blocking.
+  Decisions: Do not make markers mandatory — they are documentation hints, not execution hooks.
+  Acceptance: Warning appears in `verify-run` output when markers are missing and tests pass.
+
+- [ ] P3 — **`scanTestHealth` reads full test files with `fs.readFileSync` (no byte limit)**
+  Problem: `scanTestHealth()` in `adopt.js` uses `fs.readFileSync(fullPath, 'utf8')` without a size cap. The other two file-walking scanners (`scanCodeQuality`, `scanSecretSignals`) use the `openSync/readSync` pattern with `MAX_FILE_READ_BYTES=50KB`. Inconsistency. On repos with large generated test fixtures, this can slow `adopt scan`.
+  Files: `lib/commands/adopt.js` — `scanTestHealth()` function
+  Behavior: Replace `fs.readFileSync` with the `openSync/readSync/closeSync` pattern using `MAX_FILE_READ_BYTES`. Same pattern already in `scanCodeQuality` and `scanSecretSignals`.
+  Decisions: The empty-file check (`content.trim().length < 80`) still works correctly on truncated content. The skip-marker check may miss markers near end-of-file in very large test files — acceptable since markers usually appear near the top.
+  Acceptance: `scanTestHealth` reads at most 50KB per file. No behavioral change on normal repos.
 
 ---
 

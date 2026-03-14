@@ -62,10 +62,10 @@ const systemDesignMd = [
 
 const testResultsJson = JSON.stringify({
   summary: { total: 6, passed: 5, failed: 1 },
-  fr_coverage: {
-    'FR-001': { status: 'pass', passed: 3, total: 3 },
-    'FR-002': { status: 'fail', passed: 2, total: 3 },
-  },
+  fr_coverage: [
+    { fr_id: 'FR-001', status: 'covered',  tests_passing: 3, tests_failing: 0, tests_skipped: 0 },
+    { fr_id: 'FR-002', status: 'partial',  tests_passing: 2, tests_failing: 1, tests_skipped: 0 },
+  ],
 });
 
 const manifestJson = JSON.stringify({

@@ -5,6 +5,136 @@
 
 ---
 
+## [0.1.44] — 2026-03-13
+
+### Bug Fixes (deep stability audit — v0.1.44)
+- **fix(resume.js):** `fr_coverage` was treated as an object with `Object.keys()`, but `verify.js` writes it as an array `[{fr_id, tests_passing, tests_failing, ...}]`. `aitri resume` was showing `- 0: unknown (0/0 tests passing)` instead of `- FR-001: covered (3/3 tests passing)`. Now handles both array and legacy object formats. Test fixture updated to match the real artifact structure.
+- **fix(adopt.js):** `buf.slice()` → `buf.subarray()` in `scanCodeQuality` and `scanSecretSignals`. `wizard.js` was already using `buf.subarray()` — brings all three into alignment.
+- **fix(adopt.js):** `process.exit(0)` on user abort in `adoptApply` changed to `process.exit(1)`. Exit code 0 signals success to the shell — `aitri adopt apply && next_cmd` would continue even if the user pressed N. Now consistent with `approve.js` which uses `process.exit(1)`.
+
+### Docs
+- **docs(BACKLOG.md):** Stabilization item closed. Added `## Known Technical Debt` section documenting 3 design trade-offs: JSON.parse error quality in validators, missing `@aitri-tc` marker silent failure in verify, and `scanTestHealth` byte-limit inconsistency.
+
+### Tests
+- **Total: 443/443 passing (unchanged)**
+
+---
+
+## [0.1.39] — 2026-03-13
+
+### Bug Fix (discovered in production — real-world adopt test on Ultron project)
+- **fix(state.js):** `EISDIR` crash when `.aitri` already exists as a directory. Added `configFilePath()` — when `.aitri` is a directory, config is stored at `.aitri/config.json` instead of overwriting the directory. Affects projects that use `.aitri/` as a docs/config folder before adopting Aitri.
+
+---
+
+## [0.1.41] — 2026-03-13
+
+### Features
+- **feat(adopt/scan):** Deep technical health audit. `adopt scan` now pre-scans 6 dimensions programmatically (code quality markers, .gitignore coverage, env/secrets, credential signals, infrastructure readiness, test health) and passes results to the agent. `ADOPTION_PLAN.md` now requires a `## Technical Health Report` section with 7 subsections + Priority Actions (CRITICAL/HIGH/MEDIUM/LOW).
+- **feat(personas/adopter):** Role expanded to Senior Software Architect + Technical Auditor. REASONING updated with 4-phase analysis process.
+
+### Tests
+- **Total: 443 tests (unchanged)**
+
+---
+
+## [0.1.40] — 2026-03-13
+
+### Fix
+- **fix(feature/init):** `aitri feature init` output now explains what a feature sub-pipeline is, lists all commands, and shows the full workflow — previously only showed 2 lines.
+
+---
+
+## [0.1.39] — 2026-03-13
+
+### Bug Fix (discovered in production — real-world adopt test on Ultron project)
+- **fix(state.js):** `EISDIR` crash when `.aitri` already exists as a directory. Added `configFilePath()` — when `.aitri` is a directory, config is stored at `.aitri/config.json`. Affects projects that use `.aitri/` as a docs/config folder before adopting Aitri.
+
+---
+
+## [0.1.38] — 2026-03-13
+
+### Features
+- **feat(wizard/agent-mode):** `aitri wizard` no longer errors when stdin is not a TTY. In non-TTY contexts (Claude Code, pipelines), prints a structured briefing instructing the agent to conduct the interview, infer fields from rich answers, and confirm the IDEA.md draft before writing.
+- **feat(init):** `aitri init` now creates `idea/` folder alongside `IDEA.md` and `spec/`. Drop mockups, Figma exports, PDFs, or reference docs there — `aitri run-phase` automatically lists them in every phase briefing.
+- **feat(templates/IDEA.md):** Added `## Assets` section for Figma links, mockup paths, and reference docs.
+- **feat(templates/phases):** All 8 phase templates now include a `## Delivery Summary` section — structured phase report after each artifact so the user can approve without opening the file.
+- **fix(wizard):** Replaced deprecated `buf.slice()` with `buf.subarray()`.
+- **fix(adopt/parsePlan):** Section heading aliases — accepts `## Project Overview`, `## Summary`, `## Decision`, `## Recommendation`, `## Inferred Phases`, `## Phases` in addition to canonical names.
+- **fix(help):** `WORKFLOW:` now documents `idea/` folder and `aitri wizard` as alternative to manual IDEA.md editing.
+
+### Tests
+- **test(wizard):** Updated agent-mode test — verifies briefing output instead of TTY error.
+- **Total: 443 tests (unchanged)**
+
+---
+
+## [0.1.37] — 2026-03-13
+
+### Stabilization
+- **fix(bin/aitri.js):** `aitri adopt scan` and `aitri adopt apply` now always use the current working directory instead of `findProjectDir(cwd)`. Previously, if any parent directory (including home dir) contained a `.aitri` file, scan/apply would silently run against that parent dir instead of the intended project. `adopt --upgrade` is unaffected (it intentionally finds an existing Aitri project).
+- **fix(run-phase):** Missing required file error now names the exact phase to run — e.g. "Missing required file: 01_REQUIREMENTS.json\nRun: aitri run-phase 1" instead of generic "Run previous phases first."
+- **fix(adopt/parsePlan):** Parser now accepts `###` headings (not just `##`); Adoption Decision check uses `\bready\b`/`\bblocked\b` regex (not fragile `startsWith`); Completed Phases now falls back to bullet list (`- Phase 1`) and comma-separated formats in addition to JSON array.
+- **fix(help):** Added FEATURE WORKFLOW section — `aitri feature init/run-phase/complete/approve` were undocumented in `aitri help` output.
+
+### Tests
+- **test(smoke):** 13 new smoke tests — `aitri adopt scan`, `aitri adopt apply` (well-formed, `###` headings, bullet-list phases), `aitri adopt --upgrade`, `aitri feature init`, `aitri feature list`, `aitri feature status`, `aitri feature init` error cases.
+- **Total: 443 tests (up from 430)**
+
+---
+
+## [0.1.36] — 2026-03-12
+
+### Features
+- **feat(wizard):** `aitri wizard [--depth quick|standard|deep]` — synchronous TTY interview (zero deps, `fs.readSync` char-by-char). Writes filled `IDEA.md` from user answers. Depths: quick (6 questions), standard (+constraints/tech stack), deep (+urgency/no-go/risks). Aborts if `IDEA.md` exists unless user confirms overwrite.
+- **feat(run-phase/discovery):** `aitri run-phase discovery --guided` — runs quick interview before printing briefing, injects answers as `## Interview Context` block. Backward-compatible: without `--guided`, zero behavior change.
+
+### Tests
+- **test(wizard):** 21 new tests — `collectInterview`, `buildIdeaMd`, `buildInterviewContext`, `runDiscoveryInterview`, `cmdWizard` (TTY gate, overwrite confirm/abort, depth validation), `run-phase discovery --guided` integration.
+- **Total: 430 tests (up from 409)**
+
+---
+
+## [0.1.35] — 2026-03-12
+
+### Features
+- **feat(adopt/scan):** `aitri adopt scan` — scans project file tree, `package.json`, `README`, test files → outputs briefing for agent → agent produces `ADOPTION_PLAN.md`.
+- **feat(adopt/apply):** `aitri adopt apply` — reads `ADOPTION_PLAN.md`, isTTY gate, initializes `.aitri` + `spec/` + `IDEA.md` from Project Summary, marks inferred `completedPhases`.
+- **feat(README):** Restructured — ASCII art header, pipeline diagram, 5-step Quick Start, commands table (adopt/feature/resume/wizard), agents table. Reduced from 354 to ~100 lines. Schemas removed (available via `aitri help`).
+
+### Tests
+- **test(adopt):** 21 new tests — scan output structure, apply initialization, --upgrade sync, error conditions, parsePlan section parsing.
+- **Total: 409 tests (up from 388)**
+
+---
+
+## [0.1.34] — 2026-03-12
+
+### Features
+- **feat(adopt/--upgrade):** `aitri adopt --upgrade` — non-destructive sync for existing Aitri projects: iterates all PHASE_DEFS artifacts, adds to `completedPhases` if present on disk, updates `aitriVersion`. Never removes state.
+- **feat(init/status):** `aitriVersion` field stored in `.aitri` on every `init`. `aitri status` warns if project was initialized with a different CLI version: "⚠️ Project initialized with vX.Y.Z — CLI is vA.B.C. Run: aitri init to update (non-destructive)".
+- **feat(personas):** New `lib/personas/adopter.js` — Senior Software Architect persona for reverse-engineering adoption analysis.
+- **feat(templates):** New `templates/adopt/scan.md` — briefing template for `adopt scan` with FILE_TREE, PKG_JSON, README, TEST_SUMMARY placeholders and structured ADOPTION_PLAN.md output format (6 required sections).
+
+### Tests
+- **test(init):** 6 new tests — `aitriVersion` stored on init, version mismatch warning in status, no warning when versions match, no warning when aitriVersion absent (graceful).
+- **Total: 388 tests (up from 382)**
+
+---
+
+## [0.1.33] — 2026-03-12
+
+### Features
+- **feat(phaseDiscovery):** Discovery Confidence gate — `aitri complete discovery` now validates `00_DISCOVERY.md` has ≥ 5 Evidence sections and a Confidence score. Low confidence blocks with actionable message.
+- **feat(approve/phaseUX):** UX archetype detection — `aitri approve ux` detects `UX`, `visual`, `audio` FRs in `01_REQUIREMENTS.json` and enforces Phase UX must run before Phase 2. Prevents skipping UX phase silently.
+
+### Tests
+- **test(phaseDiscovery):** 6 new tests — confidence gate pass/fail, evidence count validation, missing confidence score.
+- **test(phaseUX):** 4 new tests — archetype detection in approve flow.
+- **Total: 382 tests (up from 370)**
+
+---
+
 ## [0.1.30] — 2026-03-12
 
 ### Features
