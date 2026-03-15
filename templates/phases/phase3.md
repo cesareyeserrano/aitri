@@ -105,14 +105,39 @@ Include the coverage matrix as `type_coverage_matrix` field in the JSON output.
 - FR type reporting:   must include test that chart/graph component renders with real data (not placeholder/empty state)
 - FR type logic:       must include boundary value test AND a test with production-scale data volume
 
-## Fidelity rule — qualitative FRs (UX/visual/audio)
-For every FR of type UX, visual, or audio: the expected_result of each test case MUST reference
-the specific metric from that FR's acceptance_criteria — not just check presence.
+## Specificity rule — expected_result must survive mutation
+
+A test is only valuable if it fails when the behavior it covers breaks.
+For every test case, ask: "If I delete or invert the core logic this test verifies, does this test fail?"
+If the answer is "maybe not", make expected_result more specific.
+
+**Negative tests (scenario: negative)**
+  ❌ expected_result: "login fails"                          → passes even if 500 is returned instead of 401
+  ✅ expected_result: "HTTP 401, body: { code: 'INVALID_CREDENTIALS' }"
+  ❌ expected_result: "returns an error"
+  ✅ expected_result: "HTTP 403 Forbidden, no user data in response body"
+
+**Logic tests (type: unit — calculations, rules, transformations)**
+  ❌ expected_result: "returns the total"                    → passes even if wrong value returned
+  ✅ expected_result: "returns 42.50 — items [10, 20, 12.50] with 2-decimal precision"
+  ❌ expected_result: "discount applied correctly"
+  ✅ expected_result: "price reduced from $100 to $85 (15% discount rule applied)"
+
+**Persistence tests (type: integration — storage, databases)**
+  ❌ expected_result: "data is saved"                        → passes even if save is a silent no-op
+  ✅ expected_result: "GET /users/123 returns same payload after process restart"
+  ❌ expected_result: "record exists in database"
+  ✅ expected_result: "SELECT COUNT(*) WHERE id=123 returns 1 after POST /users"
+
+**Security tests (type: security — auth, validation)**
+  ❌ expected_result: "unauthorized request is rejected"     → passes even if 500 returned
+  ✅ expected_result: "HTTP 401 with WWW-Authenticate header, no user data in response body"
+
+**Qualitative FRs (UX/visual/audio) — copy metric directly from acceptance_criteria**
   ❌ expected_result: "component renders"
   ✅ expected_result: "component renders at 375px viewport, animation completes in ≤200ms"
   ❌ expected_result: "audio plays"
   ✅ expected_result: "audio plays within 100ms of trigger with no gap on loop"
-Copy the metric directly from the FR's acceptance_criteria into expected_result.
 
 {{#IF_BEST_PRACTICES}}
 {{BEST_PRACTICES}}
@@ -152,3 +177,5 @@ Next: aitri complete 3   →   aitri approve 3
   [ ] No test cases written for items declared in no_go_zone
   [ ] Type Coverage Matrix is present and FR types have correct required levels
   [ ] Every FR has at least one TC id ending in `h` (happy path) and one ending in `f` (failure)
+  [ ] Negative TCs: expected_result includes specific error code/message — not just "fails" or "returns error"
+  [ ] Mutation check: if the core logic of each TC were deleted, would the test catch it?
