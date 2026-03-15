@@ -102,6 +102,42 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 
 ---
 
+### P1 — Aitri Adopt: revisión profunda para adopción de proyectos reales
+
+> **Prioridad:** P1. El usuario quiere traer proyectos de terceros a Aitri, incluyendo uno de tamaño considerable. El flujo actual de adopt tiene friction suficiente para fallar en la práctica.
+
+**Contexto del problema:** La sesión de 2026-03-14 identificó que `aitri adopt` funciona en proyectos simples/controlados, pero en proyectos de terceros con código preexistente, deuda técnica, y sin specs formales, el flujo tiene múltiples puntos de falla:
+
+1. **`adopt scan` produce un briefing denso** — el agente recibe un árbol de archivos + signals pre-escaneadas y tiene que generar `ADOPTION_PLAN.md`. En proyectos grandes (>200 archivos) el tree puede exceder el contexto del agente o resultar en un plan de baja calidad.
+
+2. **`adopt apply` depende de parsear `ADOPTION_PLAN.md`** — `parsePlan()` tiene 3 estrategias de fallback para detectar `completedPhases`. Si el agente escribe el plan en un formato ligeramente diferente, infiere 0 fases. `--from N` mitiga esto (v0.1.50) pero no todos los usuarios saben usarlo.
+
+3. **No hay validación de que el estado adoptado sea coherente** — después de `adopt apply`, el `.aitri` puede tener `completedPhases: [1, 2, 3]` pero sin los artifacts correspondientes en `spec/`. El pipeline acepta ese estado y puede entrar a Phase 4 sin requirements reales.
+
+4. **`scan` no distingue entre "el proyecto tiene specs" y "el proyecto tiene documentación"** — un `README.md` rico puede hacer que el agente marque Phase 1 como completada cuando en realidad no hay `01_REQUIREMENTS.json` en el formato de Aitri.
+
+5. **El output de `adopt scan` (briefing) es evaluativo, no accionable** — produce `ADOPTION_PLAN.md` que el usuario tiene que leer y convertir en comandos. El ideal sería que `adopt apply` pueda ejecutarse directamente sin un plan intermedio en muchos casos.
+
+**Archivos afectados:**
+- `lib/commands/adopt.js` — `adoptScan`, `adoptApply`, `adoptApplyFrom`, `adoptUpgrade`, `parsePlan`, `inferFromArtifacts`
+- `templates/adopt/scan.md` — briefing template para el agente
+- `lib/personas/adopter.js` — persona del arquitecto adoptador
+- `test/commands/adopt.test.js` — tests actuales de adopt
+
+**Área de trabajo a explorar (sin pre-decidir solución):**
+
+- [ ] **Limitar el file tree en scan** — proyectos grandes necesitan un tree truncado o filtrado por relevancia (solo entry points, routes, models, tests, config). El scan actual incluye todo.
+- [ ] **Validar coherencia post-adopt** — después de `adopt apply` o `adoptApplyFrom`, verificar que cada phase marcada como completada tenga su artifact correspondiente en disco o en `spec/`. Warn si hay desajuste.
+- [ ] **`adopt apply --from` como path primario** — documentar `--from` más prominentemente. Para proyectos con código existente pero sin specs, `--from 1` es casi siempre la respuesta correcta: se retroalimentan las specs desde el código existente.
+- [ ] **Mejora del briefing de scan** — el template `scan.md` puede ser más accionable: incluir en el output la recomendación de `--from N` directamente ejecutable, no solo como texto para el usuario a interpretar.
+- [ ] **Revisar `parsePlan`** — el parser de `ADOPTION_PLAN.md` es frágil. Evaluar si debe mantenerse o si `--from` lo reemplaza completamente como path principal.
+
+**Señal de éxito:** Un proyecto de terceros con 50-200 archivos puede ser adoptado en Aitri en <5 minutos con un estado coherente y listo para continuar el pipeline desde la fase correcta.
+
+**Decisión de arquitectura pendiente:** ¿`adopt scan` → `ADOPTION_PLAN.md` → `adopt apply` sigue siendo el flujo principal, o `adopt apply --from N` se convierte en el flujo principal y `scan` queda como herramienta auxiliar de diagnóstico?
+
+---
+
 ### Auditoría 2026-03-14 — Hallazgos pendientes de implementación
 
 > Fuente: revisión profunda de todo el codebase (v0.1.46). Ordenados por severidad.
@@ -119,6 +155,43 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 - ✅ **`run-phase` no emite evento "started"** — Done v0.1.47. `appendEvent(config, 'started', phase)` antes de `saveConfig` en `run-phase.js`. Solo emite si el briefing llega a completarse sin errores de prerequisito.
 
 - ✅ **`adopt scan` — scanners individuales sin tests unitarios** — Done v0.1.47. `scanCodeQuality`, `scanSecretSignals`, `scanInfrastructure`, `scanTestHealth` exportados como named exports. 13 tests unitarios añadidos en `test/commands/adopt.test.js`.
+
+---
+
+### Estudio futuro — Adoption path (proyectos existentes)
+
+> No es un bug. Es un gap de producto que determina si Aitri puede adoptarse fuera de proyectos nuevos.
+
+**Contexto:** `aitri adopt` es el camino para traer proyectos existentes al pipeline. El flujo actual:
+1. Usuario corre `aitri adopt scan` — detecta código, tests, infra existente
+2. Usuario escribe `ADOPTION_PLAN.md` describiendo qué phases están "completas"
+3. Usuario corre `aitri adopt apply` — materializa el estado en `.aitri`
+4. Pipeline continúa desde donde el proyecto está
+
+**El problema real:** El flujo asume que el usuario puede mapear un proyecto existente al modelo de fases de Aitri con precisión. En la práctica:
+
+- **Inferencia de phases es frágil.** `aitri adopt apply` intenta inferir `completedPhases` de `ADOPTION_PLAN.md` — si el usuario no incluye la sección correcta (JSON array o bullet list), infiere 0 phases y el pipeline empieza desde cero. La warning que añadimos en v0.1.47 mitiga pero no resuelve.
+- **ADOPTION_PLAN.md es difícil de escribir.** El usuario necesita entender el modelo de fases de Aitri suficientemente para saber si su proyecto "completó Phase 1 (requirements)" o no. Muchos proyectos existentes nunca tuvieron requirements formales — ¿eso es Phase 1 no completada, o Phase 1 con debt?
+- **La scan es informativa, no accionable.** `aitri adopt scan` detecta patrones pero el usuario tiene que interpretar los resultados y traducirlos a ADOPTION_PLAN.md manualmente. No hay bridge automático entre scan output y estado de Aitri.
+- **Sin definición de "adopción exitosa".** No hay un criterio claro de cuándo un proyecto está "completamente adoptado" vs "parcialmente adoptado". El usuario puede terminar con un `.aitri` config incompleto y no saberlo.
+- **Friction suficiente para no hacerlo.** El proceso requiere 4+ pasos manuales, lectura de documentación, y conocimiento del modelo de phases. La mayoría de equipos con proyectos existentes no lo van a ejecutar correctamente.
+
+**Opciones a estudiar:**
+
+1. **Auto-adopt desde artifacts existentes** — si `01_REQUIREMENTS.json`, `02_SYSTEM_DESIGN.md`, etc. existen en el directorio, inferir phases completadas automáticamente sin ADOPTION_PLAN.md. Sin ambigüedad, sin escritura manual.
+
+2. **Wizard de adopción guiado** — `aitri adopt --wizard` hace preguntas específicas ("¿tiene requirements documentados? ¿dónde?", "¿tiene tests? ¿qué porcentaje pasa?") y genera el estado de Aitri sin que el usuario entienda el modelo de fases internamente.
+
+3. **"Adopt lite" — adopción parcial declarada** — en vez de mapear al modelo de fases, el usuario declara un "punto de entrada": `aitri adopt --from 4` inicia el pipeline desde Phase 4 (el agente escribe las fases anteriores como documento retroactivo). Útil para proyectos que ya tienen código pero no specs.
+
+4. **Reposicionar Aitri como "start of project" tool** — documentar explícitamente que Aitri está diseñado para proyectos nuevos. Para proyectos existentes, la recomendación es extraer el conocimiento del código en un IDEA.md y correr el pipeline completo. `aitri adopt` quedaría como herramienta avanzada, no como path primario.
+
+**Criterio de decisión:**
+- Si la mayoría de usuarios target son proyectos nuevos: Opción 4 (reposicionar)
+- Si hay demanda real de adopción de proyectos existentes: Opción 1 o 2
+- Opción 3 es una solución de compromiso pragmática con riesgo de artifacts de calidad baja
+
+**Señal a observar:** ¿Cuántos usuarios de Aitri intentan `adopt`? ¿Cuántos lo completan sin soporte? Si la mayoría lo abandona, el problema es de diseño, no de documentación.
 
 ---
 

@@ -5,6 +5,84 @@
 
 ---
 
+## [0.1.53] — 2026-03-14
+
+### Features
+- **feat(verify.js):** `cmdVerifyRun` — 3 friction fixes: (1) raw output capped at 200 lines with truncation notice, prevents massive suites flooding agent context; (2) when 0 TCs detected, prominent section in briefing output (not just stderr) with exact naming convention, examples, and all 3 detection patterns; (3) manifest incomplete warning when `test_runner` or `test_files` missing from `04_IMPLEMENTATION_MANIFEST.json`.
+
+### Tests
+- **Total: 497/497 passing (unchanged — display-layer changes, no exported logic)**
+
+---
+
+## [0.1.52] — 2026-03-14
+
+### Features
+- **feat(status.js):** `aitri status --json` — machine-readable pipeline state. Output fields: `project`, `dir`, `aitriVersion`, `cliVersion`, `versionMismatch`, `phases[]` (key, name, artifact, optional, exists, status, drift), `driftPhases[]`, `nextAction`, `allComplete`, `inHub`, `rejections`. Phase status values: `approved | completed | in_progress | not_started`. Verify pseudo-phase included when Phase 4 is approved. `driftPhases[]` is a convenience array of phase keys where `drift: true` — Hub can read it directly without filtering `phases[]`.
+
+### Tests
+- **test(status):** New `test/commands/status.test.js` — 15 unit tests covering JSON schema, phase status values, drift detection, driftPhases, versionMismatch, verify phase, allComplete, optional phase absence, text output unaffected by --json.
+- **Total: 497/497 passing (was 482)**
+
+---
+
+## [0.1.51] — 2026-03-14
+
+### Features
+- **feat(docs):** `docs/HUB_INTEGRATION.md` — canonical Aitri ↔ Hub integration contract. Covers `.aitri` schema (all fields, types, defaults for backward compat), artifact path resolution via `artifactsDir`, drift detection algorithm (sha256 of current artifact vs `artifactHashes[phase]` — no stored `hasDrift` field), `~/.aitri-hub/projects.json` entry schema. Rule: Hub maintainers must consult this doc before modifying any reader or alert rule.
+- **feat(adopt.js):** `adoptUpgrade` now registers project in Hub after upgrading, if Hub is installed and project not already in registry. Same silent/defensive pattern as `init.js`. Fixes gap: projects initialized before Hub was installed were never registered.
+- **docs(AITRI-HUB):** `spec/02_SYSTEM_DESIGN.md` updated with explicit section directing Hub maintainers to consult `docs/HUB_INTEGRATION.md` before touching readers or alert rules.
+
+### Tests
+- **Total: 482/482 passing (unchanged)**
+
+---
+
+## [0.1.50] — 2026-03-14
+
+### Features
+- **feat(adopt.js):** `aitri adopt apply --from <N>` — new flag. Initializes project at phase N without requiring `ADOPTION_PLAN.md`. Marks phases 1..N-1 as completed, auto-infers from existing artifacts in `spec/`. Writes `IDEA.md` from README → ADOPTION_PLAN.md → placeholder (in that priority). Entry phase guidance: no prior work → `--from 1`; has requirements only → `--from 2`; has requirements + design → `--from 3`; has code but no tests → `--from 4`; has code + tests, needs CI → `--from 5`.
+- **feat(adopt.js):** `inferFromArtifacts(dir, config)` — shared helper used by both `adoptApply` and `adoptApplyFrom`. Scans `spec/` for existing Aitri artifacts and auto-marks corresponding phases as completed.
+- **feat(adopt.js):** `adoptApply` (standard path) now runs `inferFromArtifacts` at the end — upgrade scan for projects whose ADOPTION_PLAN.md may have missed artifacts already present.
+- **feat(adopt.js):** 0-phases-inferred warning now suggests `--from` as an alternative to `--upgrade`.
+- **feat(templates/adopt/scan.md):** Instructions step 5 updated to recommend `--from N` with decision guide table.
+
+### Tests
+- **test(adopt):** 7 new tests for `--from` behavior — valid phases 1–5, invalid phase, missing phase argument, IDEA.md priority (README → ADOPTION_PLAN.md → placeholder).
+- **Total: 482/482 passing (was 459)**
+
+---
+
+## [0.1.49] — 2026-03-14
+
+### Features
+- **feat(templates/phase3.md):** "Fidelity rule" (UX/visual/audio only) replaced with broad "Specificity rule" covering all FR types. Includes Bad→Good examples per type: negative (specific error code), logic (exact return value), persistence (real DB check), security (token/session specifics), qualitative (measurable metric). Two new Human Review checklist items: (1) negative TCs include specific error code/message — not just "fails"; (2) mutation check — if core logic were deleted, would the test catch it?
+- **feat(phase3.js `validate`):** Mutation resistance framing added to `complete 3` validator comments (no behavior change — enforced via briefing).
+
+### Tests
+- **Total: 459/459 passing (unchanged)**
+
+---
+
+## [0.1.48] — 2026-03-14
+
+### Features — Semantic Quality Validation
+- **feat(phase1.js `validate`):** Broad vagueness check for ALL MUST FRs (not just qualitative types). If all `acceptance_criteria` for a MUST FR match the `BROAD_VAGUE` pattern (`good|nice|fast|properly|correctly|efficiently|reliably|securely|safely|...`) and none contain a measurable metric, throws with the FR id and first vague criterion. Forces specific, testable ACs.
+- **feat(phase3.js `validate`):** Placeholder `expected_result` detection. Blocks on: `'it works'`, `'should work'`, `'test passes'`, `'passes'`, `'succeeds'`, `'works correctly'`, `'returns successfully'`, `'is correct'`, `'is valid'`, `'ok'`. Error names all offending TC ids.
+- **feat(phase3.js `validate`):** FR-MUST gap detection (cross-artifact). Reads `01_REQUIREMENTS.json` and throws if any MUST FR has no test case in `03_TEST_CASES.json`. Every MUST requirement must have ≥1 TC.
+- **feat(phase5.js `validate`):** FR-MUST compliance gap detection (cross-artifact). Reads `01_REQUIREMENTS.json` and throws if any MUST FR is absent from `requirement_compliance[]` in `05_PROOF_OF_COMPLIANCE.json`.
+
+### Design principle established
+- Aitri enforces mechanical/structural correctness (schema, coverage, vagueness, placeholders). Human gates enforce content quality (are requirements correct? is the design good?). Heuristics raise the floor; humans set the ceiling.
+
+### Tests
+- **test(phase1):** 4 new tests for broad vague check — all-vague MUST FRs throw, FRs with metrics pass, SHOULD FRs exempt, mixed ACs pass.
+- **test(phase3):** 3 new expected_result tests + 3 new FR-MUST gap tests.
+- **test(phase5):** 4 new cross-artifact tests using real filesystem (os.tmpdir).
+- **Total: 459/459 passing (was 446)**
+
+---
+
 ## [0.1.47] — 2026-03-14
 
 ### Bug Fixes
