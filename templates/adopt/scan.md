@@ -121,29 +121,35 @@ of the work to be done:
 ```
 # [Project Name] — Adoption Stabilization
 
-## What this project does
-[2-3 sentences: what problem it solves, who uses it, what it currently does.
-Write as the original author would have described it.]
+## Problem
+[What needs to be fixed/stabilized and why it matters. Ground this in the scan
+findings — critical gaps, security issues, missing infrastructure. 2-4 sentences.
+Not a list of all problems — a coherent statement of what this stabilization solves.]
 
-## Stabilization goals
-[Bullet list of specific, concrete things needed to make this project stable,
-maintainable, and production-ready. Based on the scan findings.
+## Target Users
+[Who maintains and deploys this project. e.g.: "The development team maintaining
+and deploying [project name]. Primarily developers contributing to the codebase
+and operators running it in production."]
 
-Be specific — name files, patterns, exact gaps:
-  GOOD: "Add unit tests for src/auth.js and src/payment.js — both handle
-         critical auth and billing flows with zero test coverage"
-  BAD:  "Improve test coverage"
+## Business Rules
+[Constraints that bound the stabilization work. Derive from scan findings.
+Examples:
+  - Must not break existing functionality or passing tests
+  - No new product features — stabilization only
+  - Env vars must use [pattern found in project] — no hardcoded values
+  - [Any specific constraint from the project's deployment or security model]]
 
-  GOOD: "Remove hardcoded DB password in config/database.js line 12,
-         add DATABASE_URL to .env.example and load via process.env"
-  BAD:  "Fix security issues"
+## Success Criteria
+[Specific, verifiable outcomes. Based on Priority Actions from ADOPTION_SCAN.md.
+Be specific — name files and patterns:
+  GOOD: "All Priority Actions marked HIGH in ADOPTION_SCAN.md are resolved:
+         .env.example exists with all 5 required vars; go vet runs in CI"
+  BAD:  "Project is stable"
 
-Only include things that are genuinely necessary for the project to be stable.
-Do not invent problems that are not supported by the scan findings.]
+  GOOD: "src/auth.js and src/payment.js have unit tests covering critical paths"
+  BAD:  "Test coverage improved"
 
-## Out of scope
-[What is NOT part of this stabilization — product features, new functionality,
-performance optimizations that are not blocking stability.]
+Only include criteria that are directly verifiable from the scan findings.]
 ```
 
 ---
