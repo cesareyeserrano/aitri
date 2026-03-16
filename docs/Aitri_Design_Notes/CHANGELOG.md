@@ -5,6 +5,60 @@
 
 ---
 
+## [0.1.57] — 2026-03-16
+
+### Features
+- **feat(verify.js):** `parsePytestOutput()` — pytest -v output parser. Detects `TC_XXX` (underscore, Python function naming) and `TC-XXX` (hyphen) in pytest PASSED/FAILED lines, normalizes to canonical `TC-XXX` format. Activated in `cmdVerifyRun` fallback chain after Vitest/Jest parser. Python projects can now use `pytest -v` as `test_runner` and have TCs auto-detected by `verify-run` without rewriting tests in node:test. Convention: name pytest functions `test_TC_001h_description`.
+
+### Tests
+- **test(verify):** 10 new tests for `parsePytestOutput()` — PASSED/FAILED detection, underscore normalization, multi-line output, error context capture from `E ` lines, first-occurrence-wins deduplication, no false positives on non-TC test names.
+- **Total: 504/504 passing (was 494)**
+
+---
+
+## [0.1.56] — 2026-03-16
+
+### Bug Fixes
+- **fix(templates/adopt/scan.md):** IDEA.md output format updated to use Phase 1 expected sections (`## Problem`, `## Target Users`, `## Business Rules`, `## Success Criteria`) instead of scan-specific sections (`## What this project does`, `## Stabilization goals`, `## Out of scope`) that caused 4 warnings on `aitri run-phase 1`.
+- **fix(status.js):** `aitri status` next-step now shows `aitri approve N` when a core phase is completed but not yet approved (was always showing `aitri run-phase N`). Fixed in both human-readable and `--json` output (`nextAction` field).
+
+### Tests
+- **Total: 494/494 passing (unchanged — display/template fixes)**
+
+---
+
+## [0.1.55] — 2026-03-16
+
+### Features — Adopt Redesign: Stabilization-First Pipeline
+- **feat(adopt.js):** `adopt scan` redesigned — produces two files: `ADOPTION_SCAN.md` (technical diagnostic: priority actions, code quality, test health, security, infrastructure) + `IDEA.md` (stabilization brief for Phase 1 using standard sections). Replaces single `ADOPTION_PLAN.md` output. No more fake phase completion injection.
+- **feat(adopt.js):** `adopt apply` simplified — initializes `.aitri` + `spec/`, uses `IDEA.md` from scan as Phase 1 input, prints `aitri run-phase 1` as next step. `parsePlan()` removed entirely. Stabilization runs through the real P1→P5 pipeline, producing the project's first formal Aitri artifacts.
+- **feat(adopt.js):** `buildFileTree` — `MAX_TREE_LINES=150` cap + `ASSET_EXTS` filter (png, jpg, svg, ico, woff, mp3, map, lock, etc.). Prevents briefing explosion on projects with web assets (1884 → 442 line briefing on real Go project).
+- **feat(adopt.js):** `adoptScan` warns when project already has `.aitri` (shows version + approved phase count). `adoptApply` warns when `.aitri` exists and shows `aitri status` as next step for already-initialized projects.
+- **feat(personas/adopter.js):** ROLE, CONSTRAINTS, REASONING rewritten to match two-file output. Removed `ADOPTION_PLAN.md` references and stale Phase 2 artifact-mapping logic.
+
+### Bug Fixes (post real-project test)
+- Fixed: adoptApply showed "IDEA.md found (from scan)" for pre-existing IDEA.md — changed to "IDEA.md found"
+- Fixed: adoptApply said "Next: run-phase 1" on already-initialized projects with approved phases
+
+### Tests
+- **test(adopt):** All old `adopt apply` tests rewritten to match new behavior — no ADOPTION_PLAN.md dependency, no completedPhases injection, node:test placeholder creation, no-overwrite.
+- **test(smoke):** Updated scan + apply assertions for new two-file output.
+- **Total: 494/494 passing (was 482)**
+
+---
+
+## [0.1.54] — 2026-03-14
+
+### Features
+- **feat(validate.js):** `aitri validate --json` — machine-readable validation output. Returns `{project, dir, allValid, artifacts[], deployFiles{}, setupCommands[]}`. `artifacts[]` includes `{name, exists, approved}` per artifact. Enables CI/CD integration and Hub readers to query pipeline completeness programmatically.
+- **docs(README):** Added sections for `aitri wizard`, `aitri status --json`, `aitri validate --json`, `aitri adopt apply --from`, and "Adopting an Existing Project" guide. Machine-readable design principle documented.
+- **docs(BACKLOG):** P1 entry for `aitri adopt` deep review — 5 friction points identified, decision tree for `adopt scan` vs `--from` as primary path.
+
+### Tests
+- **Total: 497/497 passing (unchanged)**
+
+---
+
 ## [0.1.53] — 2026-03-14
 
 ### Features
