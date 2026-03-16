@@ -86,9 +86,9 @@ aitri complete 5 && aitri approve 5
 | `aitri validate --json` | Same, as machine-readable JSON |
 | `aitri resume` | Print session handoff briefing for a new agent or team member |
 | `aitri feature init <name>` | Start a feature sub-pipeline (new work on an existing project) |
-| `aitri adopt scan` | Scan existing project → briefing for agent → `ADOPTION_PLAN.md` |
-| `aitri adopt apply` | Apply adoption plan → initialize Aitri on an existing project |
-| `aitri adopt apply --from <N>` | Initialize at phase N — no ADOPTION_PLAN.md needed (1=greenfield, 4=has code) |
+| `aitri adopt scan` | Scan existing project → briefing for agent → agent writes `ADOPTION_SCAN.md` + `IDEA.md` |
+| `aitri adopt apply` | Initialize Aitri on existing project (run after `adopt scan` + agent writes `IDEA.md`) |
+| `aitri adopt apply --from <N>` | Initialize at phase N — skip scan (1=greenfield, 4=has code, no specs) |
 | `aitri adopt --upgrade` | Update `.aitri` state from existing artifacts (non-destructive) |
 | `aitri checkpoint` | Snapshot current pipeline state to `checkpoints/` |
 
@@ -103,12 +103,12 @@ Full reference: `aitri help`
 ```bash
 cd existing-project
 
-# Option A: guided scan (agent produces ADOPTION_PLAN.md)
+# Option A: guided scan
 aitri adopt scan                    # scans codebase → briefing for your agent
-# agent produces ADOPTION_PLAN.md
-aitri adopt apply                   # initializes Aitri from the plan
+# agent reads briefing → writes ADOPTION_SCAN.md (diagnostic) + IDEA.md (stabilization plan)
+aitri adopt apply                   # initializes Aitri — runs Phase 1→5 on the stabilization plan
 
-# Option B: direct entry (skip ADOPTION_PLAN.md)
+# Option B: direct entry (skip scan)
 aitri adopt apply --from 4          # project has code but no formal specs → enter at Phase 4
 aitri adopt apply --from 1          # start fresh from requirements on an existing codebase
 
