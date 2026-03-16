@@ -100,29 +100,13 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 
 ## Open
 
+*(No open items)*
+
 ---
 
-### P2 — `driftPhases[]` as live array in `status --json` (not derived from phases[])
+### ✅ P2 — `driftPhases[]` stored in `.aitri` — **Done v0.1.58**
 
-> **Prioridad:** P2. Currently `driftPhases[]` in `status --json` is computed dynamically in status.js at read time. The field is correct but requires Hub readers to either re-compute drift themselves or call `aitri status --json` to get it. A stored `driftPhases[]` in `.aitri` would let Hub detect drift without shelling out.
-
-**Problem:** `.aitri` has no stored drift state — drift is always computed fresh by hashing the current artifact vs `artifactHashes[phase]`. `driftPhases[]` in `--json` output is a convenience alias derived at status read time. Hub currently polls `status --json` to get it. If Hub wants to react to drift without calling the CLI (e.g., a file watcher on `.aitri`), it can't.
-
-**Files:**
-- `lib/commands/run-phase.js` — store `driftPhases[]` in `.aitri` after updating `artifactHashes`
-- `lib/commands/complete.js` — clear phase from `driftPhases[]` on complete (hash re-anchored)
-- `lib/commands/approve.js` — clear phase from `driftPhases[]` on approve
-- `lib/state.js` — may need `setDrift(config, phaseKey)` / `clearDrift(config, phaseKey)` helpers
-- `lib/commands/status.js` — read from stored `driftPhases[]` instead of computing at read time
-- `docs/HUB_INTEGRATION.md` — update schema contract
-
-**Behavior:** `.aitri` gains a `driftPhases: []` field. Written by `run-phase` when artifact hash changes after a previous approval. Cleared on `complete` and `approve`. `status --json` reads from stored field instead of re-computing.
-
-**Decisions:** Keep dynamic computation as fallback if field absent (backward compat with old `.aitri` files that lack the field).
-
-**Acceptance:** `aitri status --json` returns same `driftPhases` whether computed or stored. Hub can read `.aitri` directly and see drift without calling CLI. `status.test.js` covers both paths.
-
-**Risk:** Cross-cutting — touches run-phase, complete, approve, state.js, status.js, HUB_INTEGRATION.md. Do not schedule without reviewing all 5 files for interaction effects.
+> `state.js`: `setDriftPhase`/`clearDriftPhase` helpers. `run-phase`: sets on re-run of approved phase. `complete`/`approve`: clears. `status.hasDrift()`: fast-paths on stored field, falls through to dynamic hash check. `HUB_INTEGRATION.md` updated. 505/505 tests.
 
 ---
 

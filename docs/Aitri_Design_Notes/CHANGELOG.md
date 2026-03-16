@@ -5,6 +5,21 @@
 
 ---
 
+## [0.1.58] — 2026-03-16
+
+### Features
+- **feat(state.js):** `setDriftPhase(config, phase)` / `clearDriftPhase(config, phase)` — helpers for managing stored drift state in `.aitri`.
+- **feat(run-phase):** sets `driftPhases[phase]` in `.aitri` when re-running an already-approved phase; clears on fresh first runs.
+- **feat(complete, approve):** clear `driftPhases[phase]` on completion and approval — artifact hash is re-anchored.
+- **feat(status):** `hasDrift()` fast-paths to `true` if phase is in stored `driftPhases[]`, then always falls through to dynamic hash check (catches direct file modifications outside of `run-phase`). Hub can now read `.aitri` directly to detect drift without shelling out to `aitri status --json`.
+- **docs(HUB_INTEGRATION.md):** `driftPhases[]` field added to schema. Updated `hasDrift()` contract with two-path logic.
+
+### Tests
+- **test(status):** 1 new test — stored `driftPhases[]` path (field present in `.aitri`).
+- **Total: 505/505 passing (was 504)**
+
+---
+
 ## [0.1.57] — 2026-03-16
 
 ### Features
