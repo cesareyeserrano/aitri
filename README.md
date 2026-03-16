@@ -7,7 +7,7 @@
   ╚═╝  ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝
 ```
 
-**Spec-Driven SDLC Engine. Agent-agnostic.**
+**Spec-driven SDLC engine for AI-assisted development.**
 
 ![npm](https://img.shields.io/npm/v/aitri) ![node](https://img.shields.io/node/v/aitri) ![license](https://img.shields.io/npm/l/aitri)
 
@@ -15,32 +15,36 @@
 npm install -g aitri
 ```
 
-Aitri turns your idea into a production-ready app through a structured 5-phase pipeline. Each phase is handled by a specialized AI persona. You approve every artifact before the next phase begins — no phase auto-advances.
+---
+
+Aitri structures AI-assisted development into a five-phase pipeline — requirements, architecture, test design, implementation, and deployment. Each phase produces a versioned artifact. You review and approve before the next phase begins.
+
+Works with any agent that reads stdout: Claude Code, Codex, Gemini Code, Opencode, or any shell-based workflow.
 
 ---
 
 ## Pipeline
 
 ```
-YOUR IDEA (IDEA.md)
+IDEA.md
     ↓
-[optional] Phase Discovery — Facilitator     → 00_DISCOVERY.md
+[optional] Discovery — Facilitator           → 00_DISCOVERY.md
     ↓
-Phase 1 — Product Manager                    → 01_REQUIREMENTS.json
-    ↓ (you approve)
-[optional] Phase UX — UX/UI Designer         → 01_UX_SPEC.md
+Phase 1   — Product Manager                  → 01_REQUIREMENTS.json
     ↓
-Phase 2 — Software Architect                 → 02_SYSTEM_DESIGN.md
-    ↓ (you approve)
-Phase 3 — QA Engineer                        → 03_TEST_CASES.json
-    ↓ (you approve)
-Phase 4 — Full-Stack Developer               → src/ + 04_IMPLEMENTATION_MANIFEST.json
-    ↓ (you approve)
-[optional] Phase review — Code Reviewer      → 04_CODE_REVIEW.md
+[optional] UX — UX/UI Designer               → 01_UX_SPEC.md
     ↓
-    ✦ VERIFY                                 → 04_TEST_RESULTS.json (gate: all tests pass)
+Phase 2   — Software Architect               → 02_SYSTEM_DESIGN.md
     ↓
-Phase 5 — DevOps Engineer                    → Dockerfile + 05_PROOF_OF_COMPLIANCE.json
+Phase 3   — QA Engineer                      → 03_TEST_CASES.json
+    ↓
+Phase 4   — Full-Stack Developer             → 04_IMPLEMENTATION_MANIFEST.json
+    ↓
+          ✦ Verify                           → 04_TEST_RESULTS.json
+    ↓
+[optional] Code Review — Reviewer            → 04_CODE_REVIEW.md
+    ↓
+Phase 5   — DevOps Engineer                  → 05_PROOF_OF_COMPLIANCE.json
 ```
 
 ---
@@ -49,18 +53,18 @@ Phase 5 — DevOps Engineer                    → Dockerfile + 05_PROOF_OF_COMP
 
 ```bash
 mkdir my-app && cd my-app
-aitri init                          # creates IDEA.md
-# Edit IDEA.md — describe the problem, users, requirements, success criteria
-# Or: aitri wizard  to fill IDEA.md interactively
+aitri init
 
-aitri run-phase 1                   # agent reads briefing → saves 01_REQUIREMENTS.json
-aitri complete 1                    # validate artifact
-aitri approve 1                     # or: aitri reject 1 --feedback "..."
+# Edit IDEA.md — or run aitri wizard for a guided interview
 
-# Repeat run-phase / complete / approve for phases 2, 3, 4
+aitri run-phase 1
+aitri complete 1
+aitri approve 1
 
-aitri verify-run                    # runs real tests, writes 04_TEST_RESULTS.json
-aitri verify-complete               # gate: all TCs pass + FR coverage confirmed
+# Repeat for phases 2, 3, 4
+
+aitri verify-run
+aitri verify-complete
 
 aitri run-phase 5
 aitri complete 5 && aitri approve 5
@@ -70,31 +74,33 @@ aitri complete 5 && aitri approve 5
 
 ## Commands
 
+### Core loop
+
 | Command | What it does |
 | :--- | :--- |
-| `aitri init` | Initialize project — creates IDEA.md and `.aitri` state |
-| `aitri wizard` | Interactive TTY interview to build IDEA.md (depths: quick / standard / deep) |
-| `aitri run-phase <phase>` | Print phase briefing to stdout — agent reads and acts |
-| `aitri complete <phase>` | Validate artifact schema + record as done |
-| `aitri approve <phase>` | Approve with interactive checklist — unlocks next phase |
-| `aitri reject <phase> --feedback ""` | Reject with feedback — re-run briefing with it applied |
-| `aitri verify-run` | Run real tests, parse TC results, write 04_TEST_RESULTS.json |
-| `aitri verify-complete` | Gate: all TCs pass + all FRs covered → unlocks Phase 5 |
-| `aitri status` | Show pipeline state (ASCII) |
-| `aitri status --json` | Show pipeline state as machine-readable JSON (for scripts, CI, Hub) |
-| `aitri validate` | Validate all artifacts against current schemas |
-| `aitri validate --json` | Same, as machine-readable JSON |
-| `aitri resume` | Print session handoff briefing for a new agent or team member |
-| `aitri feature init <name>` | Start a feature sub-pipeline (new work on an existing project) |
-| `aitri adopt scan` | Scan existing project → briefing for agent → agent writes `ADOPTION_SCAN.md` + `IDEA.md` |
-| `aitri adopt apply` | Initialize Aitri on existing project (run after `adopt scan` + agent writes `IDEA.md`) |
-| `aitri adopt apply --from <N>` | Initialize at phase N — skip scan (1=greenfield, 4=has code, no specs) |
-| `aitri adopt --upgrade` | Update `.aitri` state from existing artifacts (non-destructive) |
-| `aitri checkpoint` | Snapshot current pipeline state to `checkpoints/` |
+| `aitri init` | Initialize project — creates IDEA.md and `.aitri` state file |
+| `aitri wizard` | Interactive interview to build IDEA.md (quick / standard / deep) |
+| `aitri run-phase <phase>` | Print phase briefing to stdout — your agent reads and acts on it |
+| `aitri complete <phase>` | Validate artifact schema and record the phase as done |
+| `aitri approve <phase>` | Approve with a human review checklist — unlocks the next phase |
+| `aitri reject <phase> --feedback "..."` | Send feedback — next briefing incorporates it |
 
-Phases: `1-5`, `discovery`, `ux`, `review`
+### Test gate
 
-Full reference: `aitri help`
+| Command | What it does |
+| :--- | :--- |
+| `aitri verify-run` | Execute the test suite, parse TC results, write `04_TEST_RESULTS.json` |
+| `aitri verify-complete` | Confirm all TCs pass and all FRs are covered — unlocks Phase 5 |
+
+### Status
+
+| Command | What it does |
+| :--- | :--- |
+| `aitri status` | Show pipeline state |
+
+Phases: `1–5`, `discovery`, `ux`, `review`
+
+For the full command reference: `aitri help`
 
 ---
 
@@ -103,48 +109,38 @@ Full reference: `aitri help`
 ```bash
 cd existing-project
 
-# Option A: guided scan
-aitri adopt scan                    # scans codebase → briefing for your agent
-# agent reads briefing → writes ADOPTION_SCAN.md (diagnostic) + IDEA.md (stabilization plan)
-aitri adopt apply                   # initializes Aitri — runs Phase 1→5 on the stabilization plan
+# Guided path — agent produces the adoption plan
+aitri adopt scan
+# agent writes ADOPTION_SCAN.md (diagnostic) and IDEA.md (stabilization plan)
+aitri adopt apply
+# then run the pipeline from Phase 1 as usual
 
-# Option B: direct entry (skip scan)
-aitri adopt apply --from 4          # project has code but no formal specs → enter at Phase 4
-aitri adopt apply --from 1          # start fresh from requirements on an existing codebase
+# Direct entry — skip the scan
+aitri adopt apply --from 4    # has code, no formal specs
+aitri adopt apply --from 1    # start from requirements on an existing codebase
 
-# Option C: upgrade an existing Aitri project
-aitri adopt --upgrade               # sync .aitri state with artifacts already on disk
+# Upgrade an existing Aitri project
+aitri adopt --upgrade
 ```
 
 ---
 
 ## Compatible Agents
 
-| Agent | How to use |
+| Agent | Notes |
 | :--- | :--- |
-| Claude Code | Run `aitri run-phase N` — Claude Code reads stdout and acts |
-| Codex CLI | Same — any agent reading stdout works |
+| Claude Code | Run `aitri run-phase N` in your session — Claude reads stdout |
+| Codex CLI | Same |
 | Gemini Code | Same |
 | Opencode | Same |
-| Any bash agent | Same — Aitri outputs to stdout, agent writes files |
-
----
-
-## Design Principles
-
-| Principle | What it means |
-| :--- | :--- |
-| Stateless | Every command reads/writes `.aitri`. Reproducible in CI/CD. |
-| Zero dependencies | Node.js built-ins only. Works anywhere Node 18+ is installed. |
-| stdout protocol | `run-phase` prints the briefing. Any agent reads it. No integration needed. |
-| Human gates | Every phase requires explicit `aitri approve` with a checklist. No auto-advance. |
-| Machine-readable | `status --json` and `validate --json` for scripts, CI, and monitoring tools. |
+| Any shell agent | Aitri writes to stdout; the agent writes files |
 
 ---
 
 ## Requirements
 
 - Node.js 18+
+- No external dependencies
 
 ## License
 
