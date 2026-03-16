@@ -58,6 +58,7 @@ const configPath = fs.statSync(p).isDirectory()
 | Campo | Tipo | Default si ausente | Descripción |
 |---|---|---|---|
 | `artifactHashes` | `object<string, string>` | `{}` | Mapa `{ "1": "<sha256>", "2": "<sha256>", ... }` — hash sha256 del artifact al momento de aprobación |
+| `driftPhases` | `array<string>` | ausente en .aitri antiguas | Fases en estado drift (set por `run-phase` al re-ejecutar fase aprobada; cleared por `complete`/`approve`). Ver sección drift. |
 | `events` | `array<Event>` | `[]` | Log de actividad del pipeline (máx. 20 eventos, más reciente al final) |
 
 #### Schema de `Event`
@@ -77,12 +78,17 @@ Valores válidos de `event.event`: `"completed"`, `"approved"`, `"rejected"`
 
 ## Cómo detectar drift (cambios post-aprobación)
 
-Drift ocurre cuando un artifact aprobado fue modificado después de la aprobación.
-**Hub debe calcular drift dinámicamente** — no hay campo `hasDrift` en `.aitri`.
+Drift ocurre cuando un artifact aprobado fue modificado después de la aprobación. Desde v0.1.58, `.aitri` incluye un campo `driftPhases[]` que Hub puede leer directamente. Para mayor fiabilidad (captura ediciones directas de archivo), combinar ambos métodos:
 
 ```js
-// Pseudo-código: detectar drift para una fase
+// Pseudo-código: detectar drift para una fase (v0.1.58+)
 function hasDrift(projectDir, config, phaseKey) {
+  // Fast path: run-phase sets driftPhases[] when re-running an approved phase
+  if (Array.isArray(config.driftPhases) &&
+      config.driftPhases.map(String).includes(String(phaseKey))) {
+    return true;
+  }
+  // Dynamic hash check: catches direct file modifications outside run-phase
   const stored = (config.artifactHashes || {})[String(phaseKey)];
   if (!stored) return false;             // fase sin hash = nunca aprobada = no hay drift
   const artifactFile = ARTIFACT_MAP[phaseKey];  // e.g. "01_REQUIREMENTS.json"
@@ -94,6 +100,10 @@ function hasDrift(projectDir, config, phaseKey) {
   } catch { return false; }
 }
 ```
+
+**Nota:** `driftPhases[]` puede estar ausente en proyectos creados antes de v0.1.58. En ese caso, usar solo el hash check (dynamic path).
+
+`driftPhases[]` contiene strings (`["1", "ux"]`). Comparar siempre con `String(phaseKey)`.
 
 Mapa de phases → artifacts (`ARTIFACT_MAP`):
 
@@ -154,6 +164,7 @@ Hub no debe asumir que todos los proyectos en `projects.json` tienen `.aitri` �
 
 | Versión Aitri | Cambio |
 |---|---|
+| v0.1.58 | Campo `driftPhases[]` añadido al schema. Escrito por `run-phase` (drift) y cleared por `complete`/`approve`. Hub puede leer directamente o combinarlo con hash check. |
 | v0.1.51 | Documento inicial. Campos `artifactHashes`, `events`, `artifactsDir` formalizados. Comportamiento de drift documentado. |
 | v0.1.46 | `aitri init` auto-registra proyectos en Hub si Hub está instalado |
 | v0.1.45 | Campo `events` añadido al schema (pipeline activity log) |

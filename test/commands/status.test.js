@@ -48,6 +48,18 @@ describe('cmdStatus --json', () => {
     assert.deepEqual(result.driftPhases, []);
   });
 
+  it('driftPhases uses stored driftPhases[] field when present (v0.1.58+ path)', () => {
+    const dir = tmpDir();
+    cmdInit({ dir, rootDir: ROOT_DIR, err: (m) => { throw new Error(m); }, VERSION: '0.1.58' });
+    const config = loadConfig(dir);
+    config.approvedPhases  = [1];
+    config.completedPhases = [1];
+    config.driftPhases     = ['1'];  // stored — no artifact hash needed
+    saveConfig(dir, config);
+    const result = captureJson(() => cmdStatus({ dir, VERSION: '0.1.58', args: ['--json'] }));
+    assert.ok(result.driftPhases.includes(1), 'phase 1 should be in driftPhases (from stored field)');
+  });
+
   it('driftPhases contains key of drifted phase', () => {
     const dir = tmpDir();
     cmdInit({ dir, rootDir: ROOT_DIR, err: (m) => { throw new Error(m); }, VERSION: '0.1.52' });
