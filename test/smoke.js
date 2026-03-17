@@ -328,18 +328,23 @@ describe('Aitri CLI — Smoke Test', () => {
     }
   });
 
-  it('[v0.1.26] aitri approve 1 warns on stderr when requirements JSON is unparseable', () => {
-    // Set up a fresh isolated dir for this test to avoid polluting the shared tmpDir state
+  it('[v0.1.26] aitri approve 1 blocks when artifact modified after complete (drift gate)', () => {
+    // Modifying artifact after complete is now caught as drift — approve blocks in non-TTY
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-ux-warn-'));
     try {
-      // Init + write valid requirements + complete phase 1
       execSync('aitri init', { cwd: dir, encoding: 'utf8' });
       fs.writeFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), VALID_REQUIREMENTS);
       execSync('aitri complete 1', { cwd: dir, encoding: 'utf8' });
-      // Now corrupt the JSON — approve must warn, not silently skip
+      // Modify artifact after complete — drift gate must block approve in non-TTY
       fs.writeFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), '{not valid json}');
-      const out = execSync('aitri approve 1 2>&1', { cwd: dir, encoding: 'utf8' });
-      assert.match(out, /Warning.*UX|UX.*Warning/i, 'approve must warn about unreadable requirements JSON');
+      let threw = false;
+      try {
+        execSync('aitri approve 1 2>&1', { cwd: dir, encoding: 'utf8' });
+      } catch (e) {
+        threw = true;
+        assert.match(e.stdout || '', /artifact changed after approval|human review required/i);
+      }
+      assert.ok(threw, 'approve must exit non-zero when artifact modified after complete');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
