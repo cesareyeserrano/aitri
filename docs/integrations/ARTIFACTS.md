@@ -166,6 +166,98 @@ Check `approvedPhases[]` and `completedPhases[]` in `.aitri` to determine which 
 
 ---
 
+## 06_EXTERNAL_SIGNALS.json
+
+**Written by:** external tools (ESLint, npm audit, GitLeaks, Snyk, custom scripts — anything). **Not** written by Aitri Core.
+**Read by:** Hub (surfaces signals as alerts). Other subproducts may ignore this file.
+**Optional:** if absent or malformed, no signals are generated — no crash.
+
+This file is the integration point for tools that Hub cannot run directly (static analysis, dependency auditing, security scanning, etc.). Each tool writes its findings here; Hub reads them as-is.
+
+```json
+{
+  "generatedAt": "2026-03-18T14:00:00Z",
+  "signals": [
+    {
+      "tool":     "eslint",
+      "type":     "code-quality",
+      "severity": "warning",
+      "message":  "15 lint errors found in src/",
+      "command":  "npm run lint"
+    },
+    {
+      "tool":     "npm-audit",
+      "type":     "dependency",
+      "severity": "blocking",
+      "message":  "2 critical vulnerabilities in dependencies",
+      "command":  "npm audit fix"
+    },
+    {
+      "tool":     "gitleaks",
+      "type":     "security",
+      "severity": "blocking",
+      "message":  "Possible secret detected in src/config.js:42",
+      "command":  "gitleaks detect"
+    }
+  ]
+}
+```
+
+### Field reference
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `generatedAt` | ISO8601 string | No | When the tool ran — for freshness display |
+| `signals` | array | Yes | Empty array = no signals |
+| `signals[].tool` | string | Yes | Tool name shown in Hub alert (e.g. `"eslint"`) |
+| `signals[].type` | string | Yes | Category label (e.g. `"code-quality"`, `"security"`, `"dependency"`) |
+| `signals[].severity` | string | Yes | `"blocking"` \| `"warning"` \| `"info"` — invalid values coerced to `"warning"` |
+| `signals[].message` | string | Yes | Human-readable description — shown as alert message |
+| `signals[].command` | string | No | Command to resolve the issue — shown as inline code badge in Hub |
+
+### How Hub renders signals
+
+Each signal becomes one alert in Hub's health report:
+- `severity: "blocking"` → appears in BLOCKING section, blocks triage
+- `severity: "warning"` → appears in WARNING section
+- `severity: "info"` → appears in INFO section
+- Message is prefixed with `[tool]` — e.g. `[eslint] 15 lint errors found in src/`
+- `command` shown as a copyable badge if present
+
+### Integration examples
+
+**npm audit (package.json script):**
+```json
+"scripts": {
+  "hub:signals": "node scripts/generate-signals.js"
+}
+```
+
+**Minimal shell script:**
+```bash
+#!/bin/bash
+RESULT=$(npm audit --json 2>/dev/null)
+CRITICAL=$(echo "$RESULT" | jq '.metadata.vulnerabilities.critical // 0')
+cat > spec/06_EXTERNAL_SIGNALS.json << EOF
+{
+  "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "signals": [
+    {
+      "tool": "npm-audit",
+      "type": "dependency",
+      "severity": $([ "$CRITICAL" -gt 0 ] && echo '"blocking"' || echo '"warning"'),
+      "message": "$CRITICAL critical vulnerabilities",
+      "command": "npm audit fix"
+    }
+  ]
+}
+EOF
+```
+
+Run this script in CI or as a pre-commit hook. Hub picks it up on the next poll cycle.
+
+---
+
 ## Node hierarchy for graph consumers
 
 Aitri artifacts form a natural hierarchy for visualization:
