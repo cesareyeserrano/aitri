@@ -30,8 +30,9 @@ import { cmdFeature }        from '../lib/commands/feature.js';
 import { cmdAdopt }          from '../lib/commands/adopt.js';
 import { cmdWizard }         from '../lib/commands/wizard.js';
 import { cmdHelp }           from '../lib/commands/help.js';
+import { cmdBacklog }        from '../lib/commands/backlog.js';
 
-const VERSION   = '0.1.64';
+const VERSION   = '0.1.65';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir   = path.dirname(__dirname);
 const cwd       = process.cwd();
@@ -101,6 +102,7 @@ switch (cmd) {
   case 'adopt':            cmdAdopt(ctx);           break;
   case 'wizard':           cmdWizard(ctx);          break;
   case 'validate':         cmdValidate(ctx);        break;
+  case 'backlog':          cmdBacklog(ctx);         break;
   case '--version':        console.log(`Aitri v${VERSION}`); break;
   default:                 cmdHelp(ctx);            break;
 }
