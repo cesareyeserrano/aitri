@@ -1,0 +1,184 @@
+# Aitri — `.aitri` Schema Contract
+
+**Aitri version:** v0.1.64+
+**Maintenance rule:** Update this file in the same commit as any `.aitri` schema change.
+
+---
+
+## File location
+
+`.aitri` can be either a flat JSON file or a directory (`.aitri/config.json`). Subproducts must handle both:
+
+```js
+const p = path.join(projectDir, '.aitri');
+const configPath = fs.statSync(p).isDirectory()
+  ? path.join(p, 'config.json')
+  : p;
+```
+
+---
+
+## Guaranteed fields (all Aitri projects)
+
+Present after any `aitri init` or `aitri adopt --upgrade`.
+
+| Field | Type | Default when absent | Description |
+|---|---|---|---|
+| `currentPhase` | `number` | `0` | Active phase (0 = not started) |
+| `approvedPhases` | `array<number\|string>` | `[]` | Human-approved phases. May include `"discovery"`, `"ux"` |
+| `completedPhases` | `array<number\|string>` | `[]` | Agent-completed phases (pending human approval) |
+| `updatedAt` | `string` ISO 8601 | `null` | Timestamp of last `saveConfig` call |
+
+---
+
+## Fields added by `aitri init`
+
+| Field | Type | Default when absent | Description |
+|---|---|---|---|
+| `projectName` | `string` | `path.basename(dir)` | Project name |
+| `createdAt` | `string` ISO 8601 | `null` | Timestamp of `aitri init` |
+| `aitriVersion` | `string` | `null` | CLI version used to initialize or upgrade |
+| `artifactsDir` | `string` | `""` | Subdirectory for artifacts. `"spec"` for new projects; `""` for adopted or pre-v0.1.20 |
+
+---
+
+## Optional fields (present based on pipeline activity)
+
+| Field | Type | Default when absent | Description |
+|---|---|---|---|
+| `artifactHashes` | `object<string, string>` | `{}` | `{ "1": "<sha256>", ... }` — SHA-256 of each artifact file. Written on `approve` and `complete` (v0.1.63+) |
+| `driftPhases` | `array<string>` | absent in old projects | Phases in drift state. Set by `run-phase` when re-running an approved phase; cleared by `complete`/`approve` |
+| `events` | `array<Event>` | `[]` | Pipeline activity log (max 20, most recent last) |
+| `verifyPassed` | `boolean` | `false` | `true` if `aitri verify-complete` passed. Required to unlock Phase 5 |
+| `verifySummary` | `object` | `null` | Last test run summary: `{ passed, failed, skipped, total }` |
+| `rejections` | `object<string, Rejection>` | `{}` | Map of phase key → last rejection. Key is phase as string (`"1"`, `"2"`, etc.) |
+
+---
+
+## Event schema
+
+```json
+{
+  "at": "2025-11-01T14:23:00.000Z",
+  "event": "approved",
+  "phase": 1,
+  "afterDrift": true
+}
+```
+
+Valid `event` values: `"started"`, `"completed"`, `"approved"`, `"rejected"`
+
+Optional fields by type:
+- `"rejected"` → includes `"feedback": "text"`
+- `"approved"` → includes `"afterDrift": true` when approved after detected drift (v0.1.60+)
+
+---
+
+## Rejection schema
+
+```json
+{
+  "at": "2025-11-01T14:23:00.000Z",
+  "feedback": "Rejection feedback text"
+}
+```
+
+`rejections` contains only the most recent rejection per phase.
+
+---
+
+## Artifact map (phase key → filename)
+
+```json
+{
+  "discovery": "00_DISCOVERY.md",
+  "ux":        "01_UX_SPEC.md",
+  "1":         "01_REQUIREMENTS.json",
+  "2":         "02_SYSTEM_DESIGN.md",
+  "3":         "03_TEST_CASES.json",
+  "4":         "04_IMPLEMENTATION_MANIFEST.json",
+  "4r":        "04_CODE_REVIEW.md",
+  "5":         "05_PROOF_OF_COMPLIANCE.json"
+}
+```
+
+Full path: `path.join(projectDir, artifactsDir, artifactFilename)`
+When `artifactsDir` is `""` (empty string), artifact is at `projectDir` root.
+
+---
+
+## Drift detection
+
+Drift = an approved artifact was modified after approval.
+
+```js
+function hasDrift(projectDir, config, phaseKey) {
+  // Fast path: driftPhases[] written by run-phase (v0.1.58+)
+  if (Array.isArray(config.driftPhases) &&
+      config.driftPhases.map(String).includes(String(phaseKey))) {
+    return true;
+  }
+  // Dynamic hash check: catches direct file edits outside run-phase
+  const stored = (config.artifactHashes || {})[String(phaseKey)];
+  if (!stored) return false; // No hash = approved before v0.1.51 = not drift
+  const artifactFile = ARTIFACT_MAP[phaseKey];
+  const base = config.artifactsDir || '';
+  const full = base
+    ? path.join(projectDir, base, artifactFile)
+    : path.join(projectDir, artifactFile);
+  try {
+    const content = fs.readFileSync(full, 'utf8');
+    return sha256(content) !== stored;
+  } catch { return false; }
+}
+```
+
+**v0.1.63+ note:** `complete` also updates `artifactHashes`. Hash check returns `false` (no drift) after a successful `complete` — artifact is in accepted state. Real drift only exists if the artifact was modified after the last `complete` or `approve`.
+
+`driftPhases[]` contains strings (`["1", "ux"]`). Always compare with `String(phaseKey)`.
+
+---
+
+## Feature sub-pipelines
+
+`aitri feature init <name>` creates sub-pipelines at `<project>/features/<name>/`.
+Each feature has its own `.aitri` with the same schema as the parent project.
+`artifactsDir` is always `"spec"` for features.
+
+```js
+const featuresDir = path.join(projectDir, 'features');
+if (fs.existsSync(featuresDir)) {
+  for (const entry of fs.readdirSync(featuresDir)) {
+    const featureDir = path.join(featuresDir, entry);
+    const featureState = readStateFile(featureDir); // same reader as parent
+  }
+}
+```
+
+---
+
+## Version detection
+
+Compare the version the project was initialized with against the installed CLI:
+
+```js
+import { execFileSync } from 'node:child_process';
+function getInstalledAitriVersion() {
+  try {
+    return execFileSync('aitri', ['--version'], { encoding: 'utf8' })
+      .match(/v?(\d+\.\d+\.\d+)/)?.[1] ?? null;
+  } catch { return null; }
+}
+const projectVersion   = aitriState.aitriVersion;
+const installedVersion = getInstalledAitriVersion();
+const versionMismatch  = projectVersion && installedVersion && projectVersion !== installedVersion;
+// If mismatch: emit VERSION_MISMATCH alert — project should run `aitri adopt --upgrade`
+```
+
+---
+
+## Backward compatibility
+
+Always be defensive — an old project may be missing any field. Use the defaults from the tables above. `loadConfig` in Aitri applies `{ ...DEFAULTS, ...raw }` internally.
+
+Projects that run `aitri adopt --upgrade` will have missing fields written to disk automatically.
