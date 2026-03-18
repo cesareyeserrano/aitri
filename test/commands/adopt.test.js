@@ -227,7 +227,7 @@ describe('aitri adopt apply --from', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('creates IDEA.md from README when no ADOPTION_PLAN.md', () => {
+  it('creates IDEA.md from README content', () => {
     const dir = tmpDir();
     try {
       fs.writeFileSync(path.join(dir, 'README.md'), 'An invoicing tool for freelancers.', 'utf8');
