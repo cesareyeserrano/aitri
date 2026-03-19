@@ -471,3 +471,89 @@ describe('aitri adopt --upgrade', () => {
     );
   });
 });
+
+// ── verify-spec ───────────────────────────────────────────────────────────────
+
+describe('cmdAdopt verify-spec', () => {
+  function setupWithReqs(dir, frs, tcs) {
+    cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.65' });
+    const config = loadConfig(dir);
+    const specDir = path.join(dir, 'spec');
+    fs.mkdirSync(specDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(specDir, '01_REQUIREMENTS.json'),
+      JSON.stringify({ functional_requirements: frs }, null, 2)
+    );
+    if (tcs) {
+      fs.writeFileSync(
+        path.join(specDir, '03_TEST_CASES.json'),
+        JSON.stringify({ test_cases: tcs }, null, 2)
+      );
+    }
+  }
+
+  it('prints briefing when MUST FRs have no TCs', () => {
+    const dir = tmpDir();
+    setupWithReqs(dir, [
+      { id: 'FR-001', priority: 'MUST', title: 'Login', acceptance_criteria: ['User can log in'] },
+    ]);
+    let out = '';
+    const orig = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (s) => { out += s; return true; };
+    try {
+      cmdAdopt({ dir, args: ['verify-spec'], VERSION: '0.1.65', rootDir: ROOT_DIR, err: (m) => { throw new Error(m); } });
+    } finally { process.stdout.write = orig; }
+    assert.ok(out.includes('FR-001'));
+    assert.ok(out.includes('User can log in'));
+  });
+
+  it('prints "no stubs needed" when all MUST FRs are covered', () => {
+    const dir = tmpDir();
+    setupWithReqs(dir,
+      [{ id: 'FR-001', priority: 'MUST', title: 'Login', acceptance_criteria: ['User can log in'] }],
+      [{ id: 'TC-001', requirement_id: 'FR-001', title: 'Login works', status: 'open' }]
+    );
+    const log = captureLog(() =>
+      cmdAdopt({ dir, args: ['verify-spec'], VERSION: '0.1.65', rootDir: ROOT_DIR, err: (m) => { throw new Error(m); } })
+    );
+    assert.ok(log.includes('no stubs needed'));
+  });
+
+  it('errors when 01_REQUIREMENTS.json is missing', () => {
+    const dir = tmpDir();
+    cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.65' });
+    assert.throws(
+      () => cmdAdopt({ dir, args: ['verify-spec'], VERSION: '0.1.65', rootDir: ROOT_DIR, err: (m) => { throw new Error(m); } }),
+      /01_REQUIREMENTS.json not found/
+    );
+  });
+
+  it('verify-spec --complete errors when no stubs in 03_TEST_CASES.json', () => {
+    const dir = tmpDir();
+    setupWithReqs(dir,
+      [{ id: 'FR-001', priority: 'MUST', title: 'Login', acceptance_criteria: ['User can log in'] }],
+      [{ id: 'TC-001', requirement_id: 'FR-001', title: 'Login', status: 'open', stub: false }]
+    );
+    assert.throws(
+      () => cmdAdopt({ dir, args: ['verify-spec', '--complete'], VERSION: '0.1.65', rootDir: ROOT_DIR, err: (m) => { throw new Error(m); } }),
+      /No stub TCs found/
+    );
+  });
+
+  it('verify-spec --complete registers stubs and updates hash', () => {
+    const dir = tmpDir();
+    setupWithReqs(dir,
+      [{ id: 'FR-001', priority: 'MUST', title: 'Login', acceptance_criteria: ['User can log in'] }],
+      [
+        { id: 'TC-001', requirement_id: 'FR-001', title: 'Login', status: 'open' },
+        { id: 'TC-002', requirement_id: 'FR-001', title: 'Login stub', status: 'open', stub: true },
+      ]
+    );
+    const log = captureLog(() =>
+      cmdAdopt({ dir, args: ['verify-spec', '--complete'], VERSION: '0.1.65', rootDir: ROOT_DIR, err: (m) => { throw new Error(m); } })
+    );
+    assert.ok(log.includes('1 stub TC'));
+    const config = loadConfig(dir);
+    assert.ok(config.artifactHashes?.['3'], 'hash for phase 3 should be set');
+  });
+});
