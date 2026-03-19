@@ -212,6 +212,213 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 
 ---
 
+### Core — Bug Tracking
+
+- [ ] P1 — **`aitri bug` — formal bug lifecycle with FR traceability** — Post-deploy bugs go into the flat backlog with no traceability to the FR they break, no TC enforcement, and no impact on `validate` or `verify-complete`. Teams have no canonical way to track regressions without contaminating the pipeline artifact chain.
+
+  Problem: When something breaks post-deploy, the only option today is `aitri backlog add` (untracked) or manually editing spec artifacts (triggers drift). There is no mechanism to require a test case before closing a bug, or to block deployment if open bugs affect must-have FRs.
+
+  **Schema — `spec/BUGS.json`:**
+  ```json
+  {
+    "bugs": [
+      {
+        "id": "BG-001",
+        "title": "VPN peers summary resets on transient read error",
+        "description": "...",
+        "severity": "critical|high|medium|low",
+        "status": "open|in_progress|fixed|verified|closed",
+        "fr": "FR-014",
+        "phase_detected": 4,
+        "tc_reference": null,
+        "created_at": "2026-03-18T10:00:00Z",
+        "updated_at": "2026-03-18T10:00:00Z",
+        "resolution": null
+      }
+    ]
+  }
+  ```
+  Lifecycle: `open → in_progress → fixed → verified → closed` (+ `reopened` path from verified back to open).
+
+  **Commands:**
+  - `aitri bug add [--title "..."] [--fr FR-014] [--severity medium] [--phase 4]` — interactive if flags omitted; auto-assigns BG-NNN; writes to `spec/BUGS.json`; creates file if absent
+  - `aitri bug list [--severity critical|high|medium|low] [--fr FR-XXX] [--status open]` — filters open by default
+  - `aitri bug fix BG-001` — sets status `in_progress`; prints bug title + FR context from `01_REQUIREMENTS.json`
+  - `aitri bug verify BG-001 --tc TC-021` — requires `--tc` flag; sets status `fixed`; records TC reference in `tc_reference`
+  - `aitri bug close BG-001` — sets status `closed`; records timestamp
+
+  **Pipeline integration:**
+  - `aitri validate` — warns if any bug has status `fixed` and `tc_reference` is null ("bug fixed with no covering test")
+  - `aitri verify-complete` — blocks if any bug has status `open` or `fixed` AND `fr` maps to a MUST FR in `01_REQUIREMENTS.json`
+  - `aitri status` — shows open bug count next to phase status (e.g., `⚠ 2 open bugs`)
+
+  Files:
+  - `lib/commands/bug.js` — new command; handles all subcommands; owns BUGS.json read/write (not state.js)
+  - `lib/commands/validate.js` — add bug check after core phase checks
+  - `lib/commands/verify.js` — `cmdVerifyComplete`: load BUGS.json if exists; block on open/fixed MUST FR bugs
+  - `lib/commands/status.js` — load BUGS.json if exists; append open count to output
+  - `bin/aitri.js` — add `bug` dispatch case
+  - `test/commands/bug.test.js` — new test file: add/list/fix/verify/close lifecycle; validate integration; verify-complete block
+
+  Decisions:
+  - `spec/BUGS.json` not `.aitri` — bugs are project artifacts, not pipeline state. Hub/Graph can read them from the integration contract path.
+  - `bug.js` owns its own JSON I/O — does not go through `state.js` (state.js manages `.aitri` config only)
+  - `--tc` is required for `bug verify` — no exception. Closing a bug without a TC is not allowed by the command. User must explicitly mark TC or use `bug close` directly (with a warning printed).
+  - Severity is informational only — the pipeline gates on status + FR type, not severity
+  - No persona for bug management — reuses the existing validation model; no new person needed
+
+  Acceptance:
+  - `aitri bug add --title "X" --fr FR-001 --severity high` creates `spec/BUGS.json` with BG-001 in status `open`
+  - `aitri bug verify BG-001` without `--tc` exits with error
+  - `aitri verify-complete` with an `open` bug linked to a MUST FR exits with error message listing the bug
+  - `aitri validate` with a `fixed` bug and no `tc_reference` prints warning (not error — does not block)
+  - `aitri status` shows `⚠ 1 open bug` when BUGS.json has open items
+  - `npm run test:all` passes with no regressions
+
+---
+
+### Core — Cross-Document Consistency
+
+- [ ] P1 — **`aitri review` — cross-artifact semantic consistency check** — Aitri validates each artifact's structure individually but not whether artifacts are consistent with each other. An FR missing from test cases is only discovered at `verify-complete`, potentially wasting multiple verify-run cycles. There is no way to proactively check the pipeline's semantic integrity before a gate blocks.
+
+  Problem: FR-008 might be marked MUST in `01_REQUIREMENTS.json` but have zero TCs in `03_TEST_CASES.json`. Today this surfaces only at `verify-complete` with a cryptic block. `aitri review` surfaces it at any time and automatically before `complete 3`.
+
+  **Command:**
+  - `aitri review` — full cross-artifact analysis on all available artifacts
+  - `aitri review --phase 3` — only checks relevant to Phase 3 gate (Requirements → Test Cases)
+  - `aitri review --fr FR-008` — all checks scoped to a specific FR
+
+  **Checks (errors block; warnings print but don't block):**
+
+  Requirements → Test Cases (runs when both `01_REQUIREMENTS.json` and `03_TEST_CASES.json` exist):
+  - Every MUST FR has ≥1 TC with `status != "skip"` → **error** if missing
+  - Every SHOULD FR has ≥1 TC → **warning** if missing
+  - TC has `fr_id` referencing an FR that doesn't exist in requirements → **error**
+  - TC has `fr_id` null or missing → **warning**
+
+  Test Cases → Test Results (runs when `04_TEST_RESULTS.json` exists):
+  - TC in `03_TEST_CASES.json` has no entry in `04_TEST_RESULTS.json` → **warning**
+  - Entry in `04_TEST_RESULTS.json` references TC ID not in `03_TEST_CASES.json` → **error**
+
+  **Pipeline integration:**
+  - `aitri complete 3` auto-runs `review --phase 3` before recording completion. Error-level findings block `complete`. Warnings print with prompt: "Warnings found — acknowledge to continue? (y/N)".
+  - `aitri complete 5` auto-runs TC→Results check before recording completion.
+
+  Files:
+  - `lib/commands/review.js` — new command; all check logic here
+  - `lib/commands/complete.js` — call review checks in phase 3 and 5 gates (import `runReview` from review.js)
+  - `bin/aitri.js` — add `review` dispatch case
+  - `test/commands/review.test.js` — new test file: each check scenario (missing TC for MUST, orphan TC ref, orphan result ref, FR filter)
+
+  Decisions:
+  - Text-free checks only — no parsing of `02_SYSTEM_DESIGN.md` prose (too many false positives). Only JSON-to-JSON cross-references.
+  - Warnings do not block `complete` automatically — they require explicit acknowledgement (y/N prompt) to preserve human-in-the-loop for ambiguous cases
+  - `--fr` filter is a convenience for debugging a specific FR; not required for MVP
+
+  Acceptance:
+  - `aitri review` on pipeline with a MUST FR missing from test cases: exits with error, lists the FR ID
+  - `aitri complete 3` on same pipeline: blocked with same error
+  - `aitri review` on clean pipeline: prints "✅ All cross-artifact checks passed"
+  - `aitri review --phase 3` does not run TC→Results check (only when phase 3 checks are relevant)
+  - `npm run test:all` passes with no regressions
+
+---
+
+### Core — Brownfield Validation
+
+- [ ] P2 — **`aitri adopt verify-spec` — validated spec-to-code alignment for brownfield projects** — `aitri adopt apply` produces spec artifacts by declaration. There is no mechanism to verify that the generated requirements actually reflect the code's behavior. FRs can be aspirational rather than descriptive, and the gap is invisible until `verify-complete` blocks.
+
+  Problem: On a brownfield adoption, `01_REQUIREMENTS.json` may contain AC items that the existing code does not actually satisfy. The only way to discover this today is to run Phase 4 and watch tests fail — after spending time on Phase 2, 3, and partial Phase 4.
+
+  **Model:** Same as every other phase — Aitri generates a structured briefing; the agent writes the stubs in the project's actual test framework. Aitri does not generate code.
+
+  **Flow:**
+  ```
+  aitri adopt scan
+  aitri adopt apply
+  aitri run-phase 1   (or adopt apply pre-populates phase 1)
+  aitri complete 1
+  aitri adopt verify-spec   ← new step, optional but recommended for brownfield
+  aitri verify-run          ← existing command now evaluates stubs too
+  aitri verify-complete     ← blocks on unverified stubs unless explicitly acknowledged
+  ```
+
+  **What `adopt verify-spec` does:**
+  1. Reads `01_REQUIREMENTS.json` — collects all AC items across MUST FRs
+  2. Reads `03_TEST_CASES.json` if it exists — excludes AC items already covered
+  3. Generates a briefing (stdout, same model as `run-phase`) instructing the agent to:
+     - Inspect the project's test framework (detect from package.json, go.mod, pyproject.toml)
+     - For each uncovered AC item, write the **minimal stub** that fails clearly
+     - Do NOT write full implementation tests — stubs only
+     - Check existing tests first — if a test already covers the AC, mark it as `verified` instead of creating a stub
+  4. After agent runs: agent calls `aitri adopt verify-spec --complete` which appends TC stubs to `03_TEST_CASES.json`:
+     ```json
+     {
+       "id": "TC-021",
+       "fr_id": "FR-001",
+       "description": "Dashboard shows CPU temperature in Celsius with color indicator",
+       "status": "unverified",
+       "stub": true,
+       "test_hint": "Check SSE payload includes temp field; check color class assignment"
+     }
+     ```
+
+  **`verify-complete` behavior with stubs:**
+  - Stubs with status `unverified` after verify-run: `verify-complete` lists them and requires acknowledgement ("These stubs did not pass. Mark as known gap to continue? (y/N)")
+  - Marked as known gap: recorded in `04_TEST_RESULTS.json` with `"known_gap": true` and justification field required
+  - `05_PROOF_OF_COMPLIANCE.json` includes known gaps in its coverage report
+
+  Files:
+  - `lib/commands/adopt.js` — add `verify-spec` and `verify-spec --complete` subcommands
+  - `lib/phases/` — new `phaseAdoptVerify.js` for the briefing generation logic
+  - `lib/commands/verify.js` — `cmdVerifyComplete`: handle `"stub": true` TCs; prompt for known-gap acknowledgement
+  - `templates/phases/phaseAdoptVerify.md` — briefing template for the agent
+  - `test/commands/adopt.test.js` — add verify-spec tests
+
+  Decisions:
+  - `verify-spec` is optional — not a required gate for non-brownfield projects
+  - The briefing is language-agnostic; the agent detects the framework from the project files (same way Phase 4 works)
+  - `"stub": true` TCs are excluded from the Phase 3 complete validation count (they are addenda, not part of the QA-authored test cases)
+  - `verify-spec --complete` is agent-facing (same pattern as `run-phase` / `complete N`); human does not call it directly
+
+  Acceptance:
+  - `aitri adopt verify-spec` on a project with `01_REQUIREMENTS.json` and partial `03_TEST_CASES.json`: prints briefing listing uncovered AC items
+  - Agent-called `--complete` adds stub TCs to `03_TEST_CASES.json` with correct schema
+  - `aitri verify-complete` with unverified stubs: prompts for acknowledgement, does not silently pass
+  - `npm run test:all` passes with no regressions
+
+---
+
+### Core — Phase 4 TDD Guidance
+
+- [ ] P3 — **TDD recommendation section in Phase 4 briefing** — Phase 4 (Implementation) tells the agent what to build but not how to approach testing. The agent decides TDD vs Test-After independently with no traceability. A regression caused by a Test-After choice on a high-AC stateful feature has no record of the decision.
+
+  Problem: On the Ultron-AP project, the CSRF and auth tests were written Test-After and had one regression on an edge case that would likely have been caught in TDD spec-writing. The decision to go Test-After was silent and untracked.
+
+  **What to add to Phase 4 briefing:**
+  A structured `## Testing Approach Recommendation` section generated from `01_REQUIREMENTS.json`:
+  - TDD recommended if: FR has AC count > 4 AND at least one AC contains keywords indicating state, validation rules, or error conditions (`valid`, `invalid`, `must reject`, `must return`, `error`, `fail`, `unauthorized`, `token`, `session`, `rate limit`)
+  - Test-After recommended if: FR type is `ux` or `visual`, or AC is primarily about rendering/display without state
+
+  The section lists FR-by-FR recommendation with a one-line reason. It is a recommendation, not a gate — the agent can override it.
+
+  Files:
+  - `lib/phases/phase4.js` — add `buildTDDRecommendation(requirements)` function; inject into briefing context
+  - `templates/phases/phase4.md` — add `{{#IF_TDD_RECOMMENDATION}}` block at end of briefing
+
+  Decisions:
+  - Keyword-based heuristic is intentionally simple — no NLP. False positives (TDD recommended when Test-After is fine) are acceptable; the agent overrides. False negatives are the risk to minimize.
+  - Section is printed only if `01_REQUIREMENTS.json` is parseable and has ≥1 MUST FR
+  - No new artifact produced — the recommendation is part of the briefing output only
+
+  Acceptance:
+  - `aitri run-phase 4` on a project with a stateful auth FR (>4 ACs, contains "unauthorized"): briefing includes TDD recommendation for that FR
+  - `aitri run-phase 4` on a UI-only project: briefing shows Test-After recommendation
+  - `aitri run-phase 4` without `01_REQUIREMENTS.json`: briefing renders without the section (no crash)
+  - `npm run test:all` passes with no regressions
+
+---
+
 ## Design Studies
 
 > Not implementation items. Open questions that inform future architectural decisions.
