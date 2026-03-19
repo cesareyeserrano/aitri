@@ -1,6 +1,6 @@
 # Aitri — Integration Model
 
-**Version:** v0.1.64+
+**Version:** v0.1.66+
 **Owner:** This document is the authoritative description of how the Aitri ecosystem is structured.
 
 ---
@@ -43,6 +43,7 @@ Subproducts (Hub, Graph, CI, IDE, ...)
 | Optional: Discovery | `<project>/spec/00_DISCOVERY.md` | Project diagnosis (adopt flow) |
 | Optional: UX | `<project>/spec/01_UX_SPEC.md` | UX specification |
 | Optional: Code Review | `<project>/spec/04_CODE_REVIEW.md` | Phase 4 review output |
+| Optional: Bugs | `<project>/spec/BUGS.json` | Bug registry — open, fixed, verified, closed |
 | Feature pipelines | `<project>/features/<name>/` | Sub-pipelines with same structure |
 
 ---
