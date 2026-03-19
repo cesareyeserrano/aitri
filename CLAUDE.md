@@ -68,6 +68,7 @@ Estos invariantes no se negocian. Si una propuesta los viola, Claude debe decirl
 - **NO invocar `aitri` en este repo** — el proyecto se desarrolla aquí, no se gestiona con Aitri
 - **NO introducir dependencias npm**
 - Mantener VERSION en sync: `package.json` y `bin/aitri.js` VERSION const siempre iguales
+- **Toda feature nueva o cambio de comportamiento observable sube versión** — bug fixes de regresión interna pueden ir sin bump, pero nuevos commands, nuevos campos de artifacts, o cambios en lifecycle siempre requieren bump antes de release
 - Todo cambio estructural requiere cobertura en `npm run test:all` antes de release
 - **Documentación de integración obligatoria:** cualquier cambio en artifact schemas, nuevo artefacto, o cambio en el schema de `.aitri` → actualizar en el mismo commit:
   - `docs/integrations/ARTIFACTS.md` — si cambia el schema de algún artifact o se agrega uno nuevo
