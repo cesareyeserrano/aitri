@@ -5,6 +5,31 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.66
+
+**New artifact: `BUGS.json`**
+- New optional artifact in `<artifactsDir>/BUGS.json` (same dir as `spec/`).
+- Written by `aitri bug add` (manual) or prompted by `aitri verify-run` on test failure.
+- Schema: `id, title, description, steps_to_reproduce[], expected_result, actual_result, environment, severity, status, fr, tc_reference, phase_detected, detected_by, evidence, reported_by, created_at, updated_at, resolution`
+- Lifecycle: `open → fixed → verified → closed`
+- Blocking rule: `status=open` + `severity=critical|high` → blocks `verify-complete`
+- Playwright integration: `evidence` auto-populated from `test-results/` on test failure
+- Subproducts can read `BUGS.json` directly — not registered in `.aitri` state
+
+**New commands (no `.aitri` schema change):**
+- `aitri review` — cross-artifact semantic consistency check (req→TC, TC→results)
+- `aitri bug` — full bug lifecycle with `add`, `fix`, `verify`, `close`, `list`
+- `adopt verify-spec` — brownfield TC stub generator for existing codebases
+
+**`verify-run` behavior change:**
+- On test failure with TTY: prompts `Register as bugs? [y/N]` — auto-populates from runner output
+- Playwright failures: `detected_by: "playwright"`, `evidence` from `test-results/` if available
+- `autoVerifyBugs`: transitions `fixed → verified` when linked TC passes
+
+**`.aitri` schema:** no new fields in v0.1.66.
+
+---
+
 ## v0.1.64
 
 **Breaking for subproducts relying on Aitri auto-registration:**

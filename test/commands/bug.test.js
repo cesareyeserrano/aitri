@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { openBugCount, autoVerifyBugs, getBlockingBugs, fixedBugsWithoutTC, cmdBug } from '../../lib/commands/bug.js';
+import { openBugCount, autoVerifyBugs, getBlockingBugs, getOpenBugs, cmdBug } from '../../lib/commands/bug.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -11,7 +11,7 @@ function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-bug-'));
 }
 
-function baseConfig(dir) {
+function baseConfig() {
   return { artifactsDir: 'spec', approvedPhases: [], completedPhases: [] };
 }
 
@@ -19,15 +19,6 @@ function writeBugs(dir, bugs) {
   const specDir = path.join(dir, 'spec');
   fs.mkdirSync(specDir, { recursive: true });
   fs.writeFileSync(path.join(specDir, 'BUGS.json'), JSON.stringify({ bugs }, null, 2));
-}
-
-function writeReqs(dir, frs) {
-  const specDir = path.join(dir, 'spec');
-  fs.mkdirSync(specDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(specDir, '01_REQUIREMENTS.json'),
-    JSON.stringify({ functional_requirements: frs }, null, 2)
-  );
 }
 
 function readBugs(dir) {
@@ -41,24 +32,50 @@ function err(msg) { throw new Error(msg); }
 describe('openBugCount()', () => {
   it('returns null when BUGS.json does not exist', () => {
     const dir = tmpDir();
-    assert.equal(openBugCount(dir, baseConfig(dir)), null);
+    assert.equal(openBugCount(dir, baseConfig()), null);
   });
 
-  it('returns 0 when all bugs are closed', () => {
+  it('returns 0 when all bugs are closed or verified', () => {
     const dir = tmpDir();
-    writeBugs(dir, [{ id: 'BG-001', status: 'closed' }]);
-    assert.equal(openBugCount(dir, baseConfig(dir)), 0);
+    writeBugs(dir, [
+      { id: 'BG-001', status: 'closed' },
+      { id: 'BG-002', status: 'verified' },
+    ]);
+    assert.equal(openBugCount(dir, baseConfig()), 0);
   });
 
-  it('counts open and in_progress bugs', () => {
+  it('counts open and fixed bugs (active bugs not yet resolved)', () => {
     const dir = tmpDir();
     writeBugs(dir, [
       { id: 'BG-001', status: 'open' },
-      { id: 'BG-002', status: 'in_progress' },
-      { id: 'BG-003', status: 'fixed' },
+      { id: 'BG-002', status: 'fixed' },
+      { id: 'BG-003', status: 'verified' },
       { id: 'BG-004', status: 'closed' },
     ]);
-    assert.equal(openBugCount(dir, baseConfig(dir)), 2);
+    assert.equal(openBugCount(dir, baseConfig()), 2);
+  });
+});
+
+// ── getOpenBugs ───────────────────────────────────────────────────────────────
+
+describe('getOpenBugs()', () => {
+  it('returns empty array when BUGS.json does not exist', () => {
+    const dir = tmpDir();
+    assert.deepEqual(getOpenBugs(dir, baseConfig()), []);
+  });
+
+  it('returns only open bugs sorted by severity', () => {
+    const dir = tmpDir();
+    writeBugs(dir, [
+      { id: 'BG-001', status: 'open',   severity: 'low' },
+      { id: 'BG-002', status: 'open',   severity: 'critical' },
+      { id: 'BG-003', status: 'fixed',  severity: 'high' },
+      { id: 'BG-004', status: 'closed', severity: 'medium' },
+    ]);
+    const result = getOpenBugs(dir, baseConfig());
+    assert.equal(result.length, 2);
+    assert.equal(result[0].id, 'BG-002'); // critical first
+    assert.equal(result[1].id, 'BG-001'); // low last
   });
 });
 
@@ -68,7 +85,7 @@ describe('autoVerifyBugs()', () => {
   it('transitions fixed → verified when linked TC passes', () => {
     const dir = tmpDir();
     writeBugs(dir, [{ id: 'BG-001', status: 'fixed', tc_reference: 'TC-021' }]);
-    autoVerifyBugs(dir, baseConfig(dir), [{ tc_id: 'TC-021', status: 'pass' }]);
+    autoVerifyBugs(dir, baseConfig(), [{ tc_id: 'TC-021', status: 'pass' }]);
     const data = readBugs(dir);
     assert.equal(data.bugs[0].status, 'verified');
   });
@@ -76,7 +93,7 @@ describe('autoVerifyBugs()', () => {
   it('does not transition when linked TC fails', () => {
     const dir = tmpDir();
     writeBugs(dir, [{ id: 'BG-001', status: 'fixed', tc_reference: 'TC-021' }]);
-    autoVerifyBugs(dir, baseConfig(dir), [{ tc_id: 'TC-021', status: 'fail' }]);
+    autoVerifyBugs(dir, baseConfig(), [{ tc_id: 'TC-021', status: 'fail' }]);
     const data = readBugs(dir);
     assert.equal(data.bugs[0].status, 'fixed');
   });
@@ -84,7 +101,7 @@ describe('autoVerifyBugs()', () => {
   it('does not transition when TC is not in results', () => {
     const dir = tmpDir();
     writeBugs(dir, [{ id: 'BG-001', status: 'fixed', tc_reference: 'TC-021' }]);
-    autoVerifyBugs(dir, baseConfig(dir), [{ tc_id: 'TC-001', status: 'pass' }]);
+    autoVerifyBugs(dir, baseConfig(), [{ tc_id: 'TC-001', status: 'pass' }]);
     const data = readBugs(dir);
     assert.equal(data.bugs[0].status, 'fixed');
   });
@@ -92,77 +109,67 @@ describe('autoVerifyBugs()', () => {
   it('does not affect bugs with no tc_reference', () => {
     const dir = tmpDir();
     writeBugs(dir, [{ id: 'BG-001', status: 'fixed', tc_reference: null }]);
-    autoVerifyBugs(dir, baseConfig(dir), [{ tc_id: 'TC-021', status: 'pass' }]);
+    autoVerifyBugs(dir, baseConfig(), [{ tc_id: 'TC-021', status: 'pass' }]);
     const data = readBugs(dir);
     assert.equal(data.bugs[0].status, 'fixed');
   });
 
   it('is a no-op when BUGS.json does not exist', () => {
     const dir = tmpDir();
-    assert.doesNotThrow(() => autoVerifyBugs(dir, baseConfig(dir), [{ tc_id: 'TC-001', status: 'pass' }]));
+    assert.doesNotThrow(() => autoVerifyBugs(dir, baseConfig(), [{ tc_id: 'TC-001', status: 'pass' }]));
   });
 });
 
-// ── getBlockingBugs ───────────────────────────────────────────────────────────
+// ── getBlockingBugs — severity-based ─────────────────────────────────────────
 
 describe('getBlockingBugs()', () => {
   it('returns empty array when BUGS.json does not exist', () => {
     const dir = tmpDir();
-    assert.deepEqual(getBlockingBugs(dir, baseConfig(dir)), []);
+    assert.deepEqual(getBlockingBugs(dir, baseConfig()), []);
   });
 
-  it('returns open bugs linked to MUST FRs', () => {
+  it('blocks on open critical bugs', () => {
     const dir = tmpDir();
-    writeReqs(dir, [{ id: 'FR-001', priority: 'MUST', title: 'Login' }]);
-    writeBugs(dir, [{ id: 'BG-001', status: 'open', fr: 'FR-001' }]);
-    const blocking = getBlockingBugs(dir, baseConfig(dir));
+    writeBugs(dir, [{ id: 'BG-001', status: 'open', severity: 'critical' }]);
+    const blocking = getBlockingBugs(dir, baseConfig());
     assert.equal(blocking.length, 1);
     assert.equal(blocking[0].id, 'BG-001');
   });
 
-  it('does not block on open bugs linked to SHOULD FRs', () => {
+  it('blocks on open high bugs', () => {
     const dir = tmpDir();
-    writeReqs(dir, [{ id: 'FR-002', priority: 'SHOULD', title: 'Dark mode' }]);
-    writeBugs(dir, [{ id: 'BG-001', status: 'open', fr: 'FR-002' }]);
-    assert.deepEqual(getBlockingBugs(dir, baseConfig(dir)), []);
+    writeBugs(dir, [{ id: 'BG-001', status: 'open', severity: 'high' }]);
+    const blocking = getBlockingBugs(dir, baseConfig());
+    assert.equal(blocking.length, 1);
   });
 
-  it('does not block on fixed or verified bugs', () => {
+  it('does not block on open medium bugs', () => {
     const dir = tmpDir();
-    writeReqs(dir, [{ id: 'FR-001', priority: 'MUST', title: 'Login' }]);
-    writeBugs(dir, [
-      { id: 'BG-001', status: 'fixed',    fr: 'FR-001' },
-      { id: 'BG-002', status: 'verified', fr: 'FR-001' },
-    ]);
-    assert.deepEqual(getBlockingBugs(dir, baseConfig(dir)), []);
+    writeBugs(dir, [{ id: 'BG-001', status: 'open', severity: 'medium' }]);
+    assert.deepEqual(getBlockingBugs(dir, baseConfig()), []);
   });
 
-  it('does not block on open bugs with no FR link', () => {
+  it('does not block on open low bugs', () => {
     const dir = tmpDir();
-    writeReqs(dir, [{ id: 'FR-001', priority: 'MUST', title: 'Login' }]);
-    writeBugs(dir, [{ id: 'BG-001', status: 'open', fr: null }]);
-    assert.deepEqual(getBlockingBugs(dir, baseConfig(dir)), []);
-  });
-});
-
-// ── fixedBugsWithoutTC ────────────────────────────────────────────────────────
-
-describe('fixedBugsWithoutTC()', () => {
-  it('returns empty array when BUGS.json does not exist', () => {
-    const dir = tmpDir();
-    assert.deepEqual(fixedBugsWithoutTC(dir, baseConfig(dir)), []);
+    writeBugs(dir, [{ id: 'BG-001', status: 'open', severity: 'low' }]);
+    assert.deepEqual(getBlockingBugs(dir, baseConfig()), []);
   });
 
-  it('returns fixed bugs with null tc_reference', () => {
+  it('does not block on fixed or verified critical bugs', () => {
     const dir = tmpDir();
     writeBugs(dir, [
-      { id: 'BG-001', status: 'fixed', tc_reference: null },
-      { id: 'BG-002', status: 'fixed', tc_reference: 'TC-001' },
-      { id: 'BG-003', status: 'open',  tc_reference: null },
+      { id: 'BG-001', status: 'fixed',    severity: 'critical' },
+      { id: 'BG-002', status: 'verified', severity: 'high' },
     ]);
-    const result = fixedBugsWithoutTC(dir, baseConfig(dir));
-    assert.equal(result.length, 1);
-    assert.equal(result[0].id, 'BG-001');
+    assert.deepEqual(getBlockingBugs(dir, baseConfig()), []);
+  });
+
+  it('does not block regardless of FR link (severity is the gate)', () => {
+    const dir = tmpDir();
+    writeBugs(dir, [
+      { id: 'BG-001', status: 'open', severity: 'medium', fr: 'FR-001' },
+    ]);
+    assert.deepEqual(getBlockingBugs(dir, baseConfig()), []);
   });
 });
 
@@ -180,6 +187,52 @@ describe('cmdBug add', () => {
     assert.equal(data.bugs[0].status, 'open');
     assert.equal(data.bugs[0].fr, 'FR-001');
     assert.equal(data.bugs[0].severity, 'high');
+  });
+
+  it('captures steps_to_reproduce from --steps flags', () => {
+    const dir = tmpDir();
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({ artifactsDir: 'spec' }));
+    cmdBug({ dir, args: ['add', '--title', 'Test bug', '--steps', 'Open /login', '--steps', 'Click submit'], err });
+    const bug = readBugs(dir).bugs[0];
+    assert.deepEqual(bug.steps_to_reproduce, ['Open /login', 'Click submit']);
+  });
+
+  it('captures expected_result and actual_result', () => {
+    const dir = tmpDir();
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({ artifactsDir: 'spec' }));
+    cmdBug({ dir, args: ['add', '--title', 'T', '--expected', 'Should redirect', '--actual', 'HTTP 500'], err });
+    const bug = readBugs(dir).bugs[0];
+    assert.equal(bug.expected_result, 'Should redirect');
+    assert.equal(bug.actual_result, 'HTTP 500');
+  });
+
+  it('captures environment and evidence', () => {
+    const dir = tmpDir();
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({ artifactsDir: 'spec' }));
+    cmdBug({ dir, args: ['add', '--title', 'T', '--environment', 'local/Phase 4', '--evidence', 'test-results/TC-001/screenshot.png'], err });
+    const bug = readBugs(dir).bugs[0];
+    assert.equal(bug.environment, 'local/Phase 4');
+    assert.equal(bug.evidence, 'test-results/TC-001/screenshot.png');
+  });
+
+  it('captures reported_by from --reported-by', () => {
+    const dir = tmpDir();
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({ artifactsDir: 'spec' }));
+    cmdBug({ dir, args: ['add', '--title', 'T', '--reported-by', 'César'], err });
+    const bug = readBugs(dir).bugs[0];
+    assert.equal(bug.reported_by, 'César');
+  });
+
+  it('detected_by defaults to manual', () => {
+    const dir = tmpDir();
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({ artifactsDir: 'spec' }));
+    cmdBug({ dir, args: ['add', '--title', 'T'], err });
+    assert.equal(readBugs(dir).bugs[0].detected_by, 'manual');
   });
 
   it('auto-increments ID', () => {
@@ -200,7 +253,7 @@ describe('cmdBug add', () => {
   });
 });
 
-// ── cmdBug — fix / verify / close lifecycle ───────────────────────────────────
+// ── cmdBug — lifecycle ────────────────────────────────────────────────────────
 
 describe('cmdBug lifecycle', () => {
   function setup() {
@@ -211,23 +264,25 @@ describe('cmdBug lifecycle', () => {
     return dir;
   }
 
-  it('fix transitions to in_progress', () => {
+  it('fix transitions open → fixed', () => {
     const dir = setup();
     cmdBug({ dir, args: ['fix', 'BG-001'], err });
-    assert.equal(readBugs(dir).bugs[0].status, 'in_progress');
+    assert.equal(readBugs(dir).bugs[0].status, 'fixed');
   });
 
-  it('verify requires --tc flag', () => {
+  it('fix with --tc records tc_reference', () => {
     const dir = setup();
-    assert.throws(() => cmdBug({ dir, args: ['verify', 'BG-001'], err }), /--tc is required/);
-  });
-
-  it('verify sets fixed and records tc_reference', () => {
-    const dir = setup();
-    cmdBug({ dir, args: ['verify', 'BG-001', '--tc', 'TC-021'], err });
+    cmdBug({ dir, args: ['fix', 'BG-001', '--tc', 'TC-021'], err });
     const bug = readBugs(dir).bugs[0];
     assert.equal(bug.status, 'fixed');
     assert.equal(bug.tc_reference, 'TC-021');
+  });
+
+  it('verify transitions fixed → verified without requiring --tc', () => {
+    const dir = setup();
+    cmdBug({ dir, args: ['fix', 'BG-001'], err });
+    cmdBug({ dir, args: ['verify', 'BG-001'], err });
+    assert.equal(readBugs(dir).bugs[0].status, 'verified');
   });
 
   it('close sets status to closed', () => {
