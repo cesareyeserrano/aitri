@@ -274,3 +274,65 @@ describe('Phase 4 — buildBriefing() debug mode', () => {
     assert.ok(!b.includes('Coding Standards'), 'Coding Standards header must not appear when bestPractices is empty');
   });
 });
+
+describe('phase4.buildTDDRecommendation()', () => {
+  it('recommends TDD for stateful MUST FR with >4 ACs', () => {
+    const reqs = JSON.stringify({
+      functional_requirements: [{
+        id: 'FR-001', priority: 'MUST', type: 'api', title: 'Auth',
+        acceptance_criteria: [
+          'Rejects invalid token', 'Returns 401 on error', 'Session expires after 30m',
+          'Rate limit after 5 fails', 'CSRF token validated', 'Unauthorized on missing header',
+        ],
+      }],
+    });
+    const rec = PHASE_DEFS[4].buildTDDRecommendation(reqs);
+    assert.ok(rec.includes('FR-001'));
+    assert.ok(rec.includes('TDD recommended'));
+  });
+
+  it('recommends Test-After for UX type FR', () => {
+    const reqs = JSON.stringify({
+      functional_requirements: [{
+        id: 'FR-002', priority: 'MUST', type: 'ux', title: 'Dark mode',
+        acceptance_criteria: ['Colors match design', 'Toggle visible', 'State persists', 'Smooth transition', 'Accessible contrast'],
+      }],
+    });
+    const rec = PHASE_DEFS[4].buildTDDRecommendation(reqs);
+    assert.ok(rec.includes('FR-002'));
+    assert.ok(rec.includes('Test-After'));
+  });
+
+  it('recommends Test-After for FR with <=4 ACs', () => {
+    const reqs = JSON.stringify({
+      functional_requirements: [{
+        id: 'FR-003', priority: 'MUST', type: 'api', title: 'Health check',
+        acceptance_criteria: ['Returns 200', 'Responds in <100ms'],
+      }],
+    });
+    const rec = PHASE_DEFS[4].buildTDDRecommendation(reqs);
+    assert.ok(rec.includes('Test-After'));
+  });
+
+  it('returns empty string when no MUST FRs', () => {
+    const reqs = JSON.stringify({
+      functional_requirements: [
+        { id: 'FR-001', priority: 'SHOULD', type: 'api', title: 'X', acceptance_criteria: [] },
+      ],
+    });
+    assert.equal(PHASE_DEFS[4].buildTDDRecommendation(reqs), '');
+  });
+
+  it('returns empty string on malformed JSON', () => {
+    assert.equal(PHASE_DEFS[4].buildTDDRecommendation('not json'), '');
+  });
+
+  it('does not include TDD section in briefing when 01_REQUIREMENTS.json is empty object', () => {
+    const b = PHASE_DEFS[4].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { '01_REQUIREMENTS.json': '{}', '02_SYSTEM_DESIGN.md': '', '03_TEST_CASES.json': '{}' },
+      feedback: null, failingTests: undefined, bestPractices: '',
+    });
+    assert.ok(!b.includes('TDD recommended'), 'TDD section must not appear when requirements are empty');
+  });
+});

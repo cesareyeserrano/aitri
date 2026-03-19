@@ -156,6 +156,10 @@ Environment variables required: [N] — [list names]
 Next: aitri verify-run   →   aitri verify-complete   →   aitri approve 4
 ```
 
+{{#IF_TDD_RECOMMENDATION}}
+{{TDD_RECOMMENDATION}}
+{{/IF_TDD_RECOMMENDATION}}
+
 ## Human Review — Before approving phase 4
   [ ] All files listed in files_created exist on disk
   [ ] technical_debt is complete — every simplification named, no generic entries like "none" or "n/a"
