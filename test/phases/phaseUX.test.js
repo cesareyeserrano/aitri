@@ -145,4 +145,24 @@ describe('Phase UX — buildBriefing()', () => {
     assert.ok(b.includes('/tmp/test/spec/01_UX_SPEC.md'), 'artifact path must use artifactsBase/spec');
     assert.ok(!b.includes('/tmp/test/01_UX_SPEC.md'), 'artifact path must NOT use bare dir');
   });
+
+  it('injects bestPractices content when provided', () => {
+    const b = PHASE_DEFS['ux'].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { 'IDEA.md': 'A simple app idea.', '01_REQUIREMENTS.json': validRequirements },
+      feedback: null,
+      bestPractices: 'Mobile-first: design for 375px first.',
+    });
+    assert.ok(b.includes('Mobile-first'), 'best practices content must appear in briefing');
+  });
+
+  it('omits best practices block when bestPractices is empty', () => {
+    const b = PHASE_DEFS['ux'].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { 'IDEA.md': 'A simple app idea.', '01_REQUIREMENTS.json': validRequirements },
+      feedback: null,
+      bestPractices: '',
+    });
+    assert.ok(!b.includes('UX/UI Standards'), 'UX/UI Standards header must not appear when bestPractices is empty');
+  });
 });

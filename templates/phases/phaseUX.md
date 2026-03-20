@@ -38,6 +38,10 @@ Required sections (in order):
 - Mobile (375px) behavior must be explicit for every screen
 - When Design Tokens section is required: the developer must implement exactly these tokens — no improvisation on aesthetics
 
+{{#IF_BEST_PRACTICES}}
+{{BEST_PRACTICES}}
+{{/IF_BEST_PRACTICES}}
+
 ## Instructions
 1. Generate complete 01_UX_SPEC.md
 2. Save to: {{ARTIFACTS_BASE}}/01_UX_SPEC.md
