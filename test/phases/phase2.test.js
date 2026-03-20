@@ -30,7 +30,10 @@ const validP2 = () => [
   'Risk 1: DB connection exhaustion — mitigation: pool size 20',
   'Risk 2: Token leakage — mitigation: short expiry + refresh',
   'Risk 3: Load spike — mitigation: horizontal scaling',
-  ...Array(20).fill('Additional design content line.'),
+  '',
+  '## Technical Risk Flags',
+  'None detected — Node.js event loop and PostgreSQL connection pooling are compatible with all NFRs.',
+  ...Array(10).fill('Additional design content line.'),
 ].join('\n');
 
 describe('Phase 2 — validate()', () => {
@@ -78,8 +81,32 @@ describe('Phase 2 — validate()', () => {
       '## Performance & Scalability', 'N/A.',
       '## Deployment Architecture', 'N/A.',
       '## Risk Analysis', 'None.',
+      '## Technical Risk Flags', 'None detected — stack is compatible.',
     ].join('\n');
     assert.throws(() => PHASE_DEFS[2].validate(short), /too short.*min 40 lines/);
+  });
+
+  it('throws when Technical Risk Flags section is missing', () => {
+    const content = validP2().replace('## Technical Risk Flags', '## Tech Risks');
+    assert.throws(() => PHASE_DEFS[2].validate(content), /missing required sections[\s\S]*## Technical Risk Flags/);
+  });
+
+  it('throws when Technical Risk Flags section is empty', () => {
+    // Strip everything from the section header to end-of-string, leaving only the header
+    const content = validP2().replace(/\n## Technical Risk Flags[\s\S]*$/, '\n## Technical Risk Flags');
+    assert.throws(() => PHASE_DEFS[2].validate(content), /Technical Risk Flags is empty/);
+  });
+
+  it('passes when Technical Risk Flags contains [RISK] flags', () => {
+    const content = validP2().replace(
+      'None detected — Node.js event loop and PostgreSQL connection pooling are compatible with all NFRs.',
+      '[RISK] High concurrency on single thread\n  Conflict: NFR-001 requires 10k concurrent users, Node.js is single-threaded\n  Mitigation: cluster mode + load balancer\n  Severity: medium'
+    );
+    assert.doesNotThrow(() => PHASE_DEFS[2].validate(content));
+  });
+
+  it('passes when Technical Risk Flags contains explicit None detected justification', () => {
+    assert.doesNotThrow(() => PHASE_DEFS[2].validate(validP2()));
   });
 });
 
@@ -128,6 +155,14 @@ describe('Phase 2 — buildBriefing() (BL-002)', () => {
       bestPractices: 'Separation of concerns: each module has one responsibility',
     });
     assert.ok(b.includes('Separation of concerns'), 'best practices content must appear in briefing');
+  });
+
+  it('briefing contains Technical Risk Flag Analysis instructions', () => {
+    assert.ok(briefing.includes('Technical Risk Flag'), 'briefing must include Technical Risk Flag Analysis section');
+  });
+
+  it('briefing lists concrete incompatibility patterns to check', () => {
+    assert.ok(briefing.includes('real-time') || briefing.includes('concurrency'), 'briefing must mention concurrency/real-time as a pattern to check');
   });
 
   it('[v0.1.28] omits best practices block when bestPractices is empty', () => {

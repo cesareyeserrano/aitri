@@ -380,7 +380,10 @@ describe('Aitri CLI — Smoke Test', () => {
       'Risk 1: DB exhaustion — pool limit',
       'Risk 2: Token leak — short TTL',
       'Risk 3: Spike — horizontal scale',
-      ...Array(15).fill('Extra design content line.'),
+      '',
+      '## 9. Technical Risk Flags',
+      'None detected — Node.js and PostgreSQL are compatible with all stated NFRs.',
+      ...Array(10).fill('Extra design content line.'),
     ].join('\n');
     fs.writeFileSync(path.join(tmpDir, 'spec', '02_SYSTEM_DESIGN.md'), design);
     // complete 2 requires phase 1 approved (already done) and the artifact to exist
@@ -433,7 +436,10 @@ describe('Aitri CLI — run-phase smoke', () => {
     'Risk 1: DB exhaustion — pool cap',
     'Risk 2: Token leak — short TTL',
     'Risk 3: Load spike — horiz. scale',
-    ...Array(15).fill('Extra content.'),
+    '',
+    '## Technical Risk Flags',
+    'None detected — Node.js and PostgreSQL are compatible with all stated NFRs.',
+    ...Array(10).fill('Extra content.'),
   ].join('\n');
 
   before(() => {
