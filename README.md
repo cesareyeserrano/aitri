@@ -294,6 +294,32 @@ Rules enforced by `AGENTS.md`:
 
 ---
 
+## Customizing Best Practices
+
+Aitri automatically injects engineering standards into each phase briefing. The defaults cover architecture, testing, implementation, and UX/UI — language-agnostic and stack-agnostic.
+
+| Phase | Default standards injected |
+| :--- | :--- |
+| Phase 2 — Architecture | Separation of concerns, security by design, ADR discipline, API contracts, data consistency |
+| Phase 3 — Test Design | Concrete values, test isolation, boundary cases, security TCs, performance TCs |
+| Phase 4 — Implementation | Injection prevention, structured logging, DB discipline, dependency hygiene |
+| UX — UX Specification | Mobile-first, WCAG 2.1 AA, component states, progressive disclosure, design tokens |
+
+**Project-level overrides:** place a `best-practices/` folder at your project root with one or more of these files:
+
+```
+my-project/
+  best-practices/
+    architecture.md   # overrides Phase 2 standards
+    testing.md        # overrides Phase 3 standards
+    development.md    # overrides Phase 4 standards
+    ux.md             # overrides UX phase standards
+```
+
+When a project-level file exists, it replaces the global default for that phase. Use this to enforce team conventions, language-specific standards (Go, Python, Rust), or domain-specific rules (HIPAA, GDPR, financial compliance).
+
+---
+
 ## Requirements
 
 - Node.js 18 or later
