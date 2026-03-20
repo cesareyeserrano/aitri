@@ -28,7 +28,7 @@ Required sections — use these EXACT names as `##` level-2 headers (aitri compl
 1. `## Executive Summary` — tech choices with justification
 2. `## System Architecture` — ASCII/Mermaid diagram + components
 3. `## Data Model` — schema with field constraints; for frontend-only apps: localStorage structure
-4. `## API Design` — for backend apps: all endpoints (method, path, auth, request/response, errors); for frontend-only apps: internal JS module API (exported function signatures)
+4. `## API Design` — for backend apps: all endpoints (method, path, auth, request/response, errors); for frontend-only apps: internal module/package API (exported function and class signatures in the language's idiomatic style)
 5. `## Security Design` — auth, input validation, security headers, XSS/injection mitigations
 6. `## Performance & Scalability` — caching, query optimization, size bounds
 7. `## Deployment Architecture` — environments, containers, CI/CD

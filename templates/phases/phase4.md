@@ -65,11 +65,14 @@ aitri verify-run parses TC-XXX patterns directly from runner output:
   - node:test / mocha / TAP: ✔/✖ TC-XXX — auto-detected
   - Vitest:                  run with --reporter verbose — ✓/× TC-XXX detected automatically
   - Jest:                    run with --verbose flag     — ✓/✕ TC-XXX detected automatically
+  - pytest:                  run with -v flag            — PASSED/FAILED TC-XXX detected automatically
+  - Go / Rust / other:       ensure TC-XXX appears in test output line (test name or log)
+Marker comment: use your language's line comment style (// @aitri-tc TC-XXX for JS/Go/Java, # @aitri-tc TC-XXX for Python/Ruby/Shell)
 Tests not matching TC-XXX: naming are auto-classified as skip — verify-complete rejects 0 passing tests.
 {{/IF_TC_LOCK}}
 
 ## Code Standards (mandatory)
-- JSDoc on every function: @param, @returns, @throws
+- Standard doc format for your language on every function (JSDoc, Python docstrings, godoc, Rustdoc, Javadoc, etc.) — at minimum: parameters, return value, thrown exceptions
 - File header: Module, Purpose, Dependencies
 - Zero hardcoded values — all config via env vars
 - Error handling: input validation + async try-catch + HTTP errors
@@ -86,8 +89,8 @@ If `01_REQUIREMENTS.json` contains an NFR for CI/CD (category: "CI/CD" or keywor
 
 ## Technical Definition of Done
 You MUST verify ALL of the following before calling aitri complete 4:
-  [ ] Linter/type checks pass (npm run lint or equivalent — zero errors)
-  [ ] Tests pass (npm test or equivalent — no failures, no skipped tests)
+  [ ] Linter/type checks pass (zero errors — use the linter declared in System Design)
+  [ ] Tests pass — no failures, no skipped tests (use test_runner from manifest)
   [ ] technical_debt in manifest is complete — every simplification is declared
   [ ] All files listed in files_created exist on disk
   [ ] No TODO/FIXME/PLACEHOLDER comments remain in production code
@@ -114,13 +117,18 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
 ## Output
 - Source code: {{DIR}}/src/
 - Tests: {{DIR}}/tests/
-- {{DIR}}/package.json (or equivalent) + {{DIR}}/.env.example
+- {{DIR}}/<package descriptor matching your stack> (package.json, pyproject.toml, go.mod, Cargo.toml, pom.xml, etc.) + {{DIR}}/.env.example
 - Manifest: {{ARTIFACTS_BASE}}/04_IMPLEMENTATION_MANIFEST.json
   { files_created:[], setup_commands:[], environment_variables:[{name, default}],
     technical_debt:[{fr_id, substitution, reason, effort_to_fix:"low|medium|high"}],
-    test_runner: "npm test",
-    test_files: ["tests/unit.test.js"] }
-  test_runner: the exact command to run all tests (e.g. "npm test", "node --test tests/", "vitest run --reporter verbose", "jest --verbose")
+    test_runner: "<exact command matching your stack>",
+    test_files: ["<test files containing @aitri-tc markers>"] }
+  test_runner examples by stack:
+    JavaScript/TypeScript: "npm test" | "vitest run --reporter verbose" | "jest --verbose" | "node --test tests/"
+    Python:                "pytest -v" | "python -m pytest -v"
+    Go:                    "go test ./... -v"
+    Rust:                  "cargo test -- --nocapture"
+    Java:                  "./mvnw test" | "./gradlew test"
   test_files: every file that contains @aitri-tc markers — required for aitri verify-run
 
 {{#IF_BEST_PRACTICES}}
@@ -143,7 +151,7 @@ After saving all files + 04_IMPLEMENTATION_MANIFEST.json, present this report to
 ```
 ─── Phase 4 Complete — Implementation ────────────────────────
 Files created:   [N] — [list src files]
-Test files:      [N] — framework: [jest|vitest|etc] · command: [test_runner]
+Test files:      [N] — framework: [framework from System Design] · command: [test_runner]
 @aitri-trace:    [N] functions tagged
 
 Technical debt ([N] items):

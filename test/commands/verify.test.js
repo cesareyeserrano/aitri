@@ -332,6 +332,26 @@ describe('scanTestContent()', () => {
     assert.equal(result.length, 2);
   });
 
+  it('detects Python-style # @aitri-tc markers', () => {
+    const content = `def test_TC_001_description():\n    # @aitri-tc TC-001\n    pass`;
+    const result = scanTestContent(content, 'tests/test_unit.py');
+    assert.equal(result.length, 1);
+    assert.equal(result[0].tc_id, 'TC-001');
+  });
+
+  it('counts Python assert statements as assertions', () => {
+    const content = `def test_TC_002_description():\n    # @aitri-tc TC-002\n    assert result == expected\n    assert len(items) > 0`;
+    const result = scanTestContent(content, 'tests/test_unit.py');
+    assert.equal(result.length, 0);
+  });
+
+  it('supports alphanumeric TC IDs (e.g. TC-001b) with # marker', () => {
+    const content = `def test_TC_001b():\n    # @aitri-tc TC-001b\n    pass`;
+    const result = scanTestContent(content, 'tests/test_unit.py');
+    assert.equal(result.length, 1);
+    assert.equal(result[0].tc_id, 'TC-001b');
+  });
+
 });
 
 describe('parseCoverageOutput()', () => {
