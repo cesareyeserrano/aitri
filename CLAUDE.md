@@ -64,6 +64,45 @@ Estos invariantes no se negocian. Si una propuesta los viola, Claude debe decirl
 - No validar propuestas por cortesía. Si algo es frágil, decirlo aunque el usuario esté convencido.
 - Respuestas cortas por defecto. Elaborar solo si el problema lo requiere.
 
+## Protocolo de evaluación de feedback antes de implementar
+
+Todo feedback — bug report, feature request, o cambio de comportamiento — debe pasar por este análisis **antes** de escribir código. No hay excepciones para bugs reportados por usuarios de proyectos específicos.
+
+### Preguntas obligatorias
+
+1. **¿Es un bug real o una preferencia?**
+   - Bug real: el sistema hace algo diferente a lo que promete (output incorrecto, crash, datos corruptos).
+   - Preferencia: el sistema funciona pero el usuario quiere que se comporte diferente.
+   - Si es preferencia, aplicar decision matrix antes de implementar.
+
+2. **¿Se puede verificar la causa raíz desde el código?**
+   - Leer el código antes de proponer solución. Si la causa no es verificable desde el código, pedir evidencia (output real, test file, screenshot) antes de implementar.
+   - Nunca implementar un fix basado en una hipótesis no verificada.
+
+3. **¿El feedback viene de un proyecto específico o generaliza?**
+   - Si viene de un proyecto específico: preguntar si el comportamiento sería correcto para todos los proyectos.
+   - Un edge case de un proyecto no justifica un nuevo comando o cambio de schema.
+
+4. **¿La solución propuesta respeta los invariantes del sistema?**
+   - Verificar explícitamente contra la lista de invariantes antes de implementar.
+   - Si viola un invariante, decirlo antes de proponer alternativa.
+
+5. **¿Qué se sacrifica?**
+   - Toda adición tiene un costo: complejidad, superficie de bugs, contratos de schema que no se pueden romper.
+   - Si el costo es mayor al valor, proponer la alternativa más simple (display fix vs nuevo command, config vs hardcode).
+
+6. **¿Es cosmético o estructural?**
+   - Cosmético (display, mensajes, help): implementar directamente.
+   - Estructural (nuevo command, nuevo campo de artifact, nuevo invariante): usar decision matrix.
+
+### Señales de alerta — parar y discutir
+
+- El usuario dice "impacto cosmético" pero la solución requiere nuevo comando o cambio de schema.
+- El fix introduce honor system en un lugar donde el sistema lo había eliminado deliberadamente.
+- La solución es más compleja que el problema.
+- El feedback viene de un solo proyecto y el comportamiento actual es correcto para el caso general.
+- Se está replicando lógica que ya existe en otro comando.
+
 ## Reglas críticas
 
 - **NO invocar `aitri` en este repo** — el proyecto se desarrolla aquí, no se gestiona con Aitri

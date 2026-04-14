@@ -82,11 +82,29 @@ describe('cmdTC — tc verify', () => {
     assert.equal(d.results[0].notes, 're-checked: actually fails');
   });
 
+  it('errors if --notes is missing', () => {
+    const dir = makeDir();
+    writeResults(dir, [{ tc_id: 'TC-002f', status: 'manual', notes: '' }]);
+    assert.throws(
+      () => cmdTC(makeCtx(dir, ['verify', 'TC-002f', '--result', 'pass'])),
+      /--notes is required/
+    );
+  });
+
+  it('errors if --notes is empty string', () => {
+    const dir = makeDir();
+    writeResults(dir, [{ tc_id: 'TC-002f', status: 'manual', notes: '' }]);
+    assert.throws(
+      () => cmdTC(makeCtx(dir, ['verify', 'TC-002f', '--result', 'pass', '--notes', ''])),
+      /--notes is required/
+    );
+  });
+
   it('errors if TC not found', () => {
     const dir = makeDir();
     writeResults(dir, [{ tc_id: 'TC-001h', status: 'pass', notes: '' }]);
     assert.throws(
-      () => cmdTC(makeCtx(dir, ['verify', 'TC-999x', '--result', 'pass', '--notes', ''])),
+      () => cmdTC(makeCtx(dir, ['verify', 'TC-999x', '--result', 'pass', '--notes', 'observed behavior'])),
       /not found/
     );
   });
@@ -95,7 +113,7 @@ describe('cmdTC — tc verify', () => {
     const dir = makeDir();
     writeResults(dir, [{ tc_id: 'TC-001h', status: 'pass', notes: '' }]);
     assert.throws(
-      () => cmdTC(makeCtx(dir, ['verify', 'TC-001h', '--result', 'pass', '--notes', ''])),
+      () => cmdTC(makeCtx(dir, ['verify', 'TC-001h', '--result', 'pass', '--notes', 'observed behavior'])),
       /not a manual TC/
     );
   });
@@ -113,7 +131,7 @@ describe('cmdTC — tc verify', () => {
     const dir = makeDir();
     writeResults(dir, [{ tc_id: 'TC-002f', status: 'manual', notes: '' }]);
     assert.throws(
-      () => cmdTC(makeCtx(dir, ['verify', 'TC-002f', '--result', 'skip', '--notes', ''])),
+      () => cmdTC(makeCtx(dir, ['verify', 'TC-002f', '--result', 'skip', '--notes', 'observed'])),
       /pass.*fail/
     );
   });
