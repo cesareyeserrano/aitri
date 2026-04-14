@@ -36,7 +36,7 @@ import { cmdBug }           from '../lib/commands/bug.js';
 import { cmdNormalize }     from '../lib/commands/normalize.js';
 import { cmdAudit }        from '../lib/commands/audit.js';
 
-const VERSION   = '0.1.72';
+const VERSION   = '0.1.73';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir   = path.dirname(__dirname);
 const cwd       = process.cwd();

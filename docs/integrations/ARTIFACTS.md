@@ -181,26 +181,59 @@ Written by Phase 4 (Developer persona). Implementation tracking and test runner 
 
 ## 04_TEST_RESULTS.json
 
-Written by `aitri verify-run`. Actual test execution output.
+Written by `aitri verify-run`. Never written by the agent — always auto-generated from real runner output.
 
 ```json
 {
-  "runner": "vitest | jest | pytest | playwright | mocha",
-  "passed": 0,
-  "failed": 0,
-  "skipped": 0,
-  "total": 0,
-  "test_cases": [
+  "executed_at": "ISO 8601 timestamp",
+  "test_runner": "string — exact command run (e.g. 'pytest tests/ -v')",
+  "exit_code": 0,
+  "results": [
     {
-      "id": "TC-001h",
-      "status": "pass | fail | skip",
-      "notes": "string"
+      "tc_id": "TC-001h",
+      "status": "pass | fail | skip | manual",
+      "notes": "string",
+      "known_gap": true
     }
-  ]
+  ],
+  "fr_coverage": [
+    {
+      "fr_id": "FR-001",
+      "tests_passing": 2,
+      "tests_failing": 0,
+      "tests_skipped": 0,
+      "tests_manual": 0,
+      "status": "covered | partial | uncovered | manual"
+    }
+  ],
+  "summary": {
+    "total": 10,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 1,
+    "skipped_e2e": 1,
+    "skipped_no_marker": 0,
+    "manual": 1
+  }
 }
 ```
 
-Presence implies `verifyPassed` in `.aitri` reflects the last run result.
+**Status values:**
+- `pass` — TC detected in runner output as passing
+- `fail` — TC detected in runner output as failing
+- `skip` — TC not detected in runner output (missing marker or requires browser)
+- `manual` — TC has `automation: "manual"` in `03_TEST_CASES.json`; excluded from automated runner gate
+
+**FR coverage status values:**
+- `covered` — ≥1 passing automated test
+- `partial` — mix of pass/fail, or only skipped TCs
+- `uncovered` — only failing tests, no passing
+- `manual` — all TCs for this FR have `automation: "manual"`; not blocked by verify-complete
+
+**Notes:**
+- `known_gap: true` is written by `verify-complete` when a stub TC (from `adopt verify-spec`) is acknowledged as a gap
+- Manual TCs do not block `verify-complete` and do not count toward skip percentage
+- FRs with `status: "manual"` are exempt from the "zero passing tests" gate in `verify-complete`
 
 ---
 

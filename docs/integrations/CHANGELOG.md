@@ -5,6 +5,21 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.72
+
+**`04_TEST_RESULTS.json` — manual TC support**
+- New `status` value: `"manual"` — TCs with `automation: "manual"` in `03_TEST_CASES.json` are excluded from the automated runner gate; they receive `status: "manual"` instead of `"skip"`
+- New `summary.manual` field: count of manual TCs in each run
+- New `fr_coverage[].tests_manual` field: count of manual TCs per FR
+- New `fr_coverage[].status` value: `"manual"` — for FRs whose TCs are all manual
+- `verify-complete` no longer blocks on manual TCs: they are excluded from skip checks, notes requirements, and the "zero passing tests" gate
+- `verify-run`: auto-detects `.venv/bin/pytest` (or `venv/bin/pytest`) if bare `pytest` command is used — fixes silent skip-all on Python virtualenv projects
+- `verify-run` / `feature verify-run` / `feature verify-complete` added to `aitri feature` sub-commands
+
+**Subproduct impact:** consumers of `04_TEST_RESULTS.json` should treat `"manual"` as a distinct status (not equivalent to `"skip"`). FR coverage `status: "manual"` means human-verified, not untested.
+
+---
+
 ## v0.1.71
 
 **`aitri audit` — on-demand code & architecture audit**

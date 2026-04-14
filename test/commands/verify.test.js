@@ -259,6 +259,40 @@ describe('buildFRCoverage()', () => {
     assert.equal(coverage.length, 3);
   });
 
+  it('manual status when all TCs for FR are manual', () => {
+    const results = [
+      { tc_id: 'TC-001', status: 'manual' },
+      { tc_id: 'TC-002', status: 'manual' },
+      { tc_id: 'TC-003', status: 'pass' },
+    ];
+    const coverage = buildFRCoverage(results, testCases, frIds);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.status, 'manual');
+    assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.tests_manual, 2);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-002')?.status, 'covered');
+  });
+
+  it('manual TCs do not count as skipped in fr_coverage', () => {
+    const results = [
+      { tc_id: 'TC-001', status: 'manual' },
+      { tc_id: 'TC-002', status: 'pass' },
+      { tc_id: 'TC-003', status: 'pass' },
+    ];
+    const coverage = buildFRCoverage(results, testCases, frIds);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.tests_skipped, 0);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.tests_manual, 1);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.status, 'covered');
+  });
+
+  it('mixed manual+skip produces partial (not manual) status', () => {
+    const results = [
+      { tc_id: 'TC-001', status: 'manual' },
+      { tc_id: 'TC-002', status: 'skip' },
+      { tc_id: 'TC-003', status: 'pass' },
+    ];
+    const coverage = buildFRCoverage(results, testCases, frIds);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.status, 'partial');
+  });
+
 });
 
 describe('BUG-3 regression — flagValue null vs undefined', () => {
