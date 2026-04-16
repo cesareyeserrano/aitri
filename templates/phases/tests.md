@@ -160,6 +160,32 @@ If the answer is "maybe not", make expected_result more specific.
   ❌ expected_result: "audio plays"
   ✅ expected_result: "audio plays within 100ms of trigger with no gap on loop"
 
+{{#IF_UX_SPEC}}
+## UX Spec — Additional TC Requirements
+
+01_UX_SPEC.md is present. The following TCs are required in addition to the FR-level coverage above:
+
+**Component state TCs** — for every component in the Component Inventory:
+- Loading state: component shows skeleton/spinner while data is pending
+- Error state: component shows a specific error message AND a recovery action (not just "Error occurred")
+- Empty state: component shows a guidance message when no content exists (not a blank area)
+
+These TCs must reference the UX FR that owns the component in `requirement_id` and use `type: "e2e"`.
+
+**Mobile behavior TCs** — for every screen declared in User Flows:
+- At least one TC verifying layout and interaction at 375px viewport
+- `expected_result` must reference the spec's declared mobile behavior — not "renders correctly"
+
+**Design token compliance** — at least one TC verifying:
+- Primary text contrast ratio meets the value declared in Design Tokens (≥4.5:1 against its background)
+- All interactive elements in the spec meet the declared touch target size
+
+These TCs use `type: "e2e"` and `scenario: "happy_path"` unless testing a failure condition.
+
+## UX Spec (for reference)
+{{UX_SPEC}}
+{{/IF_UX_SPEC}}
+
 {{#IF_BEST_PRACTICES}}
 {{BEST_PRACTICES}}
 {{/IF_BEST_PRACTICES}}

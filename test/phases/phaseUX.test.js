@@ -38,6 +38,27 @@ const validUX = () => `# UX/UI Specification
 - H1 Visibility: data cards show loading skeleton while fetching
 - H6 Recognition: metric labels always visible, no tooltip-only labels
 - H3 User control: logout accessible from nav, no hidden paths
+
+## Design Tokens
+
+Archetype: PRO-TECH/DASHBOARD
+
+Color roles:
+- background: #0F1117  (reason: dark-first per archetype — reduces eye strain in long sessions)
+- surface: #1A1D27     (reason: elevated surface, subtle separation from background)
+- primary: #6C63FF     (reason: muted violet accent — energetic but not distracting)
+- accent: #00C9A7      (reason: secondary action emphasis, teal contrasts with violet)
+- error: #FF4D4F       (reason: standard semantic red, WCAG contrast ≥4.5:1 on dark bg)
+- text-primary: #F0F0F5
+- text-secondary: #9B9BB4
+- border: #2E3147
+
+Type scale:
+- font-family: "Inter" — reason: high legibility at small sizes, data-dense layouts
+- sizes: 12 / 14 / 16 / 20 / 24 / 32px
+- weights: 400 (body) · 500 (labels) · 700 (headings)
+
+Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48px (4pt base rhythm)
 `;
 
 describe('Phase UX — validate()', () => {
@@ -61,8 +82,13 @@ describe('Phase UX — validate()', () => {
     assert.throws(() => PHASE_DEFS['ux'].validate(d), /Nielsen Compliance/);
   });
 
+  it('throws when ## Design Tokens section is missing', () => {
+    const d = validUX().replace('## Design Tokens', '## Visual System');
+    assert.throws(() => PHASE_DEFS['ux'].validate(d), /Design Tokens/);
+  });
+
   it('throws when artifact is too short', () => {
-    const d = '## User Flows\n## Component Inventory\n## Nielsen Compliance\n';
+    const d = '## User Flows\n## Component Inventory\n## Nielsen Compliance\n## Design Tokens\n';
     assert.throws(() => PHASE_DEFS['ux'].validate(d), /too short/);
   });
 

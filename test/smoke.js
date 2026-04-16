@@ -181,6 +181,7 @@ describe('Aitri CLI — Smoke Test', () => {
       '## User Flows\n### Screen: Dashboard\n- Entry: login\n- Steps: view list\n- Exit: logout\n- Error path: retry button\n',
       '## Component Inventory\n| Component | Default | Loading | Error | Empty | Disabled |\n|---|---|---|---|---|---|\n| List | rows | skeleton | error+retry | empty msg | N/A |\n',
       '## Nielsen Compliance\n### Dashboard\n- H1: status updates within 1s\n- H8: minimal controls visible\n',
+      '## Design Tokens\nArchetype: ENTERPRISE/INTERNAL\nColor roles:\n- background: #FFFFFF (reason: light-only per archetype)\n- surface: #F8F9FA\n- primary: #0066CC\n- accent: #0052A3\n- error: #CC0000\n- text-primary: #1A1A1A\n- text-secondary: #6B7280\n- border: #E5E7EB\nType scale:\n- font-family: "Inter" — reason: high legibility in dense layouts\n- sizes: 12/14/16/20/24px\n- weights: 400/500/700\nSpacing scale: 4/8/12/16/24/32/48px\n',
     ].join('\n').repeat(2);
     fs.writeFileSync(path.join(tmpDir, 'spec', '01_UX_SPEC.md'), uxContent);
     const out = aitri('complete ux', tmpDir);
