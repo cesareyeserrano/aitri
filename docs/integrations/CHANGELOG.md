@@ -5,6 +5,18 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.76
+
+**`04_IMPLEMENTATION_MANIFEST.json` — `files_modified` field added**
+- New optional field `files_modified: []` — list of existing files changed during implementation
+- Gate changed: `files_created` OR `files_modified` must be non-empty (previously only `files_created`)
+- Enables modification/redesign phases where no new files are created
+- `files_created` is no longer a required field — omit if work only modified existing files
+
+**Subproduct impact:** `04_IMPLEMENTATION_MANIFEST.json` may now have `files_modified` instead of (or in addition to) `files_created`. Readers should handle both fields.
+
+---
+
 ## v0.1.74
 
 **`aitri tc verify` — record manual TC execution results**

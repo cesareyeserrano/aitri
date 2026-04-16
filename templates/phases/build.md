@@ -119,7 +119,7 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
 - Tests: {{DIR}}/tests/
 - {{DIR}}/<package descriptor matching your stack> (package.json, pyproject.toml, go.mod, Cargo.toml, pom.xml, etc.) + {{DIR}}/.env.example
 - Manifest: {{ARTIFACTS_BASE}}/04_IMPLEMENTATION_MANIFEST.json
-  { files_created:[], setup_commands:[], environment_variables:[{name, default}],
+  { files_created:[], files_modified:[], setup_commands:[], environment_variables:[{name, default}],
     technical_debt:[{fr_id, substitution, reason, effort_to_fix:"low|medium|high"}],
     test_runner: "<exact command matching your stack>",
     test_files: ["<test files containing @aitri-tc markers>"] }
@@ -155,8 +155,8 @@ Test files:      [N] — framework: [framework from System Design] · command: [
 @aitri-trace:    [N] functions tagged
 
 Technical debt ([N] items):
-  - [debt title 1] — [brief reason]
-  - [debt title 2] — [brief reason]
+  - [substitution 1] — [brief reason]
+  - [substitution 2] — [brief reason]
   (list all; "none" only if genuinely zero)
 
 Environment variables required: [N] — [list names]

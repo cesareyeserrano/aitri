@@ -152,7 +152,8 @@ Written by Phase 4 (Developer persona). Implementation tracking and test runner 
 
 ```json
 {
-  "files_created": ["path/to/file.js"],
+  "files_created": ["path/to/new-file.js"],
+  "files_modified": ["path/to/existing-file.js"],
   "setup_commands": ["npm install", "npm run build"],
   "environment_variables": {
     "KEY": "description or default value"
@@ -169,7 +170,8 @@ Written by Phase 4 (Developer persona). Implementation tracking and test runner 
 ```
 
 **Validation rules (enforced by `aitri complete 4`):**
-- Required fields: `files_created` (non-empty array), `setup_commands`, `environment_variables`
+- Required fields: `setup_commands`, `environment_variables`
+- At least one of `files_created` or `files_modified` must be a non-empty array — supports both greenfield (new files only) and modification/redesign work
 - `technical_debt` field is required — use `[]` if no substitutions were made
 - Each `technical_debt` entry must have `fr_id` and a non-generic `substitution`
 - `test_runner` is required (e.g. `"npm test"`, `"node --test tests/"`)

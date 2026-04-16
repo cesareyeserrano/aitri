@@ -254,6 +254,31 @@ describe('Phase 3 — validate()', () => {
     }
   });
 
+  it('[NFR check] throws when TC requirement_id references a non-FR id', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-p3-'));
+    try {
+      const reqs = {
+        functional_requirements: [
+          { id: 'FR-001', priority: 'MUST', acceptance_criteria: [] },
+          { id: 'FR-002', priority: 'MUST', acceptance_criteria: [] },
+        ],
+        user_stories: [],
+      };
+      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), JSON.stringify(reqs), 'utf8');
+      const d = JSON.parse(validP3());
+      // Replace FR-002 TCs with NFR-001 — agent mistake: NFRs are not valid TC targets
+      d.test_cases = d.test_cases.map(tc =>
+        tc.requirement_id === 'FR-002' ? { ...tc, requirement_id: 'NFR-001' } : tc
+      );
+      assert.throws(
+        () => PHASE_DEFS[3].validate(JSON.stringify(d), { dir, config: {} }),
+        /NFR-001.*does not match any functional requirement/
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('[FR-MUST gap] SHOULD FRs not in TCs do not trigger the gap check', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-p3-'));
     try {

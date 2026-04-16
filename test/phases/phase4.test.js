@@ -23,10 +23,10 @@ describe('Phase 4 — validate()', () => {
     assert.doesNotThrow(() => PHASE_DEFS[4].validate(JSON.stringify(d)));
   });
 
-  it('throws when files_created is missing', () => {
+  it('throws when files_created is missing and files_modified is absent', () => {
     const d = JSON.parse(validP4());
     delete d.files_created;
-    assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /Manifest missing fields.*files_created/);
+    assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /files_created or files_modified must be a non-empty array/);
   });
 
   it('throws when setup_commands is missing', () => {
@@ -41,10 +41,31 @@ describe('Phase 4 — validate()', () => {
     assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /Manifest missing fields.*environment_variables/);
   });
 
-  it('throws when files_created is empty array', () => {
+  it('throws when files_created is empty and files_modified is absent', () => {
     const d = JSON.parse(validP4());
     d.files_created = [];
-    assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /files_created must be a non-empty array/);
+    assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /files_created or files_modified must be a non-empty array/);
+  });
+
+  it('passes when files_created is empty but files_modified is non-empty', () => {
+    const d = JSON.parse(validP4());
+    d.files_created = [];
+    d.files_modified = ['src/index.js'];
+    assert.doesNotThrow(() => PHASE_DEFS[4].validate(JSON.stringify(d)));
+  });
+
+  it('passes when only files_modified is present (no files_created)', () => {
+    const d = JSON.parse(validP4());
+    delete d.files_created;
+    d.files_modified = ['src/feature.js', 'src/utils.js'];
+    assert.doesNotThrow(() => PHASE_DEFS[4].validate(JSON.stringify(d)));
+  });
+
+  it('throws when both files_created and files_modified are empty', () => {
+    const d = JSON.parse(validP4());
+    d.files_created = [];
+    d.files_modified = [];
+    assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /files_created or files_modified must be a non-empty array/);
   });
 
   it('throws when technical_debt field is absent', () => {
