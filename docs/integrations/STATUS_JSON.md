@@ -49,6 +49,7 @@ Exit code: `0` on success (even when the project has drift or blocking bugs — 
   "bugs":    { "total": N, "open": N, "blocking": N },
   "backlog": { "open": N },
   "audit":   { "exists": bool, "stalenessDays": N | null },
+  "normalize": { /* see "normalize" below */ },
   "health":  { /* see "health" below */ },
   "nextActions": [ /* ordered actions — see "nextActions" below */ ]
 }
@@ -118,6 +119,26 @@ Deploy-gate reason types: `no_root`, `phases_pending`, `verify_not_passed`, `dri
 
 ---
 
+## `normalize`
+
+Reflects the off-pipeline code-change baseline recorded when build (phase 4) is approved, plus a snapshot-time detection of changes since that baseline.
+
+```jsonc
+{
+  "state":          "pending | resolved | null",  // verbatim from .aitri normalizeState.status
+  "method":         "git | mtime | null",         // detection method recorded at baseline
+  "baseRef":        "string | null",              // git SHA or ISO timestamp at baseline
+  "uncountedFiles": N | null                      // off-pipeline source files since baseRef
+}
+```
+
+Semantics of `uncountedFiles`:
+- `null` when no baseline exists, the baseline is `mtime` (skipped to keep snapshot cheap), `state === 'pending'` (already known, no need to re-count), or git failed.
+- `0` when the git baseline matches HEAD (no new off-pipeline changes).
+- `N > 0` when N source files (excluding `spec/`, `.aitri`, `node_modules/`) have changed since the recorded baseline. Surfaces `aitri normalize` as a priority-4 next-action with reason `"N file(s) changed outside pipeline since last build approval"`.
+
+---
+
 ## `nextActions[]`
 
 Priority-ordered list of suggested commands. Priority is a stable small integer — subproducts can safely sort, filter, or show the top-N.
@@ -139,7 +160,7 @@ Priority-ordered list of suggested commands. Priority is a stable small integer 
 | 1 | Version mismatch or missing `aitriVersion` |
 | 2 | Drift on an approved phase (any pipeline) |
 | 3 | One or more critical/high bugs open |
-| 4 | `normalizeState.status === 'pending'` on root |
+| 4 | `normalizeState.status === 'pending'` on root, **or** `normalize.uncountedFiles > 0` (off-pipeline source changes detected at snapshot time) |
 | 5 | Phase 4 approved but verify not yet passed (any pipeline) |
 | 6 | Pending phase work (any pipeline) |
 | 7 | Deployable → `aitri validate` |

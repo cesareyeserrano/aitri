@@ -14,8 +14,10 @@ import {
   buildProjectSnapshot,
   buildPipelineEntry,
   daysSince,
+  detectUncountedChanges,
   SNAPSHOT_VERSION,
 } from '../lib/snapshot.js';
+import { execSync } from 'node:child_process';
 
 const MS_PER_DAY = 86_400_000;
 
@@ -508,6 +510,158 @@ describe('nextActions ordering', () => {
       const featureAction = snap.nextActions.find(a => a.scope === 'feature:billing');
       assert.ok(featureAction, 'feature action must exist');
       assert.match(featureAction.command, /^aitri feature run-phase billing /);
+    } finally { cleanup(dir); }
+  });
+});
+
+// ── detectUncountedChanges() ─────────────────────────────────────────────────
+
+function gitInit(dir) {
+  execSync('git init -q', { cwd: dir });
+  execSync('git config user.email a@b.c', { cwd: dir });
+  execSync('git config user.name Test',   { cwd: dir });
+  execSync('git config commit.gpgsign false', { cwd: dir });
+}
+function gitAddCommit(dir, msg) {
+  execSync('git add -A',                          { cwd: dir });
+  execSync(`git commit -q --no-verify -m "${msg}"`, { cwd: dir });
+}
+function gitHead(dir) {
+  return execSync('git rev-parse HEAD', { cwd: dir }).toString().trim();
+}
+
+describe('detectUncountedChanges()', () => {
+  it('returns all-null when no normalize baseline exists', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, { projectName: 'p', artifactsDir: 'spec' });
+      const pl = buildPipelineEntry(dir, 'root');
+      const r = detectUncountedChanges(pl);
+      assert.deepEqual(r, { state: null, baseRef: null, method: null, uncountedFiles: null });
+    } finally { cleanup(dir); }
+  });
+
+  it('preserves status="pending" but does not run git (no double counting)', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'pending', baseRef: 'abc1234', method: 'git' },
+      });
+      const pl = buildPipelineEntry(dir, 'root');
+      const r = detectUncountedChanges(pl);
+      assert.equal(r.state, 'pending');
+      assert.equal(r.uncountedFiles, null, 'pending state must not trigger detection');
+    } finally { cleanup(dir); }
+  });
+
+  it('returns uncountedFiles=null for mtime baselines (skipped to keep snapshot cheap)', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'resolved', baseRef: new Date().toISOString(), method: 'mtime' },
+      });
+      const pl = buildPipelineEntry(dir, 'root');
+      const r = detectUncountedChanges(pl);
+      assert.equal(r.method, 'mtime');
+      assert.equal(r.uncountedFiles, null);
+    } finally { cleanup(dir); }
+  });
+
+  it('counts source files changed since git baseline (resolved state)', () => {
+    const dir = tmpDir();
+    try {
+      gitInit(dir);
+      fs.writeFileSync(path.join(dir, 'a.js'), 'a');
+      gitAddCommit(dir, 'init');
+      const baseSha = gitHead(dir);
+
+      // Changes after baseline: 2 source files + 1 spec/ file (must be excluded)
+      fs.writeFileSync(path.join(dir, 'a.js'), 'a-modified');
+      fs.writeFileSync(path.join(dir, 'b.js'), 'b');
+      fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), '{}');
+      gitAddCommit(dir, 'changes');
+
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'resolved', baseRef: baseSha, method: 'git' },
+      });
+      const pl = buildPipelineEntry(dir, 'root');
+      const r = detectUncountedChanges(pl);
+      assert.equal(r.state, 'resolved');
+      assert.equal(r.method, 'git');
+      assert.equal(r.uncountedFiles, 2, 'should exclude spec/ files');
+    } finally { cleanup(dir); }
+  });
+
+  it('returns uncountedFiles=0 when git baseline matches HEAD', () => {
+    const dir = tmpDir();
+    try {
+      gitInit(dir);
+      fs.writeFileSync(path.join(dir, 'a.js'), 'a');
+      gitAddCommit(dir, 'init');
+      const baseSha = gitHead(dir);
+
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'resolved', baseRef: baseSha, method: 'git' },
+      });
+      const pl = buildPipelineEntry(dir, 'root');
+      assert.equal(detectUncountedChanges(pl).uncountedFiles, 0);
+    } finally { cleanup(dir); }
+  });
+
+  it('returns uncountedFiles=null when git command fails (bad baseRef)', () => {
+    const dir = tmpDir();
+    try {
+      // No git repo — execSync git diff will throw
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'resolved', baseRef: 'deadbeef', method: 'git' },
+      });
+      const pl = buildPipelineEntry(dir, 'root');
+      assert.equal(detectUncountedChanges(pl).uncountedFiles, null);
+    } finally { cleanup(dir); }
+  });
+});
+
+// ── snapshot.normalize integration ───────────────────────────────────────────
+
+describe('snapshot.normalize integration', () => {
+  it('emits nextAction for uncounted off-pipeline changes (resolved state)', () => {
+    const dir = tmpDir();
+    try {
+      gitInit(dir);
+      fs.writeFileSync(path.join(dir, 'a.js'), 'a');
+      gitAddCommit(dir, 'init');
+      const baseSha = gitHead(dir);
+      fs.writeFileSync(path.join(dir, 'b.js'), 'b');
+      gitAddCommit(dir, 'add b.js');
+
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'resolved', baseRef: baseSha, method: 'git' },
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.normalize.uncountedFiles, 1);
+      const action = snap.nextActions.find(a => a.command === 'aitri normalize');
+      assert.ok(action, 'must emit aitri normalize next-action');
+      assert.match(action.reason, /1 file\(s\) changed outside pipeline/);
+    } finally { cleanup(dir); }
+  });
+
+  it('does not emit a duplicate normalize action when already pending', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'pending', baseRef: 'abc', method: 'git' },
+      });
+      const snap = buildProjectSnapshot(dir);
+      const normalizeActions = snap.nextActions.filter(a => a.command === 'aitri normalize');
+      assert.equal(normalizeActions.length, 1, 'pending must not stack with uncounted detection');
     } finally { cleanup(dir); }
   });
 });

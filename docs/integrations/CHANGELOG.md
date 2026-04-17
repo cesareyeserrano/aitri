@@ -5,6 +5,22 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.80
+
+**`aitri status --json` — new top-level `normalize` block (additive)**
+- New `normalize` object exposes the off-pipeline change baseline plus a snapshot-time detection. Shape: `{ state, method, baseRef, uncountedFiles }`. See [STATUS_JSON.md](./STATUS_JSON.md#normalize) for semantics.
+- `nextActions[]` priority 4 now also fires when `normalize.uncountedFiles > 0` (git baseline, resolved state) — same `aitri normalize` command, distinct reason text. Closes the gap where users who never ran `aitri normalize` got no nudge despite changing code outside the pipeline.
+
+**`aitri approve` — informed human review (UX, no schema change)**
+- Approval prompt now prints a per-phase artifact summary (FR/AC counts, TC breakdown, manifest stats, compliance levels, design sections) before the y/N gate. Non-TTY path (CI/agents) unchanged.
+
+**Subproduct impact:**
+- Purely additive — readers that ignore unknown JSON fields need no changes.
+- Hub may surface `normalize.uncountedFiles > 0` in dashboards as an early signal of off-pipeline drift (complement to `health.driftPresent` which only covers approved-artifact drift).
+- **Bump `INTEGRATION_LAST_REVIEWED`** to `0.1.80` after reviewing.
+
+---
+
 ## v0.1.79
 
 **`.aitri` schema — `verifyRanAt` and `auditLastAt` (additive)**

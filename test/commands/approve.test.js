@@ -9,7 +9,15 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { cmdApprove } from '../../lib/commands/approve.js';
+import {
+  cmdApprove,
+  buildApprovalSummary,
+  summarizeRequirements,
+  summarizeTestCases,
+  summarizeManifest,
+  summarizeCompliance,
+  summarizeMarkdownSections,
+} from '../../lib/commands/approve.js';
 import { loadConfig, hashArtifact } from '../../lib/state.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -267,6 +275,147 @@ describe('cmdApprove() — phase 4 shows verify-run hint', () => {
 
   it('mentions verify-run as next step', () => {
     assert.ok(output.includes('verify-run'), 'should point to verify-run after phase 4');
+  });
+});
+
+// ── Approval summary builders ────────────────────────────────────────────────
+
+describe('summarizeRequirements()', () => {
+  it('counts FRs by priority and type, plus NFRs and ACs', () => {
+    const raw = JSON.stringify({
+      functional_requirements: [
+        { id: 'FR-1', priority: 'MUST',   type: 'business', acceptance_criteria: ['a','b'] },
+        { id: 'FR-2', priority: 'MUST',   type: 'ux',       acceptance_criteria: ['c'] },
+        { id: 'FR-3', priority: 'SHOULD', type: 'business', acceptance_criteria: [] },
+      ],
+      non_functional_requirements: [{ id: 'NFR-1' }, { id: 'NFR-2' }],
+    });
+    const lines = summarizeRequirements(raw);
+    assert.ok(lines.some(l => l.includes('Functional requirements: 3')));
+    assert.ok(lines.some(l => l.includes('2 MUST')));
+    assert.ok(lines.some(l => l.includes('1 SHOULD')));
+    assert.ok(lines.some(l => l.includes('2 business')));
+    assert.ok(lines.some(l => l.includes('Non-functional requirements: 2')));
+    assert.ok(lines.some(l => l.includes('Acceptance criteria: 3 total')));
+  });
+
+  it('returns null on malformed JSON', () => {
+    assert.equal(summarizeRequirements('{ not json'), null);
+  });
+});
+
+describe('summarizeTestCases()', () => {
+  it('counts TCs by type, scenario and linked FRs', () => {
+    const raw = JSON.stringify({
+      test_cases: [
+        { id: 'TC-1', type: 'unit',        scenario: 'happy_path', requirement_id: 'FR-1' },
+        { id: 'TC-2', type: 'unit',        scenario: 'edge_case',  requirement_id: 'FR-1' },
+        { id: 'TC-3', type: 'integration', scenario: 'happy_path', requirement_id: 'FR-2' },
+      ],
+    });
+    const lines = summarizeTestCases(raw);
+    assert.ok(lines.some(l => l.includes('Test cases: 3')));
+    assert.ok(lines.some(l => l.includes('linked FRs: 2')));
+    assert.ok(lines.some(l => l.includes('2 unit')));
+    assert.ok(lines.some(l => l.includes('1 integration')));
+    assert.ok(lines.some(l => l.includes('happy_path')));
+  });
+});
+
+describe('summarizeManifest()', () => {
+  it('reports created/modified counts and zero-debt case', () => {
+    const raw = JSON.stringify({
+      files_created:  ['a.js', 'b.js'],
+      files_modified: ['c.js'],
+      technical_debt: [],
+    });
+    const lines = summarizeManifest(raw);
+    assert.ok(lines.some(l => l.includes('Files created:  2')));
+    assert.ok(lines.some(l => l.includes('Files modified: 1')));
+    assert.ok(lines.some(l => l.includes('Technical debt: none')));
+  });
+
+  it('lists fr_ids when technical_debt entries exist', () => {
+    const raw = JSON.stringify({
+      files_created: ['a.js'],
+      technical_debt: [
+        { fr_id: 'FR-1', substitution: 'mocked' },
+        { fr_id: 'FR-3', substitution: 'stub'   },
+      ],
+    });
+    const lines = summarizeManifest(raw);
+    assert.ok(lines.some(l => l.includes('2 substitutions')));
+    assert.ok(lines.some(l => l.includes('FR-1, FR-3')));
+  });
+});
+
+describe('summarizeCompliance()', () => {
+  it('breaks compliance entries down by level', () => {
+    const raw = JSON.stringify({
+      overall_status: 'production',
+      phases_completed: [1, 2, 3, 4, 5],
+      requirement_compliance: [
+        { id: 'FR-1', level: 'production' },
+        { id: 'FR-2', level: 'production' },
+        { id: 'FR-3', level: 'mock'       },
+      ],
+    });
+    const lines = summarizeCompliance(raw);
+    assert.ok(lines.some(l => l.includes('Overall status: production')));
+    assert.ok(lines.some(l => l.includes('3 entries')));
+    assert.ok(lines.some(l => l.includes('2 production')));
+    assert.ok(lines.some(l => l.includes('1 mock')));
+    assert.ok(lines.some(l => l.includes('Phases completed: 5')));
+  });
+});
+
+describe('summarizeMarkdownSections()', () => {
+  it('lists H2 sections and truncates beyond 8', () => {
+    const md = Array.from({ length: 10 }, (_, i) => `## Section ${i + 1}`).join('\n');
+    const lines = summarizeMarkdownSections(md);
+    assert.ok(lines[0].includes('Sections (10)'));
+    assert.equal(lines.filter(l => l.includes('•')).length, 8);
+    assert.ok(lines.some(l => l.includes('and 2 more')));
+  });
+
+  it('uses custom label when provided', () => {
+    const lines = summarizeMarkdownSections('## A\n## B', 'Review sections');
+    assert.ok(lines[0].includes('Review sections (2)'));
+  });
+
+  it('returns null on null input', () => {
+    assert.equal(summarizeMarkdownSections(null), null);
+  });
+});
+
+describe('buildApprovalSummary() — dispatcher', () => {
+  it('routes phase 1 to summarizeRequirements', () => {
+    const lines = buildApprovalSummary(1, '{"functional_requirements":[],"non_functional_requirements":[]}');
+    assert.ok(lines.some(l => l.includes('Functional requirements: 0')));
+  });
+  it('routes phase 2 to markdown sections', () => {
+    const lines = buildApprovalSummary(2, '## Overview\n## Components');
+    assert.ok(lines[0].includes('Sections (2)'));
+  });
+  it('routes phase 3 to summarizeTestCases', () => {
+    const lines = buildApprovalSummary(3, '{"test_cases":[]}');
+    assert.ok(lines.some(l => l.includes('Test cases: 0')));
+  });
+  it('routes phase 4 to summarizeManifest', () => {
+    const lines = buildApprovalSummary(4, '{"files_created":[],"technical_debt":[]}');
+    assert.ok(lines.some(l => l.includes('Files created:  0')));
+  });
+  it('routes phase 5 to summarizeCompliance', () => {
+    const lines = buildApprovalSummary(5, '{"requirement_compliance":[],"phases_completed":[]}');
+    assert.ok(lines.some(l => l.includes('Requirement compliance: 0 entries')));
+  });
+  it('routes ux/discovery/review to markdown sections', () => {
+    assert.ok(buildApprovalSummary('ux', '## Screen 1')[0].includes('Sections (1)'));
+    assert.ok(buildApprovalSummary('discovery', '## Stakeholders')[0].includes('Sections (1)'));
+    assert.ok(buildApprovalSummary('review', '## Findings')[0].includes('Review sections (1)'));
+  });
+  it('returns null on missing artifact content', () => {
+    assert.equal(buildApprovalSummary(1, null), null);
   });
 });
 
