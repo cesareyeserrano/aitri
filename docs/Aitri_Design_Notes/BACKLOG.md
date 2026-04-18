@@ -451,6 +451,63 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 
 ---
 
+### Core — Status aggregation across features
+
+- [ ] P2 — **`aitri status` y `status --json`: agregar total global + breakdown por feature** — Hoy `aitri status` muestra `Passed (N/M)` del root pipeline solamente. En un proyecto con features sub-pipelines (p.ej. 8 features con ~256 TCs entre todas + 30 del root), el usuario ve `30/30` y asume que ese es el total del proyecto. El agente repite ese número al usuario, y el usuario debe manualmente reconstruir la tabla por feature para saber cuántos tests hay en total.
+
+  Problem: La información existe (`snapshot.js` líneas 283-288 ya computa `totalPassing` / `totalFailing` across pipelines internamente) pero no se surfacea. `status` muestra features con `verify ✅/⬜` sin conteos. El resultado es un display técnicamente correcto pero engañoso — el número grande que el usuario ve es solo el scope del root, no la verdad del proyecto. Para proyectos con muchas features esto confunde al usuario y al agente que intermedia. Feedback real del usuario: *"los casos siempre deberían ser el total, no solo el pipeline principal. y sí debería mostrar ese detalle"*.
+
+  Files:
+  - `lib/commands/status.js` — sección Verify: mantener el display actual del root + añadir línea/tabla de agregados cuando `features.length > 0`. Ampliar sección `Features` para mostrar `passed/total` por feature (hoy solo muestra `verify ✅/⬜`).
+  - `lib/commands/resume.js` — espejo: la sección "Tests" del resume también queda solo en root; aplicar misma mejora.
+  - `lib/snapshot.js` — promover `totalPassing` / `totalFailing` (ya calculados) a un campo expuesto, p.ej. `tests.totals { passed, failed, skipped, manual, total, perPipeline[] }`. Actualmente el agregado se pierde dentro del builder.
+  - `docs/integrations/STATUS_JSON.md` — documentar el nuevo campo `tests.totals` (o donde quede ubicado) con ejemplo y semántica.
+  - `docs/integrations/ARTIFACTS.md` — no aplica (no es schema de artifact).
+  - `docs/integrations/CHANGELOG.md` — entrada aditiva describiendo el nuevo campo + bump `INTEGRATION_LAST_REVIEWED` esperado por Hub.
+  - Hub (repo externo): consumir el nuevo campo para surfacear totales agregados en su dashboard, con el mismo breakdown por feature.
+
+  Behavior:
+  - `aitri status` con features presentes:
+    - Mantiene línea actual del root: `✓ verify — Tests — Passed (30/30)`
+    - Añade línea de agregado inmediatamente después: `Σ all pipelines: Passed (256/269)` (o similar, formato a definir).
+    - En la sección `Features`, cada feature muestra: `<name>  phases 5/5  verify ✅ (53/61)` — con conteo cuando la feature tiene `verifySummary`.
+  - `aitri status --json` gana un campo nuevo (aditivo, no modifica `phases[]` ni `features[].verifyPassed`):
+    ```jsonc
+    "tests": {
+      "totals":      { "passed": N, "failed": N, "skipped": N, "manual": N, "total": N },
+      "perPipeline": [
+        { "scope": "root",            "passed": 30,  "total": 30 },
+        { "scope": "feature:ux-ui-upgrade", "passed": 53, "total": 61 },
+        ...
+      ],
+      "stalenessDays": N | null    // ya existía
+    }
+    ```
+  - `aitri resume`: sección Tests añade el total global al comienzo y el breakdown por feature al final.
+
+  Decisions pre-resueltas:
+  - **No cambiar el contrato existente.** `verify.summary` en snapshot y el display `Passed (N/M)` del root siguen mostrando el scope del root — ese es un dato válido (testsdel pipeline base), no un bug. La solución es *sumar* información, no reemplazarla.
+  - **Fuente única.** `snapshot.js` ya hace el cómputo; el fix es promoverlo, no duplicar lógica en `status.js` / `resume.js`.
+  - **`manual_verified` cuenta como `passed`.** Mismo criterio que `04_TEST_RESULTS.json.summary` post-v0.1.74 — consistencia con lo que ya hace verify-run.
+  - **Features sin `verifySummary`.** Si una feature no ha corrido verify-run, aparece como `— / —` (no contribuye al agregado) y no bloquea el display del resto.
+  - **Hub:** este cambio es aditivo en `status --json`. Hub puede adoptarlo opcionalmente; el contrato `.aitri` + `spec/` no cambia. Cuando Hub lo consuma, debe bumpar `INTEGRATION_LAST_REVIEWED` tras revisar la entrada de CHANGELOG.md.
+
+  Riesgos / conflictos:
+  - Cambiar `status.js` texto puede romper tests de smoke que comparan strings exactos — revisar `test/smoke.js` y `test/commands/status.test.js` antes de implementar.
+  - El campo `tests.stalenessDays` ya existe en STATUS_JSON.md (v0.1.79). El nuevo `tests.totals` y `tests.perPipeline` conviven bajo el mismo namespace `tests.*` — evitar colisión.
+  - No mover `verify.summary` a `tests.totals` — mantener ambos para no romper consumidores legacy.
+
+  Acceptance:
+  - `aitri status` en proyecto sin features: output actual sin cambios (legacy-safe).
+  - `aitri status` en proyecto con ≥1 feature con `verifySummary`: output muestra agregado Σ + breakdown por feature con su propio `passed/total`.
+  - `aitri status --json`: contiene `tests.totals` + `tests.perPipeline` con valores agregados correctos (verificar sumando manualmente root + features).
+  - `aitri resume`: sección Tests lista root + features con sus conteos y el agregado.
+  - `docs/integrations/STATUS_JSON.md` y `docs/integrations/CHANGELOG.md` actualizados en el mismo commit.
+  - `npm run test:all` pasa.
+  - Repro del caso original: proyecto con 8 features y 30/30 en root → `aitri status` muestra total agregado (p.ej. 256/269) en lugar de solo 30/30. El usuario y el agente ven de inmediato el estado real del proyecto.
+
+---
+
 ## Design Studies
 
 > Not implementation items. Open questions that inform future architectural decisions.
