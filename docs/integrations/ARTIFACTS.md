@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v0.1.76+
+**Aitri version:** v0.1.80+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -325,9 +325,42 @@ First-class QA artifact. Follows standard bug report format: reproduction steps,
 | `01_UX_SPEC.md` | `aitri run-phase ux` | Optional phase; present if UX phase was run |
 | `04_CODE_REVIEW.md` | `aitri review` | Present if code review was run |
 | `BUGS.json` | `aitri bug add` / `aitri verify-run` | Present if any bug has been registered |
+| `BACKLOG.json` | `aitri backlog add` | Present if any backlog item has been registered |
 | `AUDIT_REPORT.md` | `aitri audit` | Present if an on-demand audit has been run |
 
 Check `approvedPhases[]` and `completedPhases[]` in `.aitri` to determine which optional artifacts exist before attempting to read them.
+
+---
+
+## BACKLOG.json
+
+**Written by:** `aitri backlog add` (manual).
+**Location:** `<artifactsDir>/BACKLOG.json`.
+**Optional:** absent until the first backlog item is registered.
+
+Project-level tech-debt / deferred-work registry. Separate from `BUGS.json` — backlog captures "we should do this" items (refactors, hardening, observability, follow-ups), while bugs capture defects.
+
+```json
+{
+  "schemaVersion": "1",
+  "items": [
+    {
+      "id": "BL-001",
+      "title": "string",
+      "priority": "P1 | P2 | P3",
+      "problem": "string — what is missing, fragile, or suboptimal",
+      "fr": "FR-XXX | null",
+      "status": "open | closed",
+      "created_at": "ISO8601",
+      "updated_at": "ISO8601"
+    }
+  ]
+}
+```
+
+**Lifecycle:** `open → closed` (via `aitri backlog done <id>`).
+**Priority:** `P1` (most urgent) through `P3` (least). Sort order for `aitri backlog list`.
+**Integration:** `openBacklogCount` surfaces in `aitri status` and `aitri status --json`.
 
 ---
 

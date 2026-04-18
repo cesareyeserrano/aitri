@@ -130,10 +130,24 @@ Auto-detects: Jest, Vitest, Pytest, Playwright.
 | Command | Description |
 | :--- | :--- |
 | `aitri status` | Pipeline status: approved, pending, and drifted phases. |
-| `aitri status --json` | Machine-readable JSON output. |
-| `aitri validate` | Full artifact audit: presence, approval status, drift flags, deployment files. |
+| `aitri status --json` | Machine-readable project snapshot (root + features + health + prioritized next actions). |
+| `aitri validate` | Full artifact audit: presence, approval status, drift flags, deployment files, deploy-gate reasoning. |
 | `aitri validate --json` | Machine-readable JSON output. |
-| `aitri resume` | Full session briefing — pipeline state, open requirements, test coverage, tech debt, next action. Designed to be pasted as context for a new agent session. |
+| `aitri validate --explain` | Expanded text output — enumerates deploy-gate reasons inline. |
+| `aitri resume` | Full session briefing — pipeline state, features, health, last session, open requirements, test coverage, tech debt, priority-ordered next actions. |
+
+### Tracking (bugs, backlog, audit)
+
+| Command | Description |
+| :--- | :--- |
+| `aitri bug add --title "..." [--severity critical\|high\|medium\|low] [--fr FR-XXX] [--tc TC-NNN]` | Register a bug in `spec/BUGS.json`. |
+| `aitri bug list` / `fix <id>` / `verify <id>` / `close <id>` | Lifecycle: `open → fixed → verified → closed`. |
+| `aitri tc verify <TC-ID> --result pass\|fail --notes "..."` | Record a manual TC execution (for `automation: "manual"` TCs). Counts toward `04_TEST_RESULTS.json` summary. |
+| `aitri backlog [list\|add\|done]` | Project-level tech-debt backlog in `spec/BACKLOG.json`. |
+| `aitri review` | Cross-artifact semantic consistency check (requirements → TCs → results). Optional before verify-run. |
+| `aitri audit` | On-demand holistic audit — agent writes `spec/AUDIT_REPORT.md` with findings (bugs, backlog, observations). Off-pipeline. |
+| `aitri audit plan` | Read `AUDIT_REPORT.md` and propose exact `bug add` / `backlog add` commands for each finding. |
+| `aitri normalize` | Baseline off-pipeline code changes after Phase 4 approval — prevents silent drift outside the briefing→complete→approve loop. |
 
 ### Checkpoints
 
