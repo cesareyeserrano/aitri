@@ -5,6 +5,19 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.84 — addendum (doc correction, no behavior change)
+
+**ARTIFACTS.md sync with code — closing pre-existing drift (2026-04-21)**
+- Phase 2 required sections now list 9 (added `Technical Risk Flags`, matching `phase2.js` validate()). Minimum length corrected from 30 to 40 lines.
+- Phase 3 `edge_case` clarified as encouraged but not enforced — only `happy_path` and `negative` are strictly required per FR.
+- Headers note added: Phase 2 accepts `## Name`, `## 1. Name`, or `## 1.1 Name` prefixes.
+
+**Subproduct impact:**
+- No schema change. This is a doc-accuracy correction; the runtime gates have been stricter than the doc claimed since before v0.1.84.
+- Subproducts that relied on the doc when deciding whether a Phase 2 artifact "looks complete" should add the `Technical Risk Flags` section to any local heuristic.
+
+---
+
 ## v0.1.84
 
 **`aitri normalize --resolve` — maintenance-path closure for normalize cycle (behavior change, not schema change)**

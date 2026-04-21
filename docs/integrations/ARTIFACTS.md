@@ -91,8 +91,11 @@ Written by Phase 2 (Architect persona). Markdown document — no fixed JSON sche
 - Performance & Scalability
 - Deployment Architecture
 - Risk Analysis (minimum 3 risks)
+- Technical Risk Flags — must have content (declare `[RISK]` flags or write "None detected" with justification)
 
-**Minimum length:** 30 lines.
+Headers accept plain (`## Name`), integer (`## 1. Name`), or decimal (`## 1.1 Name`) prefixes.
+
+**Minimum length:** 40 lines.
 **Phase gate:** Approved when `"2"` is in `approvedPhases[]`.
 
 ---
@@ -136,7 +139,7 @@ Written by Phase 3 (QA persona). Test cases keyed to FRs, user stories, and acce
 - `scenario` must be: `happy_path` | `edge_case` | `negative`
 - Each TC must have: `requirement_id`, `user_story_id`, `ac_id`
 - `expected_result` must not be a placeholder (`"it works"`, `"passes"`, `"succeeds"`, etc.)
-- Each FR must have a minimum of 3 TCs: one `happy_path`, one `edge_case`, one `negative`
+- Each FR must have a minimum of 3 TCs, with at least one `happy_path` and one `negative` scenario (edge_case is encouraged but not enforced)
 - Each FR must have at least one TC with id ending in `h` (happy path) and one ending in `f` (failure)
 - Minimum 2 `e2e` test cases total
 - `requirement_id` must be a single FR id — comma-separated ids are rejected
