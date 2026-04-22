@@ -1,6 +1,6 @@
 # Aitri — `.aitri` Schema Contract
 
-**Aitri version:** v0.1.84+
+**Aitri version:** v0.1.85+
 **Maintenance rule:** Update this file in the same commit as any `.aitri` schema change.
 
 ---

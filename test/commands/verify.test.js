@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, buildFRCoverage, scanTestContent, parseCoverageOutput } from '../../lib/commands/verify.js';
+import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, extractTCId } from '../../lib/commands/verify.js';
 
 describe('parseRunnerOutput()', () => {
 
@@ -77,6 +77,12 @@ describe('parseRunnerOutput()', () => {
     assert.equal(result.get('TC-020c')?.status, 'pass');
   });
 
+  it('detects multi-segment namespaced TC (TC-FE-001h)', () => {
+    const output = `✔ TC-FE-001h: threshold absent from scroll guard (0.1ms)`;
+    const result = parseRunnerOutput(output);
+    assert.equal(result.get('TC-FE-001h')?.status, 'pass');
+  });
+
 });
 
 describe('parseVitestOutput()', () => {
@@ -141,6 +147,12 @@ describe('parseVitestOutput()', () => {
     assert.ok(result.get('TC-005')?.notes.includes('AssertionError'));
   });
 
+  it('detects multi-segment namespaced TC (TC-FE-001h) in Vitest output', () => {
+    const output = ` ✓ TC-FE-001h: threshold absent (2ms)`;
+    const result = parseVitestOutput(output);
+    assert.equal(result.get('TC-FE-001h')?.status, 'pass');
+  });
+
 });
 
 describe('parsePlaywrightOutput()', () => {
@@ -188,6 +200,12 @@ describe('parsePlaywrightOutput()', () => {
     const output = `  ✓  3 tests/e2e/sales-tracker.spec.js › TC-020b: 375px viewport (0.5s)`;
     const result = parsePlaywrightOutput(output);
     assert.equal(result.get('TC-020b')?.status, 'pass');
+  });
+
+  it('detects multi-segment namespaced TC (TC-FE-001h) in Playwright output', () => {
+    const output = `  ✓  4 tests/e2e/fe.spec.js › TC-FE-001h: threshold absent (0.3s)`;
+    const result = parsePlaywrightOutput(output);
+    assert.equal(result.get('TC-FE-001h')?.status, 'pass');
   });
 
 });
@@ -495,6 +513,64 @@ describe('parsePytestOutput()', () => {
     const output = `collecting ... tests/test_foo.py::test_TC_001h_env COLLECTED`;
     const result = parsePytestOutput(output);
     assert.equal(result.size, 0);
+  });
+
+  it('detects multi-segment namespaced TC (TC-FE-001h) in pytest function names', () => {
+    const output = `tests/test_frontend_remediation.py::test_TC_FE_001h_threshold_120_absent PASSED`;
+    const result = parsePytestOutput(output);
+    assert.ok(result.has('TC-FE-001h'), 'TC_FE_001h should normalize to TC-FE-001h');
+    assert.equal(result.get('TC-FE-001h')?.status, 'pass');
+  });
+
+  it('detects multi-segment namespaced TC failing', () => {
+    const output = `tests/test_frontend_remediation.py::test_TC_FE_002f_no_excessive_blank FAILED`;
+    const result = parsePytestOutput(output);
+    assert.equal(result.get('TC-FE-002f')?.status, 'fail');
+  });
+
+  it('detects deep namespace TC (TC-API-USER-010f) in pytest function names', () => {
+    const output = `tests/test_api.py::test_TC_API_USER_010f_auth_flow PASSED`;
+    const result = parsePytestOutput(output);
+    assert.ok(result.has('TC-API-USER-010f'), 'deep namespace should normalize correctly');
+    assert.equal(result.get('TC-API-USER-010f')?.status, 'pass');
+  });
+
+  it('normalizes all-lowercase pytest convention (test_tc_fe_001h) to uppercase namespace', () => {
+    const output = `tests/test_foo.py::test_tc_fe_001h_threshold PASSED`;
+    const result = parsePytestOutput(output);
+    assert.ok(result.has('TC-FE-001h'), 'lowercase tc_fe should normalize to TC-FE');
+  });
+
+});
+
+describe('extractTCId()', () => {
+
+  it('returns null when no TC pattern present', () => {
+    assert.equal(extractTCId('no test case here'), null);
+  });
+
+  it('normalizes single-segment TC preserving lowercase suffix', () => {
+    assert.equal(extractTCId('✔ TC-020b: foo'), 'TC-020b');
+  });
+
+  it('normalizes underscore-separated multi-segment to hyphen-separated', () => {
+    assert.equal(extractTCId('test_TC_FE_001h_description'), 'TC-FE-001h');
+  });
+
+  it('preserves hyphen-separated multi-segment as-is', () => {
+    assert.equal(extractTCId('TC-FE-001h: description'), 'TC-FE-001h');
+  });
+
+  it('uppercases lowercase namespace segments', () => {
+    assert.equal(extractTCId('test_tc_fe_001h_foo'), 'TC-FE-001h');
+  });
+
+  it('handles deep namespaces', () => {
+    assert.equal(extractTCId('test_TC_API_USER_010f_auth'), 'TC-API-USER-010f');
+  });
+
+  it('rejects TC prefix preceded by alphanumeric (no word boundary before)', () => {
+    assert.equal(extractTCId('xTC-001h passes'), null);
   });
 
 });

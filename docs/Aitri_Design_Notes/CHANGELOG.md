@@ -5,6 +5,14 @@
 
 ---
 
+## [0.1.85] — 2026-04-22
+
+- **fix(verify):** Test-output parsers now recognize multi-segment namespaced TC IDs (`TC-FE-001h`, `TC-API-USER-010f`). Previously, all four parsers (`parseRunnerOutput`, `parseVitestOutput`, `parsePytestOutput`, `parsePlaywrightOutput`) captured only the first segment after `TC-/TC_`, so `test_TC_FE_001h_description` was parsed as `TC-FE` — which never matched Phase 3's `TC-FE-001h`. Result: every automated TC in feature sub-pipelines using namespaced IDs silently fell into `skipped_no_marker`, forcing agents to work around the gate (manual edits to `04_TEST_RESULTS.json`). Single-segment IDs (`TC-001h`, `TC-020b`) remain unaffected.
+- **feat(verify):** New exported helper `extractTCId(line)` centralizes TC extraction across the four parsers. Handles hyphen/underscore separator normalization, uppercase namespace normalization, and preserves the original-case trailing suffix (`h`, `f`, `r`, `e`). Pattern: `TC(-<NS>)*-<digits><letter-suffix>?`.
+- **tests:** +14 new cases in `test/commands/verify.test.js` covering multi-segment IDs across all four parsers, deep namespaces (`TC-API-USER-010f`), all-lowercase pytest convention (`test_tc_fe_001h`), word-boundary rejection, and direct `extractTCId()` unit tests.
+
+---
+
 ## [0.1.83] — 2026-04-20
 
 - **fix(status):** `aitri status` Features section now surfaces failing verify runs. Previously, a feature with tests failing rendered as `verify ⬜` — visually indistinguishable from "not run" — and hid the pass/fail counts. Now: passed → `verify ✅ (p/t)`, failed → `verify ❌ (p/t)`, not run → `verify ⬜`. Counts are always shown when a verify summary exists.

@@ -5,6 +5,18 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.85 (2026-04-22) — bugfix (no schema change)
+
+**Test-output parsers now handle multi-segment TC IDs**
+- `parseRunnerOutput`, `parseVitestOutput`, `parsePytestOutput`, `parsePlaywrightOutput` previously truncated IDs like `TC-FE-001h` to `TC-FE`, causing every namespaced automated test to fall silently into `skipped_no_marker`.
+- All four parsers now extract the full ID via the new shared `extractTCId()` helper. Single-segment IDs (`TC-001h`, `TC-020b`) unchanged.
+
+**Subproduct impact:**
+- None. No schema change. `04_TEST_RESULTS.json` shape, `.aitri.verifySummary`, `status --json.tests` all unchanged.
+- Consumer projects with namespaced TC IDs that hit `skipped_no_marker` counts in prior versions should re-run `verify-run` + `verify-complete` per feature to get honest numbers. `.aitri.verifyPassed` persists across verify-runs until `verify-complete` re-runs.
+
+---
+
 ## v0.1.84 — addendum (doc correction, no behavior change)
 
 **ARTIFACTS.md sync with code — closing pre-existing drift (2026-04-21)**
