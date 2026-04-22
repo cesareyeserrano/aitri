@@ -60,34 +60,48 @@ const ARTIFACTS = {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+function seedDeployableRoot(dir, configOverrides = {}) {
+  const hashes = {};
+  for (const [rel, content] of Object.entries(ARTIFACTS)) {
+    writeFile(dir, rel, content);
+    const phaseMap = {
+      'spec/01_REQUIREMENTS.json': '1',
+      'spec/02_SYSTEM_DESIGN.md': '2',
+      'spec/03_TEST_CASES.json': '3',
+      'spec/04_IMPLEMENTATION_MANIFEST.json': '4',
+      'spec/05_PROOF_OF_COMPLIANCE.json': '5',
+    };
+    if (phaseMap[rel]) hashes[phaseMap[rel]] = hashArtifact(content);
+  }
+  writeFile(dir, '.aitri', minimalConfig({
+    approvedPhases: [1, 2, 3, 4, 5],
+    completedPhases: [1, 2, 3, 4, 5],
+    verifyPassed: true,
+    verifySummary: { passed: 30, failed: 0, skipped: 0, total: 30 },
+    artifactHashes: hashes,
+    ...configOverrides,
+  }));
+}
+
+function seedFeature(dir, name, config = {}) {
+  const featDir = path.join(dir, 'features', name);
+  fs.mkdirSync(path.join(featDir, 'spec'), { recursive: true });
+  writeFile(featDir, '.aitri', JSON.stringify({
+    projectName: name,
+    artifactsDir: 'spec',
+    approvedPhases: [],
+    completedPhases: [],
+    ...config,
+  }));
+}
+
 describe('cmdValidate() — all artifacts present and approved', () => {
   let dir;
   let output;
 
   before(() => {
     dir = tmpDir();
-    // Build config with all phases approved + verify passed
-    const hashes = {};
-    for (const [rel, content] of Object.entries(ARTIFACTS)) {
-      writeFile(dir, rel, content);
-      // Hash the core phase artifacts (1-5)
-      const phaseMap = {
-        'spec/01_REQUIREMENTS.json': '1',
-        'spec/02_SYSTEM_DESIGN.md': '2',
-        'spec/03_TEST_CASES.json': '3',
-        'spec/04_IMPLEMENTATION_MANIFEST.json': '4',
-        'spec/05_PROOF_OF_COMPLIANCE.json': '5',
-      };
-      if (phaseMap[rel]) {
-        hashes[phaseMap[rel]] = hashArtifact(content);
-      }
-    }
-    writeFile(dir, '.aitri', minimalConfig({
-      approvedPhases: [1, 2, 3, 4, 5],
-      completedPhases: [1, 2, 3, 4, 5],
-      verifyPassed: true,
-      artifactHashes: hashes,
-    }));
+    seedDeployableRoot(dir);
     output = captureLog(() => cmdValidate({ dir, args: [] }));
   });
 
@@ -99,6 +113,77 @@ describe('cmdValidate() — all artifacts present and approved', () => {
 
   it('shows Validating header', () => {
     assert.ok(output.includes('Validating'), 'should show Validating header');
+  });
+
+  it('root-only project shows no Features section', () => {
+    assert.ok(!output.includes('Features:'),        'features header must not appear without features');
+    assert.ok(!output.includes('Σ all pipelines'),  'aggregate line must not appear without features');
+  });
+});
+
+describe('cmdValidate() — features with verify ran', () => {
+  let dir;
+  let output;
+
+  before(() => {
+    dir = tmpDir();
+    seedDeployableRoot(dir);
+    seedFeature(dir, 'alpha', {
+      approvedPhases:  [1, 2, 3, 4, 5],
+      completedPhases: [1, 2, 3, 4, 5],
+      verifyPassed:    false,
+      verifySummary:   { passed: 10, failed: 2, skipped: 0, total: 12 },
+    });
+    seedFeature(dir, 'beta', {
+      approvedPhases:  [1, 2, 3, 4, 5],
+      completedPhases: [1, 2, 3, 4, 5],
+      verifyPassed:    true,
+      verifySummary:   { passed: 8, failed: 0, skipped: 0, total: 8 },
+    });
+    output = captureLog(() => cmdValidate({ dir, args: [] }));
+  });
+
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('prints Features section with per-feature row', () => {
+    assert.ok(output.includes('Features:'), 'features header must appear');
+    assert.ok(output.includes('alpha'),     'alpha feature row must appear');
+    assert.ok(output.includes('beta'),      'beta feature row must appear');
+  });
+
+  it('shows aggregate Σ line with summed counts across root + features', () => {
+    // root 30/30 + alpha 10/12 + beta 8/8 → 48/50
+    assert.ok(output.includes('Σ all pipelines: Passed (48/50)'),
+      `expected aggregate 48/50, got:\n${output}`);
+  });
+
+  it('flags failing feature with ❌ and passing with ✅', () => {
+    assert.ok(/alpha.*verify ❌/.test(output), 'alpha should show ❌');
+    assert.ok(/beta.*verify ✅/.test(output),  'beta should show ✅');
+  });
+});
+
+describe('cmdValidate() — features without verify ran', () => {
+  let dir;
+  let output;
+
+  before(() => {
+    dir = tmpDir();
+    seedDeployableRoot(dir);
+    seedFeature(dir, 'alpha', { approvedPhases: [1] });
+    output = captureLog(() => cmdValidate({ dir, args: [] }));
+  });
+
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('prints Features section', () => {
+    assert.ok(output.includes('Features:'), 'features header must appear when features exist');
+    assert.ok(output.includes('alpha'),     'alpha row must appear');
+  });
+
+  it('omits Σ line when no feature ran verify', () => {
+    assert.ok(!output.includes('Σ all pipelines'),
+      'aggregate line must not appear when no feature has a verify summary');
   });
 });
 

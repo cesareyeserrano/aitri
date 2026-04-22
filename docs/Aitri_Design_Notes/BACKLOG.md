@@ -37,6 +37,106 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 > Ecosystem items (Hub, Graph, future subproducts) live in their own repos' backlogs.
 > Core only tracks items that require changes to Aitri Core itself.
 
+### Core — Reporting accuracy
+
+- [ ] P3 — **`deployable` gate includes features in terminal state** — `computeHealth()` in `snapshot.js:522-530` evaluates only the root pipeline when deciding `deployable`. A feature sub-pipeline that reached `phases 5/5` (terminal) but has `verify.passed === false` does not block deploy.
+
+  Problem: The current design assumes features are always work-in-progress, separable from root ship. But when a feature is at `phases 5/5`, by definition it is not in-progress — it is finished work that the pipeline signed off. If its verify failed or was never run, the project is not in a state consistent with what "all features approved" implies. Real case (Cesar 2026-04-22): `frontend-remediation` sat at `5/5 verify ✅ (0/44)` for multiple sessions — the feature was "done" per pipeline, but no automated tests ever matched. `aitri validate` said green. Ship would have included unverified feature code.
+
+  Files:
+  - `lib/snapshot.js` — `computeHealth()` adds a reason when `pipelines.some(p => p.scopeType === 'feature' && p.allCoreApproved && p.verify.ran && !p.verify.passed)`. Type: `feature_verify_failed`. Message lists the feature names.
+  - `test/snapshot.test.js` — three cases: no features, feature 5/5 + verify pass (deployable), feature 5/5 + verify fail (blocks).
+
+  Behavior:
+  - Features in WIP (`phases < 5/5`) remain independent from the root deploy gate — their verify state does not bleed into root's `deployable`. Intentional: a user actively developing a feature should not have it blocking the main ship.
+  - Only terminal-state features with verify that ran and failed block. This is the exact case where "the pipeline says done, but the tests disagree" — genuine inconsistency.
+  - A terminal-state feature with verify never ran is a separate condition (already covered indirectly by `phases 5/5` requiring verify-complete to have passed). Worth confirming during implementation.
+
+  Decisions:
+  - Use `verify.ran` as the guard — a feature that has not been run yet is ambiguous (maybe it will pass), not a definitive blocker.
+  - Keep the reason separate from root's `verify_not_passed` to make Hub / CLI explanations clear about *where* the block originates.
+
+  Acceptance:
+  - Snapshot returns `deployable: false` and a `feature_verify_failed` reason when any feature at 5/5 has `verify.ran && !verify.passed`.
+  - `aitri validate --explain` surfaces the feature names in the blocking-reasons list.
+  - Internal test suite (`npm run test:all`) still passes after the added gate.
+
+- [ ] P3 — **`aitri tc verify` recomputes `fr_coverage` alongside `summary`** — `tc.js:64-77` recomputes `summary` after flipping a manual TC's status but does not recompute `fr_coverage`. The two fields drift: after `tc verify TC-XXX --result pass` on a manual TC, `summary.passed` goes up but `fr_coverage[entry].tests_manual` still counts that TC as manual and `tests_passing` stays too low.
+
+  Problem: Today the gate logic uses `fr_coverage[].status === 'covered'` which is boolean (any passing test = covered), so the stale counts don't block deploy. But the artifact's own internal consistency is violated — any consumer reading both `summary` and `fr_coverage` sees contradiction. Hub currently ignores per-FR counts; future consumers or an auditor command reading this would be misled. No known break case today; latent risk.
+
+  Files:
+  - `lib/commands/tc.js` — after updating the entry + recomputing `summary`, rebuild `fr_coverage` by calling `buildFRCoverage()` (exported from `verify.js`) with current `results`, Phase 3 `test_cases`, and Phase 1 FR ids. Write the rebuilt array back to the artifact.
+  - `test/commands/tc.test.js` — add a case: start with manual TC counted in `fr_coverage.tests_manual`, run `aitri tc verify --result pass`, assert `tests_manual` decreases by 1 and `tests_passing` increases by 1 in the affected FR row.
+
+  Behavior:
+  - `aitri tc verify TC-XXX --result pass` → `fr_coverage[tc→fr].tests_manual` decreases, `tests_passing` increases by 1.
+  - `aitri tc verify TC-XXX --result fail` → `tests_manual` decreases, `tests_failing` increases by 1.
+  - `status` of the FR row (covered / partial / uncovered) recomputed — only matters if the flip was the last remaining passing test for an FR.
+  - Re-run idempotent.
+
+  Decisions:
+  - Rebuild the whole `fr_coverage` array rather than surgically updating one row. Simpler; aligned with how `verify-run` already builds it from scratch. Avoids a second code path that can drift.
+  - No version bump on its own — ship bundled with any other tc-related change. Current behavior is latent-only, not actively breaking.
+
+  Acceptance:
+  - Test above passes.
+  - `status` + `validate` output unchanged in projects that never ran `tc verify` (additive fix).
+  - No change to `.aitri` schema or artifact schema (only corrects values that should already have been correct).
+
+### Core — API cleanup
+
+- [ ] P3 — **Phase 3: enforce canonical TC ID format** — `03_TEST_CASES.json` accepts any `id` string; only presence of trailing `h` / `f` on MUST-FR coverage is checked. A project can ship non-canonical IDs like `TC-E01` (namespace letter glued to digits, no suffix) and everything downstream — conftest helpers, verify parsers, fr_coverage — silently mismatches.
+
+  Problem: Convention is documented in `docs/integrations/ARTIFACTS.md:148` and `templates/phases/tests.md:27-30` (suffix `h`/`f`/`e`, canonical shape `TC(-<NS>)*-<digits><letter>`), but not mechanically enforced. Consumer projects discover the drift as "verify shows TCs as skipped despite pytest passing" — days of debugging to trace back to a naming typo. Real case surfaced in Cesar 2026-04-22: `TC-E01`/`TC-E02` smoke tests silently dropped to `skipped_no_marker`; root cause was ID format, not the parser.
+
+  Files:
+  - `lib/phases/phase3.js` — add format validation against `/^TC(-[A-Z][A-Za-z0-9]*)*-\d+[a-z]?$/` (or similar — calibrate against existing valid IDs in internal tests + Hub). Throw with actionable message: the offending `id`, the pattern it must match, and a canonical rewrite suggestion (`TC-E01` → `TC-E-01e`).
+  - `test/phases/phase3.test.js` — add coverage for accept-canonical / reject-noncanonical cases.
+  - `docs/integrations/ARTIFACTS.md` — formalize the regex next to the existing convention paragraph.
+
+  Behavior:
+  - Phase 3 complete throws on any non-canonical `id`. Migration path for existing projects: either rename IDs (surfaces the real cost of the deviation) or we ship with a one-version grace period (warn, then throw).
+
+  Decisions:
+  - Do **not** ship reactively (single case = Cesar). Wait for a second real case before scheduling, unless an architectural review finds this a systemic gap.
+  - If scheduled: coordinate with the checkpoint-rename cycle — breaking/strict changes are easier to batch in one minor.
+
+  Acceptance:
+  - Running Phase 3 validation against a fixture with `TC-E01` throws with the exact regex + rewrite suggestion.
+  - Existing valid IDs (`TC-001h`, `TC-FE-001h`, `TC-API-USER-010f`) continue to pass.
+  - ARTIFACTS.md has the regex documented alongside the h/f/e convention.
+
+  Related:
+  - v0.1.85 fixed the parser side (multi-segment IDs) — the format-validation gate is the missing preventive counterpart.
+  - This would catch silent drift earlier (Phase 3 complete) instead of days later (verify-run showing unexplained skips).
+
+- [ ] P3 — **Rename `checkpoint` to `note` (or simplify)** — The `checkpoint` command's original "save session state" role was absorbed by auto-`writeLastSession` in v0.1.70. Today it only adds manual annotation (`--context`) and named markdown snapshots (`--name`) on top of what `resume` already surfaces.
+
+  Problem: The name `checkpoint` suggests "save state so I can restore later" — but every `complete` / `approve` / `verify-run` / `verify-complete` / `feature init` / `normalize` already writes `lastSession` automatically. Running `aitri resume` surfaces pipeline state + last-session metadata + next action without ever invoking `checkpoint`. Users who designed the command for "long project retaken days later" or "multi-user handoff" cases don't reach for it because `resume` already covers those cases. The command is mostly dormant — the name over-promises.
+
+  Files:
+  - `lib/commands/checkpoint.js` — rename and/or simplify (bare mode is redundant — `writeLastSession` with no `--context` and no `--name` duplicates auto-checkpoint)
+  - `bin/aitri.js` — dispatch table + deprecation alias if renaming
+  - `lib/commands/help.js` — update command help; clarify that `lastSession` is auto-written by structural commands
+  - `test/commands/checkpoint.test.js` — rename or update
+  - `docs/integrations/CHANGELOG.md` — breaking API change entry if renamed
+  - `README.md` — command list
+
+  Behavior (one of two paths — pick at implementation time):
+  - **Path A (rename):** `aitri note "text"` replaces `aitri checkpoint --context "text"`. `--name` snapshot mode becomes `aitri snapshot --name "..."` or folds into `aitri note --snapshot`. Bare `aitri checkpoint` is dropped (redundant with auto). Keep `checkpoint` as a deprecated alias for one minor version.
+  - **Path B (keep, simplify):** drop bare mode only — running `aitri checkpoint` with neither `--context` nor `--name` prints a short message pointing to `aitri resume`. `--context` and `--name` continue working. No rename, no deprecation.
+
+  Decisions:
+  - **Do not touch now (2026-04-21):** not broken, covers real edge cases (`--context` for free-text annotation, `--name` for pre-refactor snapshots). Revisit only if (a) a real user complains about the command's purpose being unclear, or (b) we're already doing a wider command-surface cleanup.
+  - Deprecation-with-alias is mandatory if renaming — `checkpoint` has been in the public API since v0.1.70.
+  - Path B is strictly safer than Path A; Path A is only justified if we see evidence the name confuses users.
+
+  Acceptance:
+  - If Path A: `aitri checkpoint --context "x"` prints a deprecation notice and still works; `aitri note "x"` writes `lastSession.context = "x"`; smoke + unit tests pass.
+  - If Path B: `aitri checkpoint` with no flags prints a hint; `--context` and `--name` continue working unchanged; unit tests updated.
+  - In both cases: `aitri resume` output under "Last Session" is unchanged.
+
 ### Core — Breaking changes for v0.2.0
 
 - [ ] P3 — **`IDEA.md` and `ADOPTION_SCAN.md` at the root of the user's project** — Both files land at the root after `adopt scan`, polluting the user's directory and exposing them to accidental deletion.
@@ -69,6 +169,44 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 ## Design Studies
 
 > Not implementation items. Open questions that inform future architectural decisions.
+
+### Command-surface audit
+
+Aitri exposes 20 top-level commands today (`lib/commands/*.js`). Over successive minor versions, several commands have developed functional overlap — not broken, but potentially redundant. Before v0.2.0, run a single audit to map the surface and decide whether to collapse, rename, or keep.
+
+**Suspected overlaps (starting list — to be confirmed by the audit):**
+
+| Pair / Group | Suspected overlap |
+| :--- | :--- |
+| `checkpoint` vs auto-`writeLastSession` + `resume` | Already captured — see P3 entry above |
+| `resume` vs `status` vs `status --json` vs `validate` vs `validate --explain` | Four commands project the same `buildProjectSnapshot()` with different verbosity / framing |
+| `audit` vs `review` | Both are evaluative read-only passes with personas (auditor, reviewer). Different scope (audit = whole project, review = per-phase) but same shape |
+| `feature verify-run` vs `verify-run` | Same logic, scoped to a feature sub-pipeline. Candidate for `verify-run --feature <name>` |
+| `tc verify` vs `verify-run` | Manual TC recording vs automated runner — correct split today, but worth confirming against use |
+| `wizard` vs `init` + `adopt scan` | Wizard predates the `init`/`adopt` surface maturing. Does it still add value? |
+
+**Open question:** For each suspected overlap, is the split reinforcing a real distinction (different user intent, different invariant), or is it incidental history (command added before the collapsing path existed)?
+
+**Why it is a Design Study and not a set of tickets:**
+- Each command has test coverage and real users. A "cleanup" without evidence of confusion is churn.
+- Renaming or collapsing is a breaking API change — must be batched for v0.2.0, not done piecemeal.
+- The audit's *output* is the tickets (0, 1, or N of them), not the audit itself.
+
+**Criterion to mature into tickets:**
+- A concrete case of user or agent confusion about which command to use.
+- A maintenance cost surfaced during unrelated work (e.g. snapshot schema change had to be propagated to 4 commands that project it).
+- A release that is already touching the command surface (v0.2.0 breaking batch).
+
+**Scope when executed:**
+1. One-page table: command → unique responsibility → overlaps with → evidence for or against keeping split.
+2. Per overlap: decide `keep` / `alias` / `collapse` / `rename` with trade-off written down.
+3. Output: entries in the `Core — Breaking changes for v0.2.0` section, or none if the audit finds no real overlap.
+
+**What NOT to do in the audit:**
+- Don't collapse commands just because their code is similar. Intent and user model matter more than LOC.
+- Don't rename for aesthetics. Every rename costs one deprecation cycle.
+
+---
 
 ### NFR traceability in system design (Phase 2)
 

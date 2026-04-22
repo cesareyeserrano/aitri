@@ -5,6 +5,14 @@
 
 ---
 
+## [0.1.86] — 2026-04-22
+
+- **fix(validate):** `aitri validate` text output now enumerates feature sub-pipelines and prints the `Σ all pipelines: Passed (N/M)` aggregate line, mirroring what `aitri status` already exposes (v0.1.81). Closes a false-positive path where validate declared "Pipeline complete. Deployment artifacts are ready" with root `30/30` while aggregate across feature sub-pipelines was `228/280` — 52 TCs unverified. Both the feature breakdown and the aggregate Σ are appended after the existing deploy-readiness block; users and agents who trust validate's green signal now see the same project-wide truth in the same command.
+- **docs:** Integration contract unchanged — validate's legacy `--json` schema (`artifacts[]`, `allValid`, `deployFiles`, `setupCommands`) is byte-identical. Feature-aware data is already exposed via `aitri status --json → tests` for automation consumers; this release only fixes the human-facing text projection.
+- **tests:** +5 new cases in `test/commands/validate.test.js` covering: root-only (no features section), features with verify ran (Σ printed with summed counts, ❌/✅ indicators), features without verify (features section but no Σ).
+
+---
+
 ## [0.1.85] — 2026-04-22
 
 - **fix(verify):** Test-output parsers now recognize multi-segment namespaced TC IDs (`TC-FE-001h`, `TC-API-USER-010f`). Previously, all four parsers (`parseRunnerOutput`, `parseVitestOutput`, `parsePytestOutput`, `parsePlaywrightOutput`) captured only the first segment after `TC-/TC_`, so `test_TC_FE_001h_description` was parsed as `TC-FE` — which never matched Phase 3's `TC-FE-001h`. Result: every automated TC in feature sub-pipelines using namespaced IDs silently fell into `skipped_no_marker`, forcing agents to work around the gate (manual edits to `04_TEST_RESULTS.json`). Single-segment IDs (`TC-001h`, `TC-020b`) remain unaffected.
