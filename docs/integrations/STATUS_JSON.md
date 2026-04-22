@@ -1,6 +1,6 @@
 # `aitri status --json` — Machine-Readable Project Snapshot
 
-**Aitri version:** v0.1.86+
+**Aitri version:** v0.1.87+
 **Stability:** Additive-only. Legacy fields (used by Hub pre-v0.1.77) preserved indefinitely.
 **Scope:** Single-machine CLI consumers. For remote (GitHub-URL) consumers, use `.aitri` + `spec/` directly per [SCHEMA.md](./SCHEMA.md) / [ARTIFACTS.md](./ARTIFACTS.md).
 
@@ -116,7 +116,9 @@ Deploy-gate reasoning and global signals.
 }
 ```
 
-Deploy-gate reason types: `no_root`, `phases_pending`, `verify_not_passed`, `drift`, `normalize_pending`, `blocking_bugs`, `version_mismatch`.
+Deploy-gate reason types: `no_root`, `phases_pending`, `verify_not_passed`, `drift`, `normalize_pending`, `blocking_bugs`, `version_mismatch`, `feature_verify_failed` (v0.1.87+).
+
+The `feature_verify_failed` reason carries an additional `features: string[]` field listing the feature names at phases 5/5 whose verify ran and did not pass. WIP features (phases < 5/5) do not trigger this reason — by design, a feature still in progress must not block root deploy.
 
 ---
 

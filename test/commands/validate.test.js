@@ -163,6 +163,46 @@ describe('cmdValidate() — features with verify ran', () => {
   });
 });
 
+describe('cmdValidate() — feature at 5/5 with verify failed blocks deploy', () => {
+  let dir;
+  let output;
+  let explainOutput;
+
+  before(() => {
+    dir = tmpDir();
+    seedDeployableRoot(dir);
+    seedFeature(dir, 'frontend-remediation', {
+      approvedPhases:  [1, 2, 3, 4, 5],
+      completedPhases: [1, 2, 3, 4, 5],
+      verifyPassed:    false,
+      verifySummary:   { passed: 0, failed: 44, skipped: 0, total: 44 },
+    });
+    output        = captureLog(() => cmdValidate({ dir, args: [] }));
+    explainOutput = captureLog(() => cmdValidate({ dir, args: ['--explain'] }));
+  });
+
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('reports deploy blocked instead of "Pipeline complete"', () => {
+    assert.ok(!output.includes('Pipeline complete. Deployment artifacts are ready'),
+      'validate must not declare ready-to-ship when a 5/5 feature has failed verify');
+    assert.ok(output.includes('deploy is blocked'),
+      'validate must surface the deploy block');
+  });
+
+  it('names the failing feature in blocking reasons', () => {
+    assert.ok(output.includes('frontend-remediation'),
+      'feature name must appear in the blocking-reasons list');
+  });
+
+  it('--explain surfaces the feature_verify_failed type', () => {
+    assert.ok(explainOutput.includes('feature_verify_failed'),
+      '--explain must expose the reason type');
+    assert.ok(explainOutput.includes('frontend-remediation'),
+      '--explain must name the failing feature');
+  });
+});
+
 describe('cmdValidate() — features without verify ran', () => {
   let dir;
   let output;

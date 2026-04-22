@@ -39,28 +39,6 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 
 ### Core — Reporting accuracy
 
-- [ ] P3 — **`deployable` gate includes features in terminal state** — `computeHealth()` in `snapshot.js:522-530` evaluates only the root pipeline when deciding `deployable`. A feature sub-pipeline that reached `phases 5/5` (terminal) but has `verify.passed === false` does not block deploy.
-
-  Problem: The current design assumes features are always work-in-progress, separable from root ship. But when a feature is at `phases 5/5`, by definition it is not in-progress — it is finished work that the pipeline signed off. If its verify failed or was never run, the project is not in a state consistent with what "all features approved" implies. Real case (Cesar 2026-04-22): `frontend-remediation` sat at `5/5 verify ✅ (0/44)` for multiple sessions — the feature was "done" per pipeline, but no automated tests ever matched. `aitri validate` said green. Ship would have included unverified feature code.
-
-  Files:
-  - `lib/snapshot.js` — `computeHealth()` adds a reason when `pipelines.some(p => p.scopeType === 'feature' && p.allCoreApproved && p.verify.ran && !p.verify.passed)`. Type: `feature_verify_failed`. Message lists the feature names.
-  - `test/snapshot.test.js` — three cases: no features, feature 5/5 + verify pass (deployable), feature 5/5 + verify fail (blocks).
-
-  Behavior:
-  - Features in WIP (`phases < 5/5`) remain independent from the root deploy gate — their verify state does not bleed into root's `deployable`. Intentional: a user actively developing a feature should not have it blocking the main ship.
-  - Only terminal-state features with verify that ran and failed block. This is the exact case where "the pipeline says done, but the tests disagree" — genuine inconsistency.
-  - A terminal-state feature with verify never ran is a separate condition (already covered indirectly by `phases 5/5` requiring verify-complete to have passed). Worth confirming during implementation.
-
-  Decisions:
-  - Use `verify.ran` as the guard — a feature that has not been run yet is ambiguous (maybe it will pass), not a definitive blocker.
-  - Keep the reason separate from root's `verify_not_passed` to make Hub / CLI explanations clear about *where* the block originates.
-
-  Acceptance:
-  - Snapshot returns `deployable: false` and a `feature_verify_failed` reason when any feature at 5/5 has `verify.ran && !verify.passed`.
-  - `aitri validate --explain` surfaces the feature names in the blocking-reasons list.
-  - Internal test suite (`npm run test:all`) still passes after the added gate.
-
 - [ ] P3 — **`aitri tc verify` recomputes `fr_coverage` alongside `summary`** — `tc.js:64-77` recomputes `summary` after flipping a manual TC's status but does not recompute `fr_coverage`. The two fields drift: after `tc verify TC-XXX --result pass` on a manual TC, `summary.passed` goes up but `fr_coverage[entry].tests_manual` still counts that TC as manual and `tests_passing` stays too low.
 
   Problem: Today the gate logic uses `fr_coverage[].status === 'covered'` which is boolean (any passing test = covered), so the stale counts don't block deploy. But the artifact's own internal consistency is violated — any consumer reading both `summary` and `fr_coverage` sees contradiction. Hub currently ignores per-FR counts; future consumers or an auditor command reading this would be misled. No known break case today; latent risk.

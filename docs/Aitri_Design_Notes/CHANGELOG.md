@@ -5,6 +5,16 @@
 
 ---
 
+## [0.1.87] — 2026-04-22
+
+- **feat(health):** New deploy-gate reason `feature_verify_failed` — `computeHealth()` now blocks `deployable` when any feature sub-pipeline at phases 5/5 has `verify.ran && !verify.passed`. Real case (Cesar 2026-04-22): `frontend-remediation` sat at `5/5 verify ✅ (0/44)` for multiple sessions; pipeline declared done, tests never matched, `validate` said green. Now the inconsistency blocks the gate instead of silently passing it.
+- **design:** WIP features (phases < 5/5) remain independent from root's deploy gate by design — a feature in active development must not force the main ship. Only terminal-state features (pipeline signed off) participate in the gate.
+- **api:** `deployableReasons` entries for this reason carry an additional `features: string[]` field listing the offending feature names. Additive; existing readers ignoring unknown reason types unaffected. Surfaced identically via `aitri validate`, `aitri validate --explain`, and the `--json` projections of both `validate` and `status`.
+- **docs:** `docs/integrations/STATUS_JSON.md` + `docs/integrations/CHANGELOG.md` updated with the new reason type and subproduct impact note.
+- **tests:** +3 cases in `test/snapshot.test.js` (feature 5/5 pass stays deployable, feature 5/5 fail blocks, WIP feature does not block) + 3 cases in `test/commands/validate.test.js` (deploy blocked text, feature named in reasons, `--explain` surfaces the reason type).
+
+---
+
 ## [0.1.86] — 2026-04-22
 
 - **fix(validate):** `aitri validate` text output now enumerates feature sub-pipelines and prints the `Σ all pipelines: Passed (N/M)` aggregate line, mirroring what `aitri status` already exposes (v0.1.81). Closes a false-positive path where validate declared "Pipeline complete. Deployment artifacts are ready" with root `30/30` while aggregate across feature sub-pipelines was `228/280` — 52 TCs unverified. Both the feature breakdown and the aggregate Σ are appended after the existing deploy-readiness block; users and agents who trust validate's green signal now see the same project-wide truth in the same command.

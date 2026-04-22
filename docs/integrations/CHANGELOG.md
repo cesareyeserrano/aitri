@@ -5,6 +5,20 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.87 (2026-04-22) — deploy gate — additive
+
+**New deploy-gate reason: `feature_verify_failed`**
+- `computeHealth()` now blocks `deployable` when a feature sub-pipeline at phases 5/5 has `verify.ran && !verify.passed`. WIP features (phases < 5/5) remain independent — a feature still in development must not block root deploy.
+- New reason object shape: `{ type: 'feature_verify_failed', message: string, features: string[] }` — `features` lists the offending feature names. Present alongside (not replacing) existing reasons.
+- Surfaced via `aitri validate`, `aitri validate --explain`, `aitri validate --json.deployableReasons`, and `aitri status --json.health.deployableReasons`.
+
+**Subproduct impact:**
+- **Additive.** Old readers ignoring unknown reason types keep working. No field removed, no type change.
+- Readers that enumerate `deployableReasons` should handle `feature_verify_failed` and optionally use its `features[]` field for richer UI. The existing `{ type, message }` contract is preserved — any reader that only formats `message` needs no changes.
+- `v0.1.87` also updates `aitri validate` text output to enumerate features + Σ aggregate (shipped in v0.1.86, schema-free rendering-only change).
+
+---
+
 ## v0.1.85 (2026-04-22) — bugfix (no schema change)
 
 **Test-output parsers now handle multi-segment TC IDs**

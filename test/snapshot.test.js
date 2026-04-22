@@ -220,6 +220,69 @@ describe('health.deployable', () => {
       assert.ok(snap.health.deployableReasons.some(r => r.type === 'normalize_pending'));
     } finally { cleanup(dir); }
   });
+
+  it('stays true when a terminal-state feature has verify passed', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir);
+      const featDir = path.join(dir, 'features', 'ok');
+      fs.mkdirSync(path.join(featDir, 'spec'), { recursive: true });
+      saveConfig(featDir, {
+        projectName:     'ok',
+        artifactsDir:    'spec',
+        approvedPhases:  [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+        verifyPassed:    true,
+        verifySummary:   { passed: 4, failed: 0, total: 4 },
+      });
+      const snap = buildProjectSnapshot(dir, { cliVersion: '0.1.76' });
+      assert.equal(snap.health.deployable, true);
+      assert.ok(!snap.health.deployableReasons.some(r => r.type === 'feature_verify_failed'));
+    } finally { cleanup(dir); }
+  });
+
+  it('is false with feature_verify_failed when a feature at 5/5 has verify failed', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir);
+      const featDir = path.join(dir, 'features', 'frontend-remediation');
+      fs.mkdirSync(path.join(featDir, 'spec'), { recursive: true });
+      saveConfig(featDir, {
+        projectName:     'frontend-remediation',
+        artifactsDir:    'spec',
+        approvedPhases:  [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+        verifyPassed:    false,
+        verifySummary:   { passed: 0, failed: 44, total: 44 },
+      });
+      const snap = buildProjectSnapshot(dir, { cliVersion: '0.1.76' });
+      assert.equal(snap.health.deployable, false);
+      const reason = snap.health.deployableReasons.find(r => r.type === 'feature_verify_failed');
+      assert.ok(reason, 'feature_verify_failed reason must be present');
+      assert.deepEqual(reason.features, ['frontend-remediation']);
+      assert.ok(reason.message.includes('frontend-remediation'));
+    } finally { cleanup(dir); }
+  });
+
+  it('does not block on features still in progress (phases < 5/5, verify failed)', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir);
+      const featDir = path.join(dir, 'features', 'wip');
+      fs.mkdirSync(path.join(featDir, 'spec'), { recursive: true });
+      saveConfig(featDir, {
+        projectName:     'wip',
+        artifactsDir:    'spec',
+        approvedPhases:  [1, 2, 3],
+        completedPhases: [1, 2, 3],
+        verifyPassed:    false,
+        verifySummary:   { passed: 2, failed: 3, total: 5 },
+      });
+      const snap = buildProjectSnapshot(dir, { cliVersion: '0.1.76' });
+      assert.equal(snap.health.deployable, true, 'WIP feature must not block root deploy');
+      assert.ok(!snap.health.deployableReasons.some(r => r.type === 'feature_verify_failed'));
+    } finally { cleanup(dir); }
+  });
 });
 
 // ── Version mismatch ─────────────────────────────────────────────────────────
