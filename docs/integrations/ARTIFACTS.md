@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v0.1.88+
+**Aitri version:** v0.1.89+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -60,7 +60,8 @@ Written by Phase 1 (PM persona). Flat structure — no epics or nested feature h
     }
   ],
   "constraints": ["string"],
-  "technology_preferences": ["string"]
+  "technology_preferences": ["string"],
+  "original_brief": "string (optional, v0.1.89+) — full content of IDEA.md absorbed at first approve of Phase 1; the file is removed from disk after archive. Historical reference only — never read by Aitri or downstream phases for behavioral decisions."
 }
 ```
 
@@ -73,6 +74,13 @@ Written by Phase 1 (PM persona). Flat structure — no epics or nested feature h
 - MUST FRs whose `title` is fully vague (matches qualifier like "properly"/"correctly"/"correctamente" with <2 substantive tokens remaining after stopword/vague-word removal) will fail validation (v0.1.82+)
 - Any pair of FRs (regardless of priority) with ≥3 acceptance_criteria each and ≥90% Jaccard similarity on their AC sets will fail validation — copy-paste of ACs is an anti-pattern (v0.1.82+)
 - `user_personas` missing → non-fatal warning (not blocked)
+- `original_brief` (v0.1.89+) is additive — not validated, present only after first approve of Phase 1; safe to ignore for old readers
+
+**Phase 1 input handling (v0.1.89+):**
+- **First run** (no `01_REQUIREMENTS.json` yet): the agent reads `IDEA.md` from project root as seed input.
+- **Re-runs** (`01_REQUIREMENTS.json` exists and parses): the agent reads the current `01_REQUIREMENTS.json` as the SSoT and refines it. `IDEA.md` is irrelevant by design — never reloaded.
+- **Archive on first approve**: `aitri approve 1` (first time) absorbs `IDEA.md` into `01_REQUIREMENTS.json.original_brief` and removes the file. Subsequent re-runs cannot drift against a stale brief because the brief no longer exists as a live input.
+- **Reset to seed**: delete `01_REQUIREMENTS.json` (the `original_brief` field preserves the seed text for manual recovery).
 
 **Phase gate:** Approved when `"1"` is in `approvedPhases[]`.
 

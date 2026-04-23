@@ -5,6 +5,20 @@
 
 ---
 
+## [0.1.89] — 2026-04-22
+
+- **feat(phase1):** Phase 1 re-runs now use `01_REQUIREMENTS.json` as the SSoT input instead of re-reading IDEA.md. Closes a real drift class where re-runs silently pruned FRs that legitimately grew past the original brief — agents would obey the constraint *"never invent requirements not implied by IDEA.md"* and quietly delete CSV-export, categories, notifications, etc. that were added between approvals. Re-runs now refine current FRs; first run still uses IDEA.md.
+- **feat(approve):** First `aitri approve 1` archives `IDEA.md` content into `01_REQUIREMENTS.json.original_brief` (new optional field) and removes `IDEA.md` from disk. Once 01_REQUIREMENTS.json is the canonical artifact, IDEA.md cannot drift against it because it no longer exists as a live input. The seed text is preserved verbatim for human recovery.
+- **api:** New optional artifact field `01_REQUIREMENTS.json.original_brief` (string). Additive — old readers (Hub, etc.) ignore unknown fields. Full schema doc + Phase 1 input handling section in `docs/integrations/ARTIFACTS.md`.
+- **feat(feature):** `aitri feature run-phase <name> 1` now materializes `FEATURE_IDEA.md → IDEA.md` only when the feature has no `01_REQUIREMENTS.json` yet — same SSoT model per feature sub-pipeline.
+- **personas:** `pm.js` constraint relaxed from absolute "never invent beyond IDEA.md" to mode-neutral "never invent beyond the input artifact (IDEA.md on first run, 01_REQUIREMENTS.json on re-run)". `ux.js` Design Tokens fallback now references 01_REQUIREMENTS.json (or its original_brief field) instead of IDEA.md.
+- **template:** `templates/phases/requirements.md` adds a conditional re-run block ("Current Requirements — SSoT for this re-run") that instructs the agent to refine current FRs and skip the IDEA.md Pre-flight Evaluation. First-run mode unchanged.
+- **escape hatch:** To regenerate from the seed: delete `01_REQUIREMENTS.json` (the `original_brief` field preserves the original IDEA.md content). No new flag, no new command — just one explicit gesture.
+- **tests:** +12 cases — phase1 re-run mode (3: SSoT block renders, malformed 01_REQS falls back, missing both throws); approve archives IDEA.md (5: file removed, original_brief written, hash matches post-archive, ideaArchived event, user notice); approve no-op without IDEA.md (2); re-approve does not re-archive (2).
+- **scope decision:** Discovery phase intentionally NOT changed — same drift class exists in theory (Discovery re-runs read IDEA.md) but no real evidence demands it; will revisit if a case appears. NFR traceability and other Design Studies untouched.
+
+---
+
 ## [0.1.88] — 2026-04-22
 
 - **docs(prompt):** [templates/phases/tests.md](templates/phases/tests.md) TC ID convention now documents the canonical shape `TC[-NAMESPACE]*-<digits><suffix>` with namespaced examples (`TC-FE-001h`, `TC-API-USER-010f`) and explicit anti-patterns (`TC-FE001h` glued, `TC-E01` no separator) — both fail [verify.js extractTCId](lib/commands/verify.js#L29) silently. Partial mitigation for the canonical-format gate still pending in BACKLOG. Phase 3 prompt output is the only observable change.

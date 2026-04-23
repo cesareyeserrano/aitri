@@ -54,6 +54,103 @@ const ARTIFACT_CONTENT = '{"project_name":"T","functional_requirements":[]}';
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+describe('cmdApprove() — first approve of phase 1 archives IDEA.md', () => {
+  let dir;
+  let output;
+  const ideaContent = '# My Project\n\n## Problem\nUsers waste hours.\n## Target Users\nDevs.\n## Business Rules\nMust be fast.\n## Success Criteria\nGiven X when Y then Z.\n';
+  const reqContent  = '{"project_name":"T","functional_requirements":[]}';
+
+  before(() => {
+    dir = tmpDir();
+    writeFile(dir, 'IDEA.md', ideaContent);
+    writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+    writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+    output = captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+  });
+
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('removes IDEA.md from disk', () => {
+    assert.ok(!fs.existsSync(path.join(dir, 'IDEA.md')), 'IDEA.md must be deleted');
+  });
+
+  it('writes original_brief field with full IDEA.md content into 01_REQUIREMENTS.json', () => {
+    const updated = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+    assert.equal(updated.original_brief, ideaContent, 'full IDEA content must land verbatim in original_brief');
+    assert.equal(updated.project_name, 'T', 'existing fields must be preserved');
+  });
+
+  it('records hash of post-archive artifact (not the original)', () => {
+    const config   = loadConfig(dir);
+    const onDisk   = fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8');
+    assert.equal(config.artifactHashes['1'], hashArtifact(onDisk),
+      'recorded hash must match what is now on disk — otherwise drift fires immediately');
+  });
+
+  it('logs ideaArchived in the approved event', () => {
+    const config = loadConfig(dir);
+    const last   = config.events[config.events.length - 1];
+    assert.equal(last.event, 'approved');
+    assert.equal(last.ideaArchived, true);
+  });
+
+  it('prints user notice about archive + delete', () => {
+    assert.ok(output.includes('IDEA.md archived'), 'user must be told what happened');
+  });
+});
+
+describe('cmdApprove() — phase 1 approve when IDEA.md is already absent', () => {
+  let dir;
+  const reqContent = '{"project_name":"T","functional_requirements":[]}';
+
+  before(() => {
+    dir = tmpDir();
+    writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+    writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+    captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+  });
+
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('does not add original_brief when no IDEA.md to archive', () => {
+    const updated = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+    assert.equal(updated.original_brief, undefined, 'no field added when no IDEA.md exists');
+  });
+
+  it('approval still succeeds without IDEA.md', () => {
+    const config = loadConfig(dir);
+    assert.ok(config.approvedPhases.includes(1));
+  });
+});
+
+describe('cmdApprove() — re-approve of phase 1 does not re-archive', () => {
+  let dir;
+  const reqContent = '{"project_name":"T","functional_requirements":[],"original_brief":"old"}';
+
+  before(() => {
+    dir = tmpDir();
+    writeFile(dir, 'IDEA.md', 'NEW IDEA CONTENT'); // would be archived if re-archive ran
+    writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+    writeFile(dir, '.aitri', minimalConfig({
+      approvedPhases:  [1],   // already approved
+      completedPhases: [1],
+      artifactHashes:  { '1': hashArtifact(reqContent) },
+    }));
+    captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+  });
+
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('preserves existing original_brief — does not overwrite with new IDEA', () => {
+    const updated = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+    assert.equal(updated.original_brief, 'old', 're-approve must not re-archive');
+  });
+
+  it('does not delete IDEA.md on re-approval', () => {
+    assert.ok(fs.existsSync(path.join(dir, 'IDEA.md')), 'IDEA.md must remain on re-approve (only first approve archives)');
+  });
+});
+
 describe('cmdApprove() — successful approval (non-TTY)', () => {
   let dir;
   let output;

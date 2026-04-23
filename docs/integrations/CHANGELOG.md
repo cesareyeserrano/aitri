@@ -5,6 +5,27 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.89 (2026-04-22) — Phase 1 SSoT model — additive
+
+**IDEA.md role formalized as seed-only**
+- First Phase 1 run reads `IDEA.md` (the seed brief). After `aitri approve 1` (first time), `IDEA.md` content is absorbed into `01_REQUIREMENTS.json.original_brief` (new optional field) and the `IDEA.md` file is removed from disk.
+- All subsequent Phase 1 re-runs use `01_REQUIREMENTS.json` as the SSoT input. The agent refines current FRs instead of regenerating from a stale brief — this closes a real drift class where re-runs silently pruned legitimate FRs that grew organically past the original brief.
+- Same pattern for feature sub-pipelines: `aitri feature run-phase <name> 1` materializes `FEATURE_IDEA.md → IDEA.md` only when the feature has no `01_REQUIREMENTS.json` yet.
+
+**New artifact field: `01_REQUIREMENTS.json.original_brief`**
+- Type: `string` (full IDEA.md content, verbatim).
+- Optional and additive — old readers ignoring unknown fields keep working.
+- Historical reference only. Aitri does not read this field for any behavioral decision; it exists for human recovery and future audit tooling.
+- Present after first `aitri approve 1` if `IDEA.md` existed at that moment. Absent if the project was approved before v0.1.89 OR if `IDEA.md` was deleted manually before approval.
+
+**Subproduct impact:**
+- **Additive.** No schema field removed, no type changed. Hub and other readers need no changes.
+- Hub may optionally surface `original_brief` in project detail views (e.g. "Original brief" expandable block).
+- The disappearance of `IDEA.md` from disk after first Phase 1 approve is intentional, not a bug. Readers that previously checked `IDEA.md` existence to gauge project maturity should switch to checking `01_REQUIREMENTS.json` (more reliable signal).
+- Compliance with the artifacts-as-SSoT invariant: Phase 1's behavior on re-runs now matches the same "current artifact = SSoT" model that Phases 2-5 already follow.
+
+---
+
 ## v0.1.87 (2026-04-22) — deploy gate — additive
 
 **New deploy-gate reason: `feature_verify_failed`**

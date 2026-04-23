@@ -13,6 +13,22 @@
 {{FEEDBACK}}
 {{/IF_FEEDBACK}}
 
+{{#IF_CURRENT_REQUIREMENTS}}
+## Current Requirements — SSoT for this re-run
+01_REQUIREMENTS.json already exists from a prior Phase 1 run. This is the **single source of truth** — IDEA.md is no longer relevant for this iteration. Your task is to **refine, correct, or extend** the FRs below based on the feedback (if any), NOT to regenerate from scratch and NOT to prune FRs that grew organically beyond the original brief.
+
+```json
+{{CURRENT_REQUIREMENTS}}
+```
+
+**Rules for re-runs:**
+- Preserve every FR id from the current artifact unless explicitly removed via feedback. Renumbering breaks downstream traces (TCs, compliance entries).
+- Add new FRs only if feedback explicitly demands new behavior or you discover a gap relative to the existing FR set.
+- The `original_brief` field (if present) is historical context only — never use it as an authority for what FRs should exist today.
+- Skip the IDEA.md Pre-flight below — it does not apply on re-runs.
+{{/IF_CURRENT_REQUIREMENTS}}
+
+{{#IF_IDEA_MD}}
 ## IDEA.md
 ```
 {{IDEA_MD}}
@@ -46,6 +62,7 @@ Instead, report which criteria failed, why each matters, and instruct the user: 
 
 **Blocking rule:** 2+ criteria FAIL → stop, report gaps, do not write artifact.
 With exactly 1 FAIL → proceed but document the gap in `project_summary.idea_gaps`.
+{{/IF_IDEA_MD}}
 
 ---
 
@@ -177,6 +194,6 @@ Next: aitri complete 1   →   aitri approve 1
   [ ] Every MUST FR has type AND at least one acceptance_criteria with a concrete metric
   [ ] acceptance_criteria for UX/visual/audio FRs contain real measurements (px, ms, %, fps)
   [ ] user_personas reflect real users — not "general user" — with a real goal and pain_point
-  [ ] No FR invents scope beyond what IDEA.md implies
+  [ ] No FR invents scope beyond what the input artifact (IDEA.md on first run, or 01_REQUIREMENTS.json on re-run) implies
   [ ] North Star KPI, JTBD, and guardrail metric are identified in project_summary
   [ ] Operational NFRs covered: observability, CI/CD, API security, healthcheck — or explicitly declared "not applicable" with reason

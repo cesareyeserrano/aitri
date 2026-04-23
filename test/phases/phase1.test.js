@@ -1,5 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { PHASE_DEFS } from '../../lib/phases/index.js';
 
 const validP1 = () => JSON.stringify({
@@ -347,5 +350,63 @@ describe('Phase 1 — buildBriefing() (BL-001)', () => {
     });
     assert.ok(b.includes('/tmp/test/spec/01_REQUIREMENTS.json'), 'artifact path must use artifactsBase/spec');
     assert.ok(!b.includes('/tmp/test/01_REQUIREMENTS.json'), 'artifact path must NOT use bare dir');
+  });
+});
+
+// ── Re-run mode: 01_REQUIREMENTS.json is the SSoT, IDEA.md is irrelevant ─────
+
+describe('Phase 1 — buildBriefing() re-run mode (01_REQUIREMENTS.json exists)', () => {
+  it('renders the "Current Requirements — SSoT" block when 01_REQS exists and skips IDEA Pre-flight', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-phase1-rerun-'));
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    const reqContent = '{"project_name":"X","functional_requirements":[{"id":"FR-001","title":"existing","priority":"MUST","type":"logic"}]}';
+    fs.writeFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), reqContent);
+    try {
+      const briefing = PHASE_DEFS[1].buildBriefing({
+        dir, inputs: {}, feedback: null,
+        artifactsBase: path.join(dir, 'spec'),
+        config: { artifactsDir: 'spec' },
+      });
+      assert.ok(briefing.includes('Current Requirements — SSoT'),
+        're-run mode must render the SSoT section');
+      assert.ok(briefing.includes('FR-001'),
+        'briefing must include the existing FR ids verbatim');
+      assert.ok(!briefing.includes('IDEA.md Pre-flight Evaluation'),
+        'Pre-flight Evaluation must be skipped in re-run mode');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to IDEA.md mode when 01_REQS exists but is malformed JSON', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-phase1-malformed-'));
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), '{not json');
+    fs.writeFileSync(path.join(dir, 'IDEA.md'), '## Problem\nReal problem here.\n');
+    try {
+      const briefing = PHASE_DEFS[1].buildBriefing({
+        dir, inputs: {}, feedback: null,
+        artifactsBase: path.join(dir, 'spec'),
+        config: { artifactsDir: 'spec' },
+      });
+      assert.ok(briefing.includes('IDEA.md Pre-flight Evaluation'),
+        'malformed 01_REQS must fall back to IDEA.md first-run mode');
+      assert.ok(!briefing.includes('Current Requirements — SSoT'),
+        'SSoT block must not render when 01_REQS is malformed');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('throws "Missing required file: IDEA.md" when neither IDEA.md nor 01_REQS exists', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-phase1-empty-'));
+    try {
+      assert.throws(
+        () => PHASE_DEFS[1].buildBriefing({ dir, inputs: {}, feedback: null, config: {} }),
+        /Missing required file: IDEA\.md/,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
