@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, extractTCId } from '../../lib/commands/verify.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, extractTCId, cmdVerifyRun } from '../../lib/commands/verify.js';
 
 describe('parseRunnerOutput()', () => {
 
@@ -311,6 +314,23 @@ describe('buildFRCoverage()', () => {
     assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.status, 'partial');
   });
 
+  it('supports multi-FR TCs via frs array', () => {
+    const tcs = [{ id: 'TC-001', frs: ['FR-001', 'FR-002'] }];
+    const results = [{ tc_id: 'TC-001', status: 'pass' }];
+    const coverage = buildFRCoverage(results, tcs, ['FR-001', 'FR-002']);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.tests_passing, 1);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-002')?.tests_passing, 1);
+  });
+
+  it('legacy schema with only "requirement" produces empty mapping (A2 trap)', () => {
+    // Regression: pre-v0.1.x schema used "requirement" (string). Without the verify-run
+    // precondition, buildFRCoverage would produce all-zeros and overwrite 04_TEST_RESULTS.json.
+    const legacyTcs = [{ id: 'TC-001', requirement: 'FR-001' }];
+    const results = [{ tc_id: 'TC-001', status: 'pass' }];
+    const coverage = buildFRCoverage(results, legacyTcs, ['FR-001']);
+    assert.equal(coverage.find(f => f.fr_id === 'FR-001')?.tests_passing, 0);
+  });
+
 });
 
 describe('BUG-3 regression — flagValue null vs undefined', () => {
@@ -571,6 +591,70 @@ describe('extractTCId()', () => {
 
   it('rejects TC prefix preceded by alphanumeric (no word boundary before)', () => {
     assert.equal(extractTCId('xTC-001h passes'), null);
+  });
+
+});
+
+describe('cmdVerifyRun() — A2 schema precondition', () => {
+
+  function tmpDir() {
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-verify-a2-'));
+  }
+
+  function writeJSON(dir, rel, obj) {
+    const full = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, JSON.stringify(obj, null, 2), 'utf8');
+  }
+
+  function seedLegacyProject(dir) {
+    writeJSON(dir, '.aitri/config.json', {
+      approvedPhases: [1, 2, 3, 4],
+      completedPhases: [1, 2, 3, 4],
+      artifactsDir: 'spec',
+      aitriVersion: '0.1.65',
+    });
+    writeJSON(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json', {
+      files_created: ['src/foo.js'],
+      test_runner: 'node --test',
+      test_files: [],
+    });
+    // Legacy schema: "requirement" (string), no requirement_id / frs
+    writeJSON(dir, 'spec/03_TEST_CASES.json', {
+      test_cases: [
+        { id: 'TC-001', title: 'foo', requirement: 'FR-001' },
+        { id: 'TC-002', title: 'bar', requirement: 'FR-001' },
+      ],
+    });
+    writeJSON(dir, 'spec/01_REQUIREMENTS.json', {
+      functional_requirements: [{ id: 'FR-001', title: 'foo', priority: 'must-have' }],
+    });
+    // Seed a pre-existing 04_TEST_RESULTS.json with valid coverage — guard must preserve it.
+    writeJSON(dir, 'spec/04_TEST_RESULTS.json', {
+      summary: { total: 2, passed: 2, failed: 0, skipped: 0 },
+      results: [{ tc_id: 'TC-001', status: 'pass' }, { tc_id: 'TC-002', status: 'pass' }],
+      fr_coverage: [{ fr_id: 'FR-001', tests_passing: 2, tests_failing: 0, tests_skipped: 0, tests_manual: 0, status: 'covered' }],
+    });
+  }
+
+  it('errors out before touching 04_TEST_RESULTS.json on legacy schema', () => {
+    const dir = tmpDir();
+    seedLegacyProject(dir);
+    const priorResults = fs.readFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), 'utf8');
+
+    let errMsg = null;
+    const err = (m) => { errMsg = m; throw new Error(m); };
+    const flagValue = () => null;
+
+    assert.throws(() => cmdVerifyRun({ dir, args: [], flagValue, err }), /legacy schema/);
+    assert.match(errMsg, /requirement_id/);
+    assert.match(errMsg, /frs/);
+
+    // Critical: the pre-existing results must NOT have been overwritten.
+    const afterResults = fs.readFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), 'utf8');
+    assert.equal(afterResults, priorResults);
+
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
 });

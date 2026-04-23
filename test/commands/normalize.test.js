@@ -335,6 +335,106 @@ describe('cmdNormalize() --resolve — gates and cycle closure', () => {
   });
 });
 
+// ── --init escape hatch (A4) ─────────────────────────────────────────────────
+
+describe('cmdNormalize() --init — brownfield baseline escape hatch', () => {
+
+  it('refuses when Phase 4 is not approved', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion: '0.1.70',
+        artifactsDir: 'spec',
+        approvedPhases: [1, 2, 3],
+      }));
+      assert.throws(
+        () => cmdNormalize({ dir, args: ['--init'], err: noopErr }),
+        /Phase 4.*must be approved/
+      );
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('refuses when normalizeState already exists (no silent clobber)', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion:   '0.1.80',
+        artifactsDir:   'spec',
+        approvedPhases: [1, 2, 3, 4],
+        normalizeState: { baseRef: 'deadbeef', method: 'git', status: 'resolved' },
+      }));
+      assert.throws(
+        () => cmdNormalize({ dir, args: ['--init'], err: noopErr }),
+        /already exists/
+      );
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('stamps mtime baseline when no git repo', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion:   '0.1.70',
+        artifactsDir:   'spec',
+        approvedPhases: [1, 2, 3, 4],
+      }));
+      captureLog(() => cmdNormalize({ dir, args: ['--init'], err: noopErr }));
+      const cfg = loadConfig(dir);
+      assert.ok(cfg.normalizeState);
+      assert.equal(cfg.normalizeState.method, 'mtime');
+      assert.equal(cfg.normalizeState.status, 'resolved');
+      // baseRef must be an ISO timestamp when method is mtime
+      assert.ok(!isNaN(new Date(cfg.normalizeState.baseRef).getTime()));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('normalize without --init hints at --init when Phase 4 approved pre-v0.1.80', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion:   '0.1.70',
+        artifactsDir:   'spec',
+        approvedPhases: [1, 2, 3, 4],
+      }));
+      let captured = '';
+      const origWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = (chunk) => { captured += chunk; return true; };
+      const origExit = process.exit.bind(process);
+      process.exit = () => { throw new Error('exit'); };
+      try { cmdNormalize({ dir, err: noopErr }); } catch {}
+      finally {
+        process.stderr.write = origWrite;
+        process.exit = origExit;
+      }
+      assert.match(captured, /aitri normalize --init/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('normalize without --init keeps original hint when Phase 4 not approved', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion:   '0.1.70',
+        artifactsDir:   'spec',
+        approvedPhases: [1, 2],
+      }));
+      let captured = '';
+      const origWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = (chunk) => { captured += chunk; return true; };
+      const origExit = process.exit.bind(process);
+      process.exit = () => { throw new Error('exit'); };
+      try { cmdNormalize({ dir, err: noopErr }); } catch {}
+      finally {
+        process.stderr.write = origWrite;
+        process.exit = origExit;
+      }
+      assert.match(captured, /Complete the pipeline to Phase 4 first/);
+      assert.doesNotMatch(captured, /normalize --init/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+});
+
 // ── cascade clears normalizeState ────────────────────────────────────────────
 
 describe('cascadeInvalidate() — clears normalizeState when build is downstream', () => {

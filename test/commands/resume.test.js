@@ -247,6 +247,79 @@ describe('cmdResume() — spec/ artifactsDir support', () => {
   });
 });
 
+describe('cmdResume() — deployable banner in Pipeline State (F1)', () => {
+  it('shows ❌ Not ready inline when health.deployable is false', () => {
+    // Phases 1-5 approved but verifyPassed=false → health.deployable = false.
+    // User must see the contradiction next to the phase table, not only in Health.
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({
+        aitriVersion: '0.1.89',
+        approvedPhases: [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+        verifyPassed: false,
+      }));
+      writeFile(dir, '01_REQUIREMENTS.json', requirementsJson);
+      writeFile(dir, '02_SYSTEM_DESIGN.md', systemDesignMd);
+      const out = captureStdout(() => cmdResume({ dir, VERSION: '0.1.89' }));
+      assert.match(out, /\*\*Deployable:\*\* ❌ Not ready/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('shows ✅ Ready when all gates pass', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({
+        aitriVersion: '0.1.89',
+        approvedPhases: [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+        verifyPassed: true,
+        verifySummary: { passed: 3, failed: 0, total: 3 },
+        verifyRanAt: new Date().toISOString(),
+        auditLastAt: new Date().toISOString(),
+        normalizeState: { baseRef: 'deadbeef', method: 'git', status: 'resolved', lastRun: new Date().toISOString() },
+      }));
+      writeFile(dir, '01_REQUIREMENTS.json', requirementsJson);
+      writeFile(dir, '02_SYSTEM_DESIGN.md', systemDesignMd);
+      writeFile(dir, '04_TEST_RESULTS.json', testResultsJson);
+      writeFile(dir, '04_IMPLEMENTATION_MANIFEST.json', manifestJson);
+      writeFile(dir, '05_PROOF_OF_COMPLIANCE.json', '{"requirement_compliance":[]}');
+      writeFile(dir, '03_TEST_CASES.json', '{"test_cases":[]}');
+      const out = captureStdout(() => cmdResume({ dir, VERSION: '0.1.89' }));
+      assert.match(out, /\*\*Deployable:\*\* ✅ Ready/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('omits the banner entirely when no progress has been made', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({ aitriVersion: '0.1.89' }));
+      const out = captureStdout(() => cmdResume({ dir, VERSION: '0.1.89' }));
+      assert.doesNotMatch(out, /\*\*Deployable:\*\*/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('cmdResume() — version-mismatch upgrade message (A3)', () => {
+  it('no longer claims to "reconcile artifacts" and directs to normalize --init', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({
+        aitriVersion: '0.1.65',
+        approvedPhases: [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+      }));
+      writeFile(dir, '01_REQUIREMENTS.json', requirementsJson);
+      writeFile(dir, '02_SYSTEM_DESIGN.md', systemDesignMd);
+      const out = captureStdout(() => cmdResume({ dir, VERSION: '0.1.89' }));
+      assert.doesNotMatch(out, /reconciles your artifacts/i);
+      assert.match(out, /bumps `aitriVersion`/);
+      assert.match(out, /Does \*\*not\*\* migrate artifact schemas/);
+      assert.match(out, /aitri normalize --init/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 describe('cmdResume() — next action logic', () => {
   function resume(overrides) {
     const d = tmpDir();

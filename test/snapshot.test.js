@@ -603,6 +603,29 @@ describe('resilience', () => {
     } finally { cleanup(dir); }
   });
 
+  it('tolerates legacy NFR schema ({title, constraint}) — A1 regression', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, { projectName: 'legacy', artifactsDir: 'spec' });
+      writeJsonSpec(dir, '01_REQUIREMENTS.json', {
+        project_name: 'legacy',
+        functional_requirements: [{ id: 'FR-001', priority: 'MUST', title: 'x', acceptance_criteria: ['a'] }],
+        non_functional_requirements: [
+          { id: 'NFR-001', title: 'Performance', constraint: 'p95 < 200ms' },
+        ],
+        user_stories: [],
+      });
+      const snap = buildProjectSnapshot(dir);
+      const fr = snap.requirements.openFRs[0];
+      const nfr = snap.requirements.openNFRs[0];
+      // FR type may be missing in legacy data — must surface as null, not "undefined"
+      assert.equal(fr.type, null);
+      // NFR legacy fields map to current field names
+      assert.equal(nfr.category, 'Performance');
+      assert.equal(nfr.requirement, 'p95 < 200ms');
+    } finally { cleanup(dir); }
+  });
+
   it('respects custom artifactsDir (not "spec")', () => {
     const dir = tmpDir();
     try {

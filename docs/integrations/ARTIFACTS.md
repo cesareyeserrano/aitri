@@ -151,7 +151,9 @@ Written by Phase 3 (QA persona). Test cases keyed to FRs, user stories, and acce
 - Each FR must have at least one TC with id ending in `h` (happy path) and one ending in `f` (failure)
 - Minimum 2 `e2e` test cases total
 - `requirement_id` must be a single FR id — comma-separated ids are rejected
+- For multi-FR TCs, use `"frs": ["FR-001","FR-002"]` (string array) instead of a comma-separated `requirement_id`. `frs` is recognized by `aitri verify-run` (v0.1.90+); when present it wins over `requirement_id`.
 - If `01_REQUIREMENTS.json` is present: TC `ac_id` values are cross-checked against AC ids in `user_stories[].acceptance_criteria`; all MUST FRs must have at least one TC
+- `verify-run` (v0.1.90+) refuses to run and refuses to write `04_TEST_RESULTS.json` if `test_cases[]` is non-empty and no entry exposes `requirement_id` or `frs` (legacy `requirement` field alone is not enough; migrate explicitly).
 
 **TC naming convention:** suffix `h` = happy path (e.g. `TC-001h`), `f` = failure/negative (e.g. `TC-001f`), `e` = edge case (e.g. `TC-001e`).
 
