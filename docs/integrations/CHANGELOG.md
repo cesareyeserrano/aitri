@@ -5,6 +5,43 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v0.1.90 (2026-04-23) — Brownfield integrity + audit trail — additive
+
+**`03_TEST_CASES.json` — alternative multi-FR shape**
+- `test_cases[].frs: string[]` is now recognized as an alternative to `requirement_id: string`. When both are present, `frs` wins. Canonical single-FR shape is still `requirement_id`.
+- Additive. No existing field removed, no type changed. Readers that only consume `requirement_id` keep working for single-FR TCs.
+
+**`verify-run` schema precondition**
+- New preflight check: if `test_cases[]` is non-empty and no entry exposes `requirement_id` or `frs`, `aitri verify-run` exits with an error before running the test command and before writing `04_TEST_RESULTS.json`. Behavior change only for projects adopted under the legacy v0.1.x schema (`requirement` string).
+- **Subproduct impact:** `04_TEST_RESULTS.json` on legacy projects will no longer be overwritten with an all-zeros `fr_coverage`. If a Hub view previously displayed a degraded coverage block for such projects, the stale state on disk will now persist until the project migrates. Migration is manual: rename `requirement` → `requirement_id` on each test case, or use `frs: ["FR-001","FR-002"]` for multi-FR TCs.
+
+**`01_REQUIREMENTS.json` — NFR legacy field tolerance (read-side only)**
+- `aitri status --json`, `aitri resume`, and `buildProjectSnapshot()` now surface `openNFRs[].category ?? nfr.title` and `openNFRs[].requirement ?? nfr.constraint`. Reader accommodation only — Phase 1's `validate()` still enforces the canonical `{category, requirement}` fields on new artifacts.
+- **Subproduct impact:** none. Hub reads `openNFRs` as produced by the snapshot, which now normalizes the shape.
+
+**`BUGS.json` — audit-trail fields (additive)**
+- New optional fields on each bug entry:
+  - `fix_commit_sha: string` — git HEAD at the moment of `aitri bug fix`
+  - `fix_at: ISO8601` — timestamp paired with `fix_commit_sha`
+  - `close_commit_sha: string` — git HEAD at the moment of `aitri bug close`
+  - `close_at: ISO8601` — timestamp paired with `close_commit_sha`
+  - `files_changed: string[]` — `git diff --name-only fix_commit_sha..close_commit_sha`, filtered to exclude `spec/` and `.aitri`
+- All captured automatically when the project is a git repo. In non-git projects the fields are simply absent; the bug lifecycle still works.
+- **Subproduct impact:** additive. Consumers that ignored unknown fields continue to work. Hub or future dashboards can now show a per-bug commit-range link and the list of files modified to resolve it.
+
+**`aitri normalize --init`**
+- New escape hatch for projects whose Phase 4 was approved before v0.1.80 (when `normalizeState` was introduced). Stamps a baseline at the current state. Refuses to run if Phase 4 is not approved, or if a `normalizeState` already exists (no silent clobber).
+- **Subproduct impact:** none on read side. Hub already reads `normalizeState` as-is.
+
+**`aitri validate` — deploy-files output**
+- No longer labels `Dockerfile`/`docker-compose.yml` as "required"; warnings like `⚠️ Dockerfile — not found (check Phase 5 output)` are removed. The `validate` output lists existing deploy files and, when none exist, prints a neutral hint about non-containerized targets.
+- **Subproduct impact:** the `--json` `deployFiles` shape (`{Dockerfile: bool, "docker-compose.yml": bool, "DEPLOYMENT.md": bool, ".env.example": bool}`) is preserved byte-for-byte. Consumers depending on this shape are unaffected.
+
+**Integration-doc header bump**
+- `SCHEMA.md`, `README.md`, `ARTIFACTS.md`, `STATUS_JSON.md` now declare `v0.1.90+`. Enforced by `test/release-sync.test.js`.
+
+---
+
 ## v0.1.89 (2026-04-22) — Phase 1 SSoT model — additive
 
 **IDEA.md role formalized as seed-only**

@@ -19,80 +19,20 @@
 
 ---
 
-### A1 — `lib/snapshot.js` NFR renderer reads wrong schema (SEV: MED)
+### A1 — ✅ shipped (staged). Renderer tolerance for legacy NFR `{title, constraint}`; null-safe FR `type`; `resume` drops `(must-have, undefined): undefined` strings.
+### A2 — ✅ shipped (staged). `verify-run` precondition blocks write on legacy TC schema before spawning the runner; `frs[]` array accepted as multi-FR shape.
 
-`snapshot.js:237-244` reads NFRs as `{id, category, requirement}`. Ultron's v0.1.65-era `01_REQUIREMENTS.json` uses `{id, title, constraint}`. Result: `aitri resume` prints `NFR-001 (undefined): undefined ×4`. Same class of bug for FRs (renderer reads `fr.type` not present in older schema → `(must-have, undefined)`).
+### A3 — ✅ shipped (staged). Upgrade message now honestly describes what runs + points at `normalize --init`.
 
-**Fix options (ranked):**
-1. Cosmetic: renderer tolerates both schemas (`nfr.category ?? nfr.title`, `nfr.requirement ?? nfr.constraint`). Cheapest, zero risk.
-2. Correct: `adopt --upgrade` runs a field rename migration, logs it.
-3. Structural: version artifact schemas, per-version reader.
+### A4 — ✅ shipped (staged). `aitri normalize --init` stamps a baseline; `normalize` without baseline hints the new flag when Phase 4 is already approved.
 
-### A2 — `verify-run` silently corrupts `04_TEST_RESULTS.json` on schema drift (SEV: HIGH)
+### A5 — ✅ shipped (staged). `validate` no longer labels Dockerfile/docker-compose as "required" or warns when they're missing. Existing deploy files still listed; absent ones trigger a non-judgemental hint about non-containerized targets. The `--json` `deployFiles` shape is unchanged (contract preserved).
 
-Nastiest finding. Ultron's v0.1.65-era `03_TEST_CASES.json` uses `requirement` (string, sometimes comma-separated for multi-FR TCs). Current `verify.js:187` reads `tc.requirement_id`. Consequence chain:
-1. `tcToFR[tc.id] = undefined` for every TC.
-2. `fr_coverage` computed with all zeros (`tests_passing: 0`).
-3. `04_TEST_RESULTS.json` **overwritten** with broken coverage.
-4. `verify-complete` blocks with "Requirement coverage failure — these FRs have zero passing tests: FR-001..FR-015" even though the runner reported all 20 TCs passing and the file on disk had correct coverage seconds earlier.
+### A6 — ❌ not an Aitri bug. Verified: Aitri Core never writes a `location` field anywhere. `lib/commands/status.js:159` only **reads** Hub's registry (`~/.aitri-hub/projects.json`) to flag "also tracked in Hub". If the path there is mis-cased, that is a Hub issue — Hub owns its registry since v0.1.64. Reassigned.
 
-The previous (correct) coverage is **silently destroyed**. Only because `04_TEST_RESULTS.json` was git-tracked could the state be recovered via `git checkout`. A user on a fresh clone or without committed results loses it with no warning.
+### F1 — ✅ shipped (staged). Pipeline State block now carries a `**Deployable:** ❌ Not ready / ✅ Ready` line, inline with the phase table.
 
-Silent data destruction + breaks the invariant "tests passed → verify-complete accepts it". Not cosmetic, correctness-level.
-
-**Fix:**
-- `verify-run` refuses to write fr_coverage if the TC→FR mapping is empty when any TCs exist (clear signal of schema mismatch, not a legit "nothing covered" case).
-- Precondition check in verify-run: read `03_TEST_CASES.json`, if neither `requirement_id` nor `frs` appears on any entry, error out with a migration hint.
-- `adopt --upgrade` migrates `tc.requirement` → `tc.requirement_id` and logs the rename.
-
-### A3 — `adopt --upgrade` is version-only, message claims to reconcile artifacts (SEV: MED — UX/trust)
-
-Resume text before upgrade says: *"This is non-destructive: it reconciles your artifacts with the current state, updates the version, and preserves all approvals and completed phases."*
-
-In practice `adopt --upgrade` rewrites `aitriVersion` in `.aitri/config.json` and does nothing else. Does not "reconcile your artifacts". After upgrade, both the NFR rendering bug (A1) and the TC field-name mismatch (A2) remain — exactly the "artifacts vs current state" discrepancies the message promises to reconcile.
-
-**Fix:** either deliver the reconciliation the message promises, or rewrite the message: *"Bumps the version; artifacts are not migrated. Run `aitri normalize` and re-verify to surface drift."*
-
-### A4 — `normalize` has no escape hatch for legacy projects (SEV: MED)
-
-Ultron's Phase 4 was approved before `normalizeState` existed (v0.1.80). `aitri normalize` now refuses: *"No normalize baseline found. A baseline is recorded automatically when you approve build (phase 4). Complete the pipeline to Phase 4 first."* — but Phase 4 **is** approved. Message is technically correct, operationally false.
-
-Meanwhile Ultron has real post-P4 code changes (commit `776e105` 2026-04-15, setFormBusy checkbox fix) that should have been classified via normalize but can't be. Those changes are invisible to the pipeline.
-
-**Fix options:**
-1. `aitri normalize --init` / `--baseline HEAD` to stamp a baseline without re-running Phase 4.
-2. `adopt --upgrade` auto-stamps `normalizeState.baseRef = HEAD` when Phase 4 is approved and no state exists.
-
-### A5 — `validate` flags Dockerfile/docker-compose even when Phase 5 explicitly rejected Docker (SEV: LOW)
-
-Ultron's rejection history includes: *"Primary deployment target is Raspberry Pi via systemd — not Docker. Remove Dockerfile and docker-compose.yml."* Phase 5 was re-approved without those files. Yet `aitri validate` still prints:
-```
-⚠️  Dockerfile — not found (check Phase 5 output)
-⚠️  docker-compose.yml — not found (check Phase 5 output)
-```
-
-Deploy-target-agnostic hardcoded expectations. For Pi/systemd/embedded/lambda/etc. they'll always warn. Harmless — but user-hostile: after an explicit Phase 5 decision, the CLI is still second-guessing it.
-
-**Fix:** read Phase 5 output to determine expected deployment artifacts, or skip Docker warnings unless a `docker` deployment mode is declared.
-
-### A6 — `init`/`adopt` records project path with inconsistent capitalization (SEV: LOW)
-
-Hub registry and `aitri status --json` carry `location: "/Users/cesareyeserrano/Documents/PROJECTS/Ultron"` (capital U). Disk is `/ultron` (lowercase). macOS case-insensitive FS masks the issue locally. On Linux/CI/the Raspberry Pi deploy target, `cd /opt/Ultron` vs `/opt/ultron` will fail to match. Source is probably the project name field, not `process.cwd()`.
-
-**Fix:** record the path as on disk, not derived from project name.
-
-### F1 — `aitri resume` headline reads like success while `health.deployable` is false
-
-Session opened, resume printed every phase ✅, tests 20/20, verify ✅. A casual reader would close the terminal thinking "done." The version-mismatch warning was earlier in the output — helps, but Pipeline State section reads like a success banner. Consider surfacing `health.deployable = false` next to the phase table, not only in the bottom Health section.
-
-### F2 — `validate` and `status` disagree on ship-readiness after bug filing
-
-- `status`: "→ Next: aitri bug list — 1 critical/high bug(s) open — resolve before proceeding"
-- `validate`: "✅ Pipeline complete. Deployment artifacts are ready — run your deploy commands to ship."
-
-Both are technically right (validate = artifacts/gates; status = priority ladder including bugs), but the contradiction reads as Aitri contradicting itself.
-
-**Fix:** `validate` reads the same priority ladder as `status`/`resume` and defers to it. "Pipeline artifacts are ready, but 1 open blocking bug — resolve before deploy" rather than "ready to ship".
+### F2 — ✅ already fixed in current code (pre-Batch 3). Empirically reproduced: `computeHealth` flips `deployable=false` when `bugs.blocking > 0`, so `validate` enters the "deploy blocked" branch — no contradiction with `status` remains. The FEEDBACK description was accurate for the version used during the session but stale against `main`. Locked in with a regression test in `test/commands/validate.test.js` so the coupling cannot quietly break.
 
 ### F3 — Audit quality is agent-dependent; no mechanical check
 
@@ -108,16 +48,7 @@ Format does enforce specificity (file:line references required). Severity calibr
 
 Two separate briefings for what is effectively one decision flow (find findings → triage them). `audit plan` re-reads AUDIT_REPORT.md from disk to present it back. Could be a single pass.
 
-### F6 — `aitri bug fix / verify / close` lifecycle is honor-system (SEV: MED — integrity gap)
-
-After filing BG-001 (high-sev), I edited `internal/database/secrets.go`, ran `go test ./...` (pass), then walked `aitri bug fix` → `verify` → `close`. Each transition printed ✅ with no check. I could have skipped the code edit entirely and the same three commands would close the bug. The `bug verify` output itself says "after confirming the fix manually" — Aitri openly acknowledges no mechanism to confirm.
-
-For a pipeline whose selling point is "gates prevent agents from lying", this is a structural gap.
-
-**Options:**
-- `aitri bug verify BG-NNN --verified-by <TC-ID|manual-note>` required; close cannot follow without verify that has evidence.
-- On `bug close`, require a commit SHA. Still honor-system (agent picks the SHA), but leaves an artifact trail pointing at a diff.
-- Integrate bug close with re-verify: cannot close a bug tagged to an FR unless the last verify-run for that FR is post-fix timestamp.
+### F6 — ✅ partially shipped (staged). `bug fix` captures `fix_commit_sha` automatically; `bug close` captures `close_commit_sha` + `files_changed` (diff fix→close). Non-git projects degrade silently. **Not shipped:** required `--verified-by` gate on verify — leaves content-judgment to the agent per the passive-producer model, consistent with how audit quality is currently handled (F3 rationale).
 
 ### F7 — Aitri's own "descuadrado" detection is weaker than user's tacit signal
 
@@ -170,9 +101,7 @@ For the common case ("what do I do next?"), 95% is noise. The architecture dump 
 - Or adaptively truncate: if all phases are approved + no drift + no blocking issues, skip architecture + requirements dump; surface them only when state is incomplete.
 - Or include a "## What I was doing" summary from `lastSession` context (the text you stored with `aitri checkpoint --context "..."`) and make that the default, not the full artifact re-paste.
 
-### F9 — Schema-drift cosmetic output (A1) persists post-commit, confirming diagnosis
-
-After the commit, `aitri resume` still prints `FR-013 (nice-to-have, undefined):` and `NFR-001..004 (undefined): undefined`. Confirms A1 is a reader-side issue, not data corruption on my side. Nothing I did touched the requirements JSON.
+### F9 — ✅ closed by the A1 fix (staged) — same root cause, same renderer.
 
 ### F10 — "Last Session" block is useful, but drifts from git reality
 
@@ -202,30 +131,15 @@ For a stable project ready for next feature, the right headline is closer to: **
 
 **Fix:** add a terminal priority ("project stable, ready for next feature") that outranks priority-7 validate when: all phases approved + no drift + no blocking bugs + audit fresh + verify fresh. In that case `nextActions` should be empty (or a single explicit "ready" marker), not a reflexive suggestion to re-validate.
 
-### F12 — Source-code drift after bug fix is invisible to Aitri
+### F12 — ✅ shipped (staged). `close` now records `close_commit_sha` and `files_changed` (diff `fix_commit_sha..close_commit_sha`, excluding `spec/` and `.aitri`). Per-bug audit trail links BG-NNN to the specific commit range that resolved it, instead of being lost between state transitions.
 
-I edited three files under `internal/**` to fix BG-001/002/003. `04_IMPLEMENTATION_MANIFEST.json` lists implementation files — yet Aitri shows no drift. Why? Because `artifactHashes` hashes the artifact JSON, not the source files it references. Aitri tracks "did the spec change" not "did the code the spec describes change."
+### F13 — ✅ shipped (staged). `adopt --upgrade` now prints a short block listing the generated agent files + recommended treatment (commit as multi-agent bootstrap; delete the ones you don't use; Aitri regenerates missing files on next upgrade).
 
-This is consistent with the design (Phase 4 approval + post-P4 normalize), but in combination with A4 (normalize is inaccessible on this project) it means three real behavior-changing code edits are **completely invisible** to Aitri's drift surface. The bug-close commands updated `BUGS.json` but the link between "BG-001 closed" and "these specific source files changed" is nowhere — no SHA, no file list.
-
-**Fix:** closing a bug should capture `git rev-parse HEAD` (or at least `git diff --name-only` since bug fix started) into `BUGS.json`. Costs nothing, makes the audit trail real. Ties into F6 (honor-system lifecycle).
-
-### F13 — `git add .codex/` adds `.codex/instructions.md` but no `.gitignore` guidance
-
-`aitri adopt --upgrade` generates `CLAUDE.md`, `GEMINI.md`, and `.codex/instructions.md` in the project root. Standard practice would be either (a) all committed (multi-agent onboarding artifact) or (b) all in `.gitignore` (per-user local config). Aitri picks (a) by writing them, but gives no guidance. A user might:
-- Commit all three and regret it later if their team doesn't use Codex or Gemini.
-- Commit only CLAUDE.md and gitignore the others, creating inconsistency.
-- Gitignore all three, then hit "files overwritten on next upgrade" confusion.
-
-**Fix:** `adopt --upgrade` should print a one-liner about the generated files and the recommended treatment. Or output them into a `.aitri/agents/` directory which is clearly project-state rather than user-local.
-
-### F14 — Commit didn't touch Aitri's version or state; `aitri status` looks identical pre/post-commit
-
-A subtle design choice I want to flag. I committed a substantive change (three code fixes + audit + bug closures + 398-line diff). After commit, `aitri status` output is **identical** to before commit. No "Last commit: 9a9d4cf" line. No "N files changed since last verify-run." Nothing that tells Aitri "the project moved."
-
-From Aitri's perspective, the commit never happened. The only on-disk signal is a new entry in git history, which Aitri doesn't consult.
-
-**Is this a bug?** Not exactly — Aitri operates on artifacts, not git. But when a user works in a flow of "code → commit → status," the invisibility of the commit is strange. A commit is by far the most common action between `aitri ...` invocations. Suggest: `status` header includes `Git: <branch> @ <short-sha>` and, if verify is older than last commit to `internal/**`, flag that as a soft signal ("code committed since last verify").
+### F14 — ❌ not acted on. The author himself flagged this as "not exactly a bug". In practice, the concrete gaps are already covered:
+- Source edits between verify and status → `aitri normalize` (A4 escape hatch makes this usable on brownfield).
+- Bug-fix commits → `bug close` now records `close_commit_sha` + `files_changed` (F12).
+- Verify staleness → `verifyRanAt` already drives the "Verify stale" signal.
+The residual ask ("status header shows `git: <branch>@<sha>`") would make `status` consult git, which contradicts the artifacts-are-SSoT invariant. Not worth crossing that boundary for a convenience line. Re-open only if a concrete defect appears that these three existing signals fail to catch.
 
 ---
 

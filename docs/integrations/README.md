@@ -1,6 +1,6 @@
 # Aitri — Integration Model
 
-**Version:** v0.1.89+
+**Version:** v0.1.90+
 **Owner:** This document is the authoritative description of how the Aitri ecosystem is structured.
 
 ---

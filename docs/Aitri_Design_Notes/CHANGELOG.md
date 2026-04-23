@@ -5,6 +5,32 @@
 
 ---
 
+## [0.1.90] — 2026-04-23
+
+Brownfield-integrity pass driven by the 2026-04-22 Ultron E2E session. Focused on data-destruction bugs and escape hatches for projects adopted before v0.1.80 — the class of drift that only appears on real adopters, not on Aitri's own test fixtures.
+
+- **fix(verify-run) — A2 [HIGH]:** schema precondition in [lib/commands/verify.js](lib/commands/verify.js) blocks the runner before it spawns when `03_TEST_CASES.json` uses the legacy `requirement` field without `requirement_id` or `frs`. Previously `buildFRCoverage` silently produced an all-zeros coverage and overwrote `04_TEST_RESULTS.json` — only recoverable via `git checkout`. Error now names the legacy field, the offending file path, and the migration recipe. The test asserts byte-for-byte that the pre-existing results file is preserved when the precondition fires.
+- **feat(verify) — multi-FR TCs:** `buildFRCoverage` accepts `tc.frs: string[]` as an alternative to `requirement_id`. When both present, `frs` wins. Additive; single-FR schema unchanged.
+- **fix(snapshot) — A1:** tolerant NFR/FR renderer. `openNFRs` falls back to legacy `{title, constraint}` when `{category, requirement}` are absent; `openFRs.type` surfaces as `null` when missing. `aitri resume` stops printing `(must-have, undefined): undefined` for pre-v0.1.x schemas.
+- **fix(resume) — A1/F9:** FR/NFR lines skip empty metadata gracefully — no trailing `()` or dangling commas.
+- **feat(normalize) — A4:** `aitri normalize --init` stamps a baseline at current state for projects whose Phase 4 was approved before v0.1.80 (when `normalizeState` was introduced). Preconditions: Phase 4 approved + no existing `normalizeState`. Uses git HEAD if repo, ISO timestamp otherwise. `normalize` without baseline now hints at `--init` when it detects the brownfield case.
+- **fix(adopt --upgrade) — A3:** version-mismatch message in [resume.js](lib/commands/resume.js) rewritten to be honest about what upgrade does (bumps version, infers completed phases from artifacts) and what it does NOT (migrate artifact schemas, re-verify). Points at `normalize --init` for brownfield drift baselining.
+- **fix(resume) — F1:** Pipeline State block now carries an inline `**Deployable:** ❌ Not ready / ✅ Ready` line next to the phase table. A reader skimming ✅✅✅✅✅ can no longer miss that deploy is blocked by version-mismatch, stale audit, open bug, etc.
+- **fix(validate) — A5:** Dockerfile/docker-compose.yml are no longer treated as "required". `validate` lists deployment files that exist, and when none exist prints a neutral hint about non-containerized targets (systemd, lambda, Pi, etc.). The `--json` `deployFiles` shape is unchanged — contract preserved.
+- **feat(bug) — F6/F12 audit trail:** `aitri bug fix` captures `fix_commit_sha` + `fix_at` automatically; `aitri bug close` captures `close_commit_sha` + `close_at` + `files_changed[]` (diff `fix..close`, excludes `spec/` and `.aitri`). Non-git projects keep working silently without these fields. First non-honor-system signal on the bug lifecycle.
+- **fix(adopt) — F13:** `adopt --upgrade` prints a short block on the generated agent instruction files (`CLAUDE.md`, `GEMINI.md`, `.codex/instructions.md`) with recommended treatment.
+- **test(validate) — F2 regression lock:** added a regression test asserting that `validate` defers to `health.deployable` (which already includes `blocking_bugs`) — no more "ready to ship" while `status` says "resolve open critical bug". The divergence in the FEEDBACK was stale against `main`; the test prevents it from coming back.
+- **schema — all additive (v0.1.90+):** `03_TEST_CASES.json.test_cases[].frs: string[]` (optional); BUGS.json bug entries gain optional `fix_commit_sha`, `fix_at`, `close_commit_sha`, `close_at`, `files_changed`. No type changes, no removals.
+- **docs:** `docs/integrations/ARTIFACTS.md` and `docs/integrations/CHANGELOG.md` updated in the same pass with schema extensions + subproduct impact notes. Integration doc headers bumped to `v0.1.90+` (release-sync gate).
+- **tests:** +22 cases across 7 files. Total: 882 passing, 0 failing.
+- **scope decisions (not shipped):**
+  - No auto-stamp of `normalizeState` inside `adopt --upgrade` — hidden state writes contradict the traceability principle. `--init` is explicit on purpose.
+  - No `--verified-by` gate on `bug verify` (FEEDBACK F6 option) — forces content-judgment on Aitri, which is what the passive-producer model deliberately delegates to the agent. SHA capture is artifact-level and compatible; the gate is not.
+  - No git consultation in `aitri status` (FEEDBACK F14) — would cross the artifacts-are-SSoT boundary. Residual concerns already covered by `normalize` + bug close SHA + `verifyRanAt` staleness.
+  - F8 (resume brief default) and F11 (terminal "stable" priority) deferred — preference-flavored, based on a single session. Will revisit with a second data point.
+
+---
+
 ## [0.1.89] — 2026-04-22
 
 - **feat(phase1):** Phase 1 re-runs now use `01_REQUIREMENTS.json` as the SSoT input instead of re-reading IDEA.md. Closes a real drift class where re-runs silently pruned FRs that legitimately grew past the original brief — agents would obey the constraint *"never invent requirements not implied by IDEA.md"* and quietly delete CSV-export, categories, notifications, etc. that were added between approvals. Re-runs now refine current FRs; first run still uses IDEA.md.
