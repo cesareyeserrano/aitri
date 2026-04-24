@@ -26,7 +26,7 @@ import { runUpgrade } from '../lib/upgrade/index.js';
 import { diagnose, migrateAll } from '../lib/upgrade/diagnose.js';
 import * as from065 from '../lib/upgrade/migrations/from-0.1.65.js';
 import { cmdInit }    from '../lib/commands/init.js';
-import { loadConfig, saveConfig } from '../lib/state.js';
+import { loadConfig, saveConfig, hashArtifact, hasDrift } from '../lib/state.js';
 
 const ROOT_DIR = path.resolve(process.cwd());
 
@@ -537,6 +537,90 @@ describe('lib/upgrade/migrations/from-0.1.65 — STATE-MISSING: normalizeState',
       silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
       const c = loadConfig(dir);
       assert.deepEqual(c.normalizeState, existing);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// ── Approval preservation across shape-only migrations (Option B) ────────────
+//
+// §2 guarantees migrations change shape, not content. Therefore an approval
+// captured before the migration is still valid against the post-migration
+// artifact. Option B: update config.artifactHashes[phase] to the new hash so
+// `aitri status` does not flag drift immediately after an upgrade.
+
+describe('lib/upgrade — approval preservation (Option B)', () => {
+  it('TC migration updates config.artifactHashes[3] so hasDrift is false after upgrade', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      writeTcs(dir, [{ id: 'TC-001', requirement: 'FR-001' }]);
+      const specDir = path.join(dir, 'spec');
+      // Pretend Phase 3 was approved with the pre-migration shape.
+      const c0 = loadConfig(dir);
+      const preHash = hashArtifact(fs.readFileSync(path.join(specDir, '03_TEST_CASES.json'), 'utf8'));
+      c0.approvedPhases = [3];
+      c0.artifactHashes = { '3': preHash };
+      saveConfig(dir, c0);
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const c = loadConfig(dir);
+      const postContent = fs.readFileSync(path.join(specDir, '03_TEST_CASES.json'), 'utf8');
+      assert.equal(c.artifactHashes['3'], hashArtifact(postContent), 'stored hash must match new content');
+      assert.equal(hasDrift(dir, c, '3', '03_TEST_CASES.json'), false, 'no drift after shape-only migration');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('NFR migration updates config.artifactHashes[1]', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      writeReqs(dir, {
+        non_functional_requirements: [{ id: 'NFR-001', title: 'Performance', constraint: '<100ms' }],
+      });
+      const specDir = path.join(dir, 'spec');
+      const c0 = loadConfig(dir);
+      const preHash = hashArtifact(fs.readFileSync(path.join(specDir, '01_REQUIREMENTS.json'), 'utf8'));
+      c0.approvedPhases = [1];
+      c0.artifactHashes = { '1': preHash };
+      saveConfig(dir, c0);
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const c = loadConfig(dir);
+      const postContent = fs.readFileSync(path.join(specDir, '01_REQUIREMENTS.json'), 'utf8');
+      assert.equal(c.artifactHashes['1'], hashArtifact(postContent));
+      assert.equal(hasDrift(dir, c, '1', '01_REQUIREMENTS.json'), false);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does NOT stamp a hash for a phase that was never approved', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      writeTcs(dir, [{ id: 'TC-001', requirement: 'FR-001' }]);
+      // No approvedPhases, no artifactHashes entry.
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const c = loadConfig(dir);
+      assert.equal((c.artifactHashes || {})['3'], undefined,
+        'must not synthesize approval hash for a non-approved phase');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does NOT modify config.driftPhases (pre-existing drift is preserved)', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      writeTcs(dir, [{ id: 'TC-001', requirement: 'FR-001' }]);
+      const c0 = loadConfig(dir);
+      c0.driftPhases = ['3'];
+      saveConfig(dir, c0);
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const c = loadConfig(dir);
+      assert.deepEqual(c.driftPhases, ['3'], 'pre-existing drift stays — agent decides');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
