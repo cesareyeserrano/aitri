@@ -541,6 +541,114 @@ describe('lib/upgrade/migrations/from-0.1.65 — STATE-MISSING: normalizeState',
   });
 });
 
+// ── Corte D: VALIDATOR-GAP reporting (v0.1.82 Phase 1 rules) ─────────────────
+
+describe('lib/upgrade/migrations/from-0.1.65 — VALIDATOR-GAP: Phase 1 vagueness', () => {
+  it('flags MUST FRs with vague titles that have <2 substantive tokens', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir);
+      writeReqs(dir, {
+        functional_requirements: [
+          // Vague title, only "app" + "must" + stop-words + BROAD_VAGUE → fails
+          { id: 'FR-001', priority: 'MUST', title: 'The app must work correctly', acceptance_criteria: ['does things'] },
+        ],
+      });
+      const config = loadConfig(dir);
+      const cat = diagnose(dir, config);
+      const f = cat.validatorGap.find(x => x.target === '01_REQUIREMENTS.json' && x.transform.includes('vagueness'));
+      assert.ok(f, 'vagueness finding expected');
+      assert.equal(f.autoMigratable, false);
+      assert.match(f.transform, /FR-001/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does not flag specific behaviors even when containing a vague word', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir);
+      writeReqs(dir, {
+        functional_requirements: [
+          // "Generate reports efficiently" — 2 substantive tokens (Generate, reports) → passes
+          { id: 'FR-001', priority: 'MUST', title: 'Generate reports efficiently', acceptance_criteria: ['report renders in <200ms'] },
+        ],
+      });
+      const cat = diagnose(dir, loadConfig(dir));
+      const vagueFindings = cat.validatorGap.filter(x => x.transform.includes('vagueness'));
+      assert.equal(vagueFindings.length, 0);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('flags MUST FRs whose every AC is vague with no observable metric', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir);
+      writeReqs(dir, {
+        functional_requirements: [
+          { id: 'FR-001', priority: 'MUST', title: 'Login flow', acceptance_criteria: ['works nice', 'runs fast'] },
+        ],
+      });
+      const cat = diagnose(dir, loadConfig(dir));
+      const f = cat.validatorGap.find(x => x.transform.includes('vagueness') && x.transform.includes('FR-001'));
+      assert.ok(f, 'all-vague-ACs finding expected');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('never auto-migrates — runUpgrade leaves the artifact byte-for-byte unchanged', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir);
+      writeReqs(dir, {
+        functional_requirements: [
+          { id: 'FR-001', priority: 'MUST', title: 'The app must work correctly', acceptance_criteria: ['ok'] },
+        ],
+      });
+      const before = fs.readFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), 'utf8');
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      const after = fs.readFileSync(path.join(dir, 'spec', '01_REQUIREMENTS.json'), 'utf8');
+      assert.equal(before, after, 'VALIDATOR-GAP findings must never mutate artifacts');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('lib/upgrade/migrations/from-0.1.65 — VALIDATOR-GAP: Phase 1 duplicate ACs', () => {
+  it('flags FR pairs with Jaccard ≥0.9 on acceptance_criteria', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir);
+      const acs = ['user can log in', 'session persists 24h', 'logout clears token'];
+      writeReqs(dir, {
+        functional_requirements: [
+          { id: 'FR-001', priority: 'MUST', title: 'Sign in',  acceptance_criteria: acs },
+          { id: 'FR-002', priority: 'MUST', title: 'Sign out', acceptance_criteria: acs },  // identical
+        ],
+      });
+      const cat = diagnose(dir, loadConfig(dir));
+      const f = cat.validatorGap.find(x => x.transform.includes('duplicate acceptance_criteria'));
+      assert.ok(f, 'duplicate-AC finding expected');
+      assert.match(f.transform, /FR-001/);
+      assert.match(f.transform, /FR-002/);
+      assert.equal(f.autoMigratable, false);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does not flag FRs with <3 ACs even if identical (threshold gates trivial cases)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir);
+      writeReqs(dir, {
+        functional_requirements: [
+          { id: 'FR-001', priority: 'MUST', title: 'A', acceptance_criteria: ['one', 'two'] },
+          { id: 'FR-002', priority: 'MUST', title: 'B', acceptance_criteria: ['one', 'two'] },
+        ],
+      });
+      const cat = diagnose(dir, loadConfig(dir));
+      const dupFindings = cat.validatorGap.filter(x => x.transform.includes('duplicate acceptance_criteria'));
+      assert.equal(dupFindings.length, 0);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 describe('lib/upgrade — state backfill event log', () => {
   it('logs upgrade_migration events for state backfills without hashes', () => {
     const dir = tmpDir();
