@@ -3,6 +3,19 @@
 Changes to the `.aitri` schema or artifact schemas that affect subproduct readers.
 Subproducts should check this file when upgrading their Aitri reader implementation.
 
+## Entry format
+
+Every top-level entry heading **must** end with exactly one of these two markers so downstream consumers (Aitri Hub, future subproducts) can distinguish safe upgrades from risky ones:
+
+- `— additive` — fields/events/commands added. Old readers continue to work unchanged; new surfaces are optional opt-ins. This is the default posture.
+- `— breaking` — an existing field/event/command shape changed, was removed, or acquired a new required semantic. Old readers will silently miscompute or fail until updated. Never use without a matching major or pre-release-major bump.
+
+Subproducts MAY use this marker to auto-silence version-gap banners for additive-only upgrades. Subproducts MUST surface action to the operator for any `breaking` marker between their last-reviewed version and the installed CLI version.
+
+A mixed upgrade (some additive, some breaking) is always `— breaking` — the stricter marker wins.
+
+**Linter:** enforced by `test/release-sync.test.js` — any `## v...` heading missing one of the two markers fails CI.
+
 ---
 
 ## v2.0.0-alpha.3 (2026-04-24) — upgrade findings persistence + rehash command — additive
@@ -171,7 +184,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.85 (2026-04-22) — bugfix (no schema change)
+## v0.1.85 (2026-04-22) — bugfix (no schema change) — additive
 
 **Test-output parsers now handle multi-segment TC IDs**
 - `parseRunnerOutput`, `parseVitestOutput`, `parsePytestOutput`, `parsePlaywrightOutput` previously truncated IDs like `TC-FE-001h` to `TC-FE`, causing every namespaced automated test to fall silently into `skipped_no_marker`.
@@ -183,7 +196,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.84 — addendum (doc correction, no behavior change)
+## v0.1.84 — addendum (doc correction, no behavior change) — additive
 
 **ARTIFACTS.md sync with code — closing pre-existing drift (2026-04-21)**
 - Phase 2 required sections now list 9 (added `Technical Risk Flags`, matching `phase2.js` validate()). Minimum length corrected from 30 to 40 lines.
@@ -196,7 +209,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.84
+## v0.1.84 — additive
 
 **`aitri normalize --resolve` — maintenance-path closure for normalize cycle (behavior change, not schema change)**
 - New flag on existing `aitri normalize` command. Closes the pending state without re-approving Phase 4 (which would cascade-invalidate Phase 5). Intended for maintenance changes classified as `refactor` or already-registered+verified `bug-fix` — i.e. code changes that did not require spec updates.
@@ -212,7 +225,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.82
+## v0.1.82 — additive
 
 **Phase 1 validation — stricter semantic checks on requirements (behavior change, not schema change)**
 - MUST FRs with a fully-vague title (e.g. `"La app debe funcionar correctamente"`, `"System must work properly"`) now fail `aitri complete 1`. Rule: title matches `BROAD_VAGUE` regex AND has <2 substantive tokens after stopword/vague-word removal. Bilingual EN/ES vocabulary.
@@ -227,7 +240,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.81
+## v0.1.81 — additive
 
 **`aitri status --json` — new top-level `tests` block (additive)**
 - New `tests` object aggregates test counts across root + all feature sub-pipelines. Shape: `{ totals: { passed, failed, skipped, manual, total }, perPipeline: [{ scope, passed, failed, total, ran }], stalenessDays }`. See [STATUS_JSON.md](./STATUS_JSON.md#tests-v0181) for semantics.
@@ -244,7 +257,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.80
+## v0.1.80 — additive
 
 **`aitri status --json` — new top-level `normalize` block (additive)**
 - New `normalize` object exposes the off-pipeline change baseline plus a snapshot-time detection. Shape: `{ state, method, baseRef, uncountedFiles }`. See [STATUS_JSON.md](./STATUS_JSON.md#normalize) for semantics.
@@ -260,7 +273,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.79
+## v0.1.79 — additive
 
 **`.aitri` schema — `verifyRanAt` and `auditLastAt` (additive)**
 - `verifyRanAt` (ISO 8601 string) — written by every `aitri verify-run` invocation, regardless of pass/fail. Closes the gap left in v0.1.77 where `status --json health.staleVerify` was reserved-but-empty.
@@ -279,7 +292,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.77
+## v0.1.77 — additive
 
 **`aitri status --json` — unified project snapshot (new surface)**
 - New CLI surface documented in [STATUS_JSON.md](./STATUS_JSON.md): `aitri status --json` emits an aggregated projection covering root + feature sub-pipelines, health signals, and a priority-ordered next-action list.
@@ -306,7 +319,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.76
+## v0.1.76 — additive
 
 **`04_IMPLEMENTATION_MANIFEST.json` — `files_modified` field added**
 - New optional field `files_modified: []` — list of existing files changed during implementation
@@ -318,7 +331,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.74
+## v0.1.74 — additive
 
 **`aitri tc verify` — record manual TC execution results**
 - New command: `aitri tc verify <TC-ID> --result pass|fail --notes "..."`
@@ -333,7 +346,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.72
+## v0.1.72 — additive
 
 **`04_TEST_RESULTS.json` — manual TC support**
 - New `status` value: `"manual"` — TCs with `automation: "manual"` in `03_TEST_CASES.json` are excluded from the automated runner gate; they receive `status: "manual"` instead of `"skip"`
@@ -348,7 +361,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.71
+## v0.1.71 — additive
 
 **`aitri audit` — on-demand code & architecture audit**
 - New command: `aitri audit` generates an evaluative briefing; agent writes `AUDIT_REPORT.md`
@@ -359,7 +372,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.70
+## v0.1.70 — additive
 
 **`.aitri` schema: `lastSession` field added**
 - New optional field `lastSession` in `.aitri` — session checkpoint written automatically by `complete`, `approve`, `verify-run`, `verify-complete`, `feature init`, and `checkpoint`
@@ -375,7 +388,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.67
+## v0.1.67 — additive
 
 **`aitri bug` — first-class QA artifact (redesign from v0.1.66 prototype)**
 - Bug artifact promoted from utility to first-class artifact with full schema formalization
@@ -390,7 +403,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.66
+## v0.1.66 — additive
 
 **New artifact: `BUGS.json`**
 - New optional artifact in `<artifactsDir>/BUGS.json` (same dir as `spec/`).
@@ -415,7 +428,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.64
+## v0.1.64 — additive
 
 **Breaking for subproducts relying on Aitri auto-registration:**
 - `aitri init` and `aitri adopt --upgrade` no longer write to `~/.aitri-hub/projects.json`.
@@ -432,7 +445,7 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 
 ---
 
-## v0.1.63
+## v0.1.63 — additive
 
 - `complete` now updates `artifactHashes` (previously only `approve` did).
   Hash check returns `false` after successful `complete` — no drift until next modification.
@@ -441,22 +454,22 @@ First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat
 - Event schema updated: `"started"` added as valid event type; `afterDrift` on `"approved"` events.
 - Feature sub-pipelines (`features/<name>/`) documented.
 
-## v0.1.58
+## v0.1.58 — additive
 
 - `driftPhases[]` field added. Written by `run-phase` on drift; cleared by `complete`/`approve`.
 - Subproducts can use `driftPhases[]` as fast path for drift detection.
 - `driftPhases[]` may be absent in projects created before v0.1.58 — fall back to hash check.
 
-## v0.1.51
+## v0.1.51 — additive
 
 - Document initial. Fields `artifactHashes`, `events`, `artifactsDir` formalized.
 - Drift detection via hash comparison documented.
 - Hub integration contract established.
 
-## v0.1.46
+## v0.1.46 — additive
 
 - `aitri init` began auto-registering projects in Hub (removed in v0.1.64).
 
-## v0.1.45
+## v0.1.45 — additive
 
 - `events[]` field added to schema (pipeline activity log).

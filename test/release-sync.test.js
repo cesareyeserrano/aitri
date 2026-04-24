@@ -53,4 +53,30 @@ describe('release sync guard', () => {
     });
   }
 
+  // Integration CHANGELOG marker linter — every versioned entry must end with
+  // `— additive` or `— breaking` so Hub (and any future subproduct) can
+  // distinguish safe upgrades from risky ones without parsing body text.
+  it('docs/integrations/CHANGELOG.md — every versioned heading carries an additive/breaking marker', () => {
+    const content = read('docs/integrations/CHANGELOG.md');
+    const lines = content.split('\n');
+    // Match headings like `## v0.1.80 (date) — title — additive`
+    // or `## v2.0.0-alpha.3 (date) — title — breaking`. The version token
+    // allows pre-release tags (alpha.N / beta.N / rc.N).
+    const versionHeadingRe = /^##\s+v[\d.]+(?:-[\w.]+)?\b/;
+    const missing = [];
+    for (const raw of lines) {
+      if (!versionHeadingRe.test(raw)) continue;
+      // Accept em-dash (—) or double-hyphen (--) as the separator, require
+      // exactly one of the two markers anywhere on the line.
+      const hasMarker = /—\s*(additive|breaking)\s*$/.test(raw.trim())
+                     || /--\s*(additive|breaking)\s*$/.test(raw.trim());
+      if (!hasMarker) missing.push(raw.trim());
+    }
+    assert.equal(
+      missing.length, 0,
+      `docs/integrations/CHANGELOG.md — ${missing.length} entry heading(s) missing the ` +
+      `"— additive" or "— breaking" marker at end of line. Offending:\n  ${missing.join('\n  ')}`
+    );
+  });
+
 });
