@@ -9,6 +9,89 @@
 
 -------
 
+## 2026-04-24 — Canary on Aitri Hub (v0.1.89 → v0.1.90 via feat/upgrade-protocol)
+
+**Session:** Claude Opus 4.7, running the `feat/upgrade-protocol` branch (Cortes A–D + Option B fix) against real Aitri Hub. Purpose: second-project canary after Ultron, per feedback_canary_hub.md — widen the evidence base beyond the project that motivated the protocol.
+
+**Setup:** `.aitri` + `spec/` + root copied to `/tmp/hub-dryrun/` (via `tar` — `cp -a` failed on `node_modules` symlink chains), seeded local git, dry-run `adopt --upgrade`, diffed, then applied on real Hub.
+
+**Final state:** `aitriVersion: 0.1.89 → 0.1.90`. Zero migrations fired. `spec/` byte-identical. `aitri status` clean, all phases approved, deployable.
+
+**Headline signal:** the protocol **correctly does nothing** on a clean project. Hub was upgraded manually during the v0.1.90 batch (TC/NFR schemas already canonical, `normalizeState` already stamped, all state fields present); the protocol confirmed it had nothing to migrate. That validates §2 by implication: zero drift ⇒ zero writes. But Hub did NOT widen the catalog — it exposed no new classes of drift. The catalog (Cortes B/C/D) remains founded on a single case (Ultron).
+
+---
+
+### H1 — No-op upgrade UX is ambiguous (SEV: LOW)
+
+On a fully-current project, the output shows:
+```
+Version:  0.1.89  →  0.1.90
+Already tracked (unchanged):
+  ─  ux           already approved
+  ...
+```
+
+Nothing in the output **distinguishes** "the upgrade did useful work" from "there was nothing to do". The banner fires the same way in both cases. A user running on a clean project wonders if the upgrade actually ran, or if it silently skipped because of some error.
+
+**Fix option:** when `migrationResult.migrated.length === 0 && migrationResult.flagged.length === 0 && inferred.length === 0`, inject a short line: `✅ Project is already current — nothing to migrate.` Keep the "Already tracked" list as context, but lead with the explicit no-op.
+
+**Fix option 2:** when `prevVer === VERSION` (re-run on already-upgraded project), replace the banner entirely with `✅ Project already at v${VERSION} — no work needed.` and skip the sections.
+
+### H2 — `Version: 0.1.90 → 0.1.90` on re-run is noise (SEV: LOW)
+
+Running `adopt --upgrade` twice in a row on the same project prints the no-op arrow on the second run. That line should either be hidden when `prev === current` or replaced with `Already at v${VERSION}`.
+
+### H3 — Hub has `.aitri` gitignored — design asymmetry worth recording (SEV: LOW, not a bug)
+
+Hub's `.gitignore` contains `.aitri` with the comment `# Aitri config (project-specific, not shared)`. That's a deliberate choice by Hub's author, but it creates an asymmetry with the integration contract:
+
+1. Hub reads `.aitri` from other projects (pull-based change detection per `docs/integrations/SCHEMA.md`).
+2. Hub's own `.aitri` is not tracked, so its state is per-machine only.
+3. `normalizeState.baseRef` is a git SHA — references git state, but the config itself is not in git.
+
+**Implication for the upgrade protocol:** when Hub runs its own monitoring and sees Hub-as-project, what does it see? Likely nothing (no `.aitri` on a fresh clone). If the integration contract assumes `.aitri` is tracked, Hub itself is an exception — worth stating explicitly in the integration docs.
+
+**Not an upgrade bug.** The upgrade command applied correctly regardless. Raising here because canary sessions are the moment to notice contract asymmetries.
+
+### H4 — Canary setup friction: `cp -a` broken on Hub's `node_modules` (SEV: LOW, not Aitri)
+
+Hub has `node_modules` with deeply nested symlink chains that `cp -a` refuses to copy (macOS `chflags: Too many levels of symbolic links`). Canary setup had to switch to `tar --exclude=node_modules`. Not Aitri's problem, but future canary runs against any Node project will hit this. A small helper like `aitri adopt --upgrade --dry-run-to <path>` (in-place copy via Node's `fs.cp` with the right flags, or rsync invocation) would eliminate the friction. Design Study candidate, not urgent.
+
+### H5 — `aitri status` features list scales poorly on complex projects (SEV: LOW, tangential)
+
+Not directly related to upgrade, but surfaced during this canary. Hub has 9 sub-features, each listed as a full line in `aitri status`:
+```
+Features:
+  hub-folder-scan      phases 5/5 verify ✅ (24/24)
+  hub-mvp-web          phases 5/5 verify ✅ (37/53)
+  ...
+```
+
+9 lines is manageable. 30 would flood the terminal. And some entries show ratios like `37/53` next to `✅` — ambiguous at a glance (passing tests vs "tests classified under this FR coverage" — actually the latter, but visual tension is real). Candidate for a "compact" mode or pagination in `status` when features exceed a threshold. Separate from the upgrade protocol — would fit as an item in the deferred F8 (resume 220 lines) family.
+
+### H6 — Catalog NOT widened by Hub — evidence base still narrow
+
+The canary on Hub validated that the protocol respects clean state (does nothing when nothing to do). It did NOT surface new drift classes. All current migrations (TC.requirement → requirement_id; NFR shape rewrite; 5 state backfills; Phase 1 vagueness/duplicate reporting) came from Ultron's baseline. Until a third real project reveals a drift class the current catalog misses, the catalog **remains founded on a single case**.
+
+**Implication for alpha.1 readiness:** two-project canary (Ultron dirty + Hub clean) is stronger than one, but weaker than three. The protocol can ship as alpha.1 — it is correct against two real projects. But CLAUDE.md's "tier-1 signal is speculative for any external project" warning still applies to the catalog coverage: new adopters may surface cases the alpha does not handle.
+
+**Recommended discipline:** when alpha.1 ships, monitor for adopters whose `adopt --upgrade` runs produce unexpected output (crashes, silent no-ops that should have migrated, VALIDATOR-GAPs that aren't valid gaps). Each surprise becomes catalog evidence.
+
+### Priority ranking
+
+Tier 1 (consumer software quality): none — protocol correctness already validated by Ultron canary.
+Tier 2 (Aitri usability):
+  1. H1 — no-op UX clarity. Small fix, eliminates ambiguity for every clean-project upgrade going forward.
+  2. H2 — re-run noise. Folds into H1's fix in most implementations.
+Tier 3 (ecosystem / evidence):
+  3. H3 — Hub `.aitri` gitignored asymmetry. Document in integration docs, no code change.
+  4. H6 — catalog evidence base. Not actionable today; discipline-only.
+Deferred / tangential:
+  5. H5 — features list in `status`. Separate UX debt, pre-existing.
+  6. H4 — canary setup. Not Aitri's problem; optional convenience.
+
+---
+
 ## 2026-04-22 — E2E on Ultron (v0.1.65 → v0.1.89 adopted, brownfield)
 
 **Session:** Claude Opus 4.7 acting as end-user operator. Mission: take Ultron-AP from a "descuadrado" (drifted, un-stabilized) state to fully stable + ready-for-next-feature, while recording friction. Ultron was adopted at v0.1.65 and untouched in the pipeline for ~5 weeks; CLI had advanced 24 minor versions.

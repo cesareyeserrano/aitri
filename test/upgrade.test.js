@@ -548,6 +548,50 @@ describe('lib/upgrade/migrations/from-0.1.65 — STATE-MISSING: normalizeState',
 // artifact. Option B: update config.artifactHashes[phase] to the new hash so
 // `aitri status` does not flag drift immediately after an upgrade.
 
+// ── No-op UX: clean-project run (FEEDBACK 2026-04-24 H1 + H2) ────────────────
+
+describe('lib/upgrade — no-op UX on already-current project', () => {
+  function captureStdout(fn) {
+    let out = '';
+    const origLog = console.log;
+    const origErr = process.stderr.write.bind(process.stderr);
+    console.log = (...a) => { out += a.join(' ') + '\n'; };
+    process.stderr.write = () => true;
+    try { fn(); } finally { console.log = origLog; process.stderr.write = origErr; }
+    return out;
+  }
+
+  it('prints "already current" and skips "Already tracked" section when re-running at same version', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.99' });
+      writeTcs(dir, [{ id: 'TC-001', requirement_id: 'FR-001' }]);
+      // First run — mostly no-op but with inferred phase 3; not what we test here.
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR }));
+      // Second run — truly no-op, phase 3 already tracked.
+      const out = captureStdout(() =>
+        runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR })
+      );
+      assert.match(out, /already current/);
+      assert.match(out, /Version:\s+0\.1\.99 \(already current\)/);
+      assert.doesNotMatch(out, /0\.1\.99\s+→\s+0\.1\.99/);
+      assert.doesNotMatch(out, /Already tracked \(unchanged\)/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('shows the version arrow when actually bumping', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      const out = captureStdout(() =>
+        runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR })
+      );
+      assert.match(out, /0\.1\.10\s+→\s+0\.1\.99/);
+      assert.doesNotMatch(out, /already current/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 describe('lib/upgrade — approval preservation (Option B)', () => {
   it('TC migration updates config.artifactHashes[3] so hasDrift is false after upgrade', () => {
     const dir = tmpDir();
