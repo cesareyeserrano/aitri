@@ -798,3 +798,136 @@ describe('lib/upgrade — state backfill event log', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
+
+// ── Dry-run preview (v2.0.0-alpha.2) ─────────────────────────────────────────
+
+describe('lib/upgrade — dry-run preview', () => {
+  // Dry-run is safety infrastructure for a reconciliation protocol that
+  // writes artifacts. Canaries (Hub, Ultron) had to simulate dry-run via
+  // manual tar-copy into /tmp/ — the friction is evidence of the need.
+
+  it('dryRun=true does not bump aitriVersion', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      silence(() => runUpgrade({ dir, VERSION: '9.9.9', rootDir: ROOT_DIR, dryRun: true }));
+      assert.equal(loadConfig(dir).aitriVersion, '0.1.10', 'version must not change in dry-run');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('dryRun=true does not write TC migration to disk', () => {
+    // Seed a legacy TC shape (requirement instead of requirement_id) that would
+    // trigger the BLOCKING migration under a real run. Dry-run must leave it
+    // byte-for-byte unchanged.
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.65' });
+      const specDir = path.join(dir, 'spec');
+      fs.mkdirSync(specDir, { recursive: true });
+      const tcPath = path.join(specDir, '03_TEST_CASES.json');
+      const legacy = JSON.stringify({
+        test_cases: [{ id: 'TC-001', requirement: 'FR-001', title: 'x', expected_result: 'y' }],
+      }, null, 2);
+      fs.writeFileSync(tcPath, legacy, 'utf8');
+
+      silence(() => runUpgrade({ dir, VERSION: '9.9.9', rootDir: ROOT_DIR, dryRun: true }));
+
+      const after = fs.readFileSync(tcPath, 'utf8');
+      assert.equal(after, legacy, 'TC file must be byte-identical after dry-run');
+      const data = JSON.parse(after);
+      assert.equal(data.test_cases[0].requirement, 'FR-001');
+      assert.equal(data.test_cases[0].requirement_id, undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('dryRun=true does not append upgrade_migration events', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.65' });
+      const specDir = path.join(dir, 'spec');
+      fs.mkdirSync(specDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(specDir, '03_TEST_CASES.json'),
+        JSON.stringify({ test_cases: [{ id: 'TC-001', requirement: 'FR-001', title: 'x', expected_result: 'y' }] }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '9.9.9', rootDir: ROOT_DIR, dryRun: true }));
+
+      const events = loadConfig(dir).events || [];
+      const upgradeEvents = events.filter(e => e.event === 'upgrade_migration');
+      assert.equal(upgradeEvents.length, 0, 'no upgrade_migration events in dry-run');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('dryRun=true does not infer completedPhases into .aitri', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      const specDir = path.join(dir, 'spec');
+      fs.mkdirSync(specDir, { recursive: true });
+      fs.writeFileSync(path.join(specDir, '01_REQUIREMENTS.json'), '{}');
+      fs.writeFileSync(path.join(specDir, '02_SYSTEM_DESIGN.md'), '# Design\n');
+
+      silence(() => runUpgrade({ dir, VERSION: '9.9.9', rootDir: ROOT_DIR, dryRun: true }));
+
+      const c = loadConfig(dir);
+      assert.ok(!c.completedPhases.includes(1), 'phase 1 must not be persisted in dry-run');
+      assert.ok(!c.completedPhases.includes(2), 'phase 2 must not be persisted in dry-run');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('dryRun=true prints a DRY-RUN banner in the report', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      let output = '';
+      const origLog = console.log;
+      console.log = (msg = '') => { output += msg + '\n'; };
+      process.stderr.write = () => true;
+      try {
+        runUpgrade({ dir, VERSION: '9.9.9', rootDir: ROOT_DIR, dryRun: true });
+      } finally {
+        console.log = origLog;
+      }
+      assert.match(output, /DRY-RUN/i, 'report must announce dry-run mode');
+      assert.match(output, /To apply these changes|aitri adopt --upgrade/,
+        'dry-run output must instruct how to apply for real');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('dryRun=true does not regenerate agent instruction files', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      // Remove agent files created by cmdInit so dry-run would otherwise recreate them.
+      for (const f of ['CLAUDE.md', 'GEMINI.md', '.codex/instructions.md']) {
+        try { fs.rmSync(path.join(dir, f), { force: true }); } catch {}
+      }
+      try { fs.rmSync(path.join(dir, '.codex'), { recursive: true, force: true }); } catch {}
+
+      silence(() => runUpgrade({ dir, VERSION: '9.9.9', rootDir: ROOT_DIR, dryRun: true }));
+
+      assert.equal(fs.existsSync(path.join(dir, 'CLAUDE.md')), false, 'CLAUDE.md must not be recreated in dry-run');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('migrateAll({ dryRun: true }) returns the same findings as a real migrate without mutating', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.65' });
+      const specDir = path.join(dir, 'spec');
+      fs.mkdirSync(specDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(specDir, '03_TEST_CASES.json'),
+        JSON.stringify({ test_cases: [{ id: 'TC-001', requirement: 'FR-001', title: 'x', expected_result: 'y' }] }, null, 2),
+      );
+      const config = loadConfig(dir);
+      const result = migrateAll(dir, config, '9.9.9', { dryRun: true });
+      assert.ok(result.migrated.length >= 1, 'dry-run must surface migratable findings');
+      const tcPath = path.join(specDir, '03_TEST_CASES.json');
+      const data = JSON.parse(fs.readFileSync(tcPath, 'utf8'));
+      assert.equal(data.test_cases[0].requirement, 'FR-001',
+        'TC must remain on legacy shape — diagnose() did not apply');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});

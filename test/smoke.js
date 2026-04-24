@@ -566,10 +566,19 @@ describe('Aitri CLI — resume + checkpoint smoke', () => {
     assert.match(out, /Phase 1.*Approved/);
   });
 
-  it('aitri resume shows open FRs', () => {
-    const out = aitri('resume', rcDir);
+  it('aitri resume --full shows open FRs', () => {
+    // FR list lives in the reference-material sections, gated behind --full
+    // since v2.0.0-alpha.2 (F8: brief default).
+    const out = aitri('resume --full', rcDir);
     assert.match(out, /FR-001/);
     assert.match(out, /Open Requirements/);
+  });
+
+  it('aitri resume (brief default) omits reference sections', () => {
+    const out = aitri('resume', rcDir);
+    assert.doesNotMatch(out, /## Open Requirements/);
+    assert.doesNotMatch(out, /## Architecture & Stack Decisions/);
+    assert.match(out, /resume --full/, 'brief must hint at --full');
   });
 
   it('aitri resume is pipeable (stdout only, no stderr bleed)', () => {

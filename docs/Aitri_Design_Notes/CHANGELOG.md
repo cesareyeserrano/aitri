@@ -5,6 +5,24 @@
 
 ---
 
+## [2.0.0-alpha.2] — 2026-04-24 — operator ergonomics + `.aitri` contract doc
+
+Second staged pre-release on `feat/upgrade-protocol`. No schema changes; closes the three deferred items surfaced during the post-canary review.
+
+**Operator ergonomics:**
+- **`aitri adopt --upgrade --dry-run`** — safety infrastructure for the reconciliation protocol. Runs `diagnose()` across every migration module and prints the report with a `(DRY-RUN — no changes written)` banner and `◻️` markers. No artifact writes, no `.aitri` mutation, no `upgrade_migration` events, no agent-files regeneration. Canaries on Ultron and Hub had to simulate dry-run via manual tar-copy to `/tmp/` — the friction was evidence.
+- **`aitri resume` — brief default + `--full` flag.** The primary entry-point command previously dumped 200+ lines on every invocation (architecture excerpt + every FR + every AC + per-FR test coverage + technical debt), most of which already lives in on-disk artifacts. Default now keeps the "what's next?" signal (Pipeline State, Last Session, Open Bugs, Health, Next Action); `--full` restores the reference sections on demand.
+- **Terminal-state next-action.** When the project is deployable AND audit is fresh AND verify is not stale, `nextActions` no longer includes P7 `aitri validate`. Consumers render "project is idle" instead of a reflexive suggestion to re-validate what just passed.
+
+**Contract documentation:**
+- **SCHEMA.md §"Should `.aitri` be committed?"** — resolves the Hub-canary H3 observation. Explicit recommendation (commit it), documented consequences of gitignoring, and explicit acknowledgement that the schema mixes shared state and per-machine state in one file. The underlying tension (single-file mix) is tracked as [ADR-028](DECISIONS.md#adr-028--2026-04-24--open-question-aitri-mixes-shared-and-per-machine-state) — open question, no code action until a second real signal.
+
+**Test coverage.** +21 tests covering dry-run semantics (no writes, no events, no version bump, no agent-files regeneration, banner present, `migrateAll({ dryRun })` parity with real migrate), resume brief/full split (reference sections gated, footer hint, full restores everything), and terminal-state priority suppression (deployable + fresh audit + fresh verify → no P7; stale/missing audit or stale verify still fires P7). Total 945/945 green.
+
+**Deferred items NOT in alpha.2:** CLI flags `--yes` / `--only` / `--verbose` (no adopter asked), Corte E preventive migrations (no evidence), `test/upgrade-coverage.test.js` gate (ADR-027 §5 standing decision), E2E smoke for upgrade (unit tests + two canaries cover the current shape). Third-project canary remains the promotion gate to stable v2.0.0.
+
+---
+
 ## [2.0.0-alpha.1] — 2026-04-24 — `adopt --upgrade` as reconciliation protocol (staged pre-release)
 
 Staged first pre-release on branch `feat/upgrade-protocol` (not merged to main). Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-reconciliation-protocol-v200).

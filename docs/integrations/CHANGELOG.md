@@ -5,6 +5,31 @@ Subproducts should check this file when upgrading their Aitri reader implementat
 
 ---
 
+## v2.0.0-alpha.2 (2026-04-24) — operator ergonomics + `.aitri` contract doc — additive
+
+Second staged pre-release on branch `feat/upgrade-protocol`. No schema field changes — the `.aitri` and artifact schemas are unchanged from alpha.1. Ergonomics and documentation only.
+
+**SCHEMA.md — new section "Should `.aitri` be committed?"**
+- Makes the default recommendation explicit (commit `.aitri`) and enumerates the consequences of gitignoring it (Hub change detection breaks, drift baseline is per-machine, approval state is per-machine, `normalizeState.baseRef` references untracked state).
+- Documents that the current schema mixes shared state (`approvedPhases`, `artifactHashes`, `events[]`, …) and per-machine state (`lastSession.when`, `normalizeState.lastRun`, `normalizeState.baseRef`) in one file. Explicit trade-off rather than unstated asymmetry.
+- **Subproduct impact:** Hub and other consumers MUST NOT treat a missing `.aitri` on a fresh clone as corruption — it is a valid state for projects that chose to gitignore. Updated guidance in the section addresses this directly.
+- Tension tracked as [ADR-028](../Aitri_Design_Notes/DECISIONS.md#adr-028--2026-04-24--open-question-aitri-mixes-shared-and-per-machine-state) (open question; `.aitri/local.json` split deferred until a second signal).
+
+**`adopt --upgrade --dry-run` — new CLI flag (safety infrastructure)**
+- Runs the full diagnose pipeline and prints the report with `(DRY-RUN — no changes written)` banner and `◻️` markers, without writing artifacts, mutating `.aitri`, appending `upgrade_migration` events, or regenerating agent instruction files.
+- **Subproduct impact:** none. Hub and other consumers observe no change — dry-run does not persist anything. Operators can now preview migrations before applying.
+
+**`aitri resume` — brief default + `--full` flag (UX)**
+- Default output omits the reference sections (Architecture & Stack Decisions, Open Requirements, Test Coverage, Technical Debt) that duplicate content already in `02_SYSTEM_DESIGN.md` / `01_REQUIREMENTS.json` / `04_TEST_RESULTS.json` / `04_IMPLEMENTATION_MANIFEST.json`. Brief output focuses on "what do I do next": Pipeline State, Last Session, Open Bugs, Health, Next Action.
+- `aitri resume --full` restores the full dump (reference material included).
+- **Subproduct impact:** none. `aitri resume` is human-consumable text; no subproduct depends on its shape. Contract surfaces (`status --json`, `.aitri`, `spec/`) are unchanged.
+
+**`nextActions` — terminal state: P7 `aitri validate` suppressed on fully-stable projects**
+- When `health.deployable === true` AND audit exists AND audit is not stale AND verify is not stale, the P7 "confirm deployment readiness" suggestion is no longer emitted. Consumers should render the priority ladder as-is; when empty, render an "idle" message.
+- **Subproduct impact:** Hub and any reader of `status --json`'s `nextActions[]` may observe an empty array on stable projects. Readers should treat empty `nextActions[]` as "no pending work", not as a schema error. The priority ordering of surviving actions is unchanged.
+
+---
+
 ## v2.0.0-alpha.1 (2026-04-24) — adopt --upgrade as reconciliation protocol — additive
 
 First staged pre-release of the v2.0.0 upgrade protocol. Shipped on branch `feat/upgrade-protocol` (not merged to main). Governed by ADR-027. Validated against two real brownfield projects: Ultron (v0.1.89 → v0.1.90, drift present) and Aitri Hub (v0.1.89 → v0.1.90, already current). Catalog evidence base remains narrow — third-project canary post-adoption will inform whether to broaden the catalog before promoting to stable.

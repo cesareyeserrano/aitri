@@ -79,7 +79,7 @@ const manifestJson = JSON.stringify({
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('cmdResume() — output structure', () => {
+describe('cmdResume() — output structure (full)', () => {
   let dir;
   let output;
 
@@ -90,7 +90,9 @@ describe('cmdResume() — output structure', () => {
     writeFile(dir, '02_SYSTEM_DESIGN.md', systemDesignMd);
     writeFile(dir, '04_TEST_RESULTS.json', testResultsJson);
     writeFile(dir, '04_IMPLEMENTATION_MANIFEST.json', manifestJson);
-    output = captureStdout(() => cmdResume({ dir }));
+    // --full: reference sections (Architecture, Open Requirements, Test Coverage,
+    // Technical Debt) are gated behind this flag; brief mode is tested below.
+    output = captureStdout(() => cmdResume({ dir, args: ['--full'] }));
   });
 
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -170,8 +172,9 @@ describe('cmdResume() — graceful degradation', () => {
   before(() => {
     dir = tmpDir();
     writeFile(dir, '.aitri', minimalConfig());
-    // No artifact files — all phases not started
-    output = captureStdout(() => cmdResume({ dir }));
+    // No artifact files — all phases not started. Uses --full so the
+    // "Not yet available" notes emitted by reference sections are present.
+    output = captureStdout(() => cmdResume({ dir, args: ['--full'] }));
   });
 
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -231,7 +234,8 @@ describe('cmdResume() — spec/ artifactsDir support', () => {
     writeFile(dir, '.aitri', minimalConfig({ artifactsDir: 'spec', approvedPhases: [1] }));
     writeFile(dir, 'spec/01_REQUIREMENTS.json', requirementsJson);
     writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', systemDesignMd);
-    output = captureStdout(() => cmdResume({ dir }));
+    // --full: FR id + design excerpt live in reference sections.
+    output = captureStdout(() => cmdResume({ dir, args: ['--full'] }));
   });
 
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -347,5 +351,68 @@ describe('cmdResume() — next action logic', () => {
   it('suggests aitri validate when all phases approved and verify passed', () => {
     const out = resume({ approvedPhases: [1, 2, 3, 4, 5], verifyPassed: true });
     assert.ok(out.includes('aitri validate'), 'must suggest validate when fully done');
+  });
+});
+
+// ── F8: brief default vs --full (reference sections gated) ───────────────────
+
+describe('cmdResume() — brief default (F8)', () => {
+  // Brief is the default because dumping architecture + requirements + test
+  // coverage + technical debt on every resume floods the "what's next?" view
+  // with 200+ lines of reference material that already lives on disk.
+  let dir;
+  let brief;
+  let full;
+
+  before(() => {
+    dir = tmpDir();
+    writeFile(dir, '.aitri', minimalConfig({ approvedPhases: [1, 2], completedPhases: [3] }));
+    writeFile(dir, '01_REQUIREMENTS.json', requirementsJson);
+    writeFile(dir, '02_SYSTEM_DESIGN.md', systemDesignMd);
+    writeFile(dir, '04_TEST_RESULTS.json', testResultsJson);
+    writeFile(dir, '04_IMPLEMENTATION_MANIFEST.json', manifestJson);
+    brief = captureStdout(() => cmdResume({ dir }));
+    full  = captureStdout(() => cmdResume({ dir, args: ['--full'] }));
+  });
+
+  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('omits Architecture & Stack Decisions in brief', () => {
+    assert.ok(!brief.includes('## Architecture & Stack Decisions'), 'Architecture section must be full-only');
+  });
+
+  it('omits Open Requirements in brief', () => {
+    assert.ok(!brief.includes('## Open Requirements'), 'Open Requirements section must be full-only');
+  });
+
+  it('omits Test Coverage in brief', () => {
+    assert.ok(!brief.includes('## Test Coverage'), 'Test Coverage section must be full-only');
+  });
+
+  it('omits Technical Debt in brief', () => {
+    assert.ok(!brief.includes('## Technical Debt'), 'Technical Debt section must be full-only');
+  });
+
+  it('keeps Pipeline State in brief', () => {
+    assert.ok(brief.includes('## Pipeline State'), 'Pipeline State must appear in brief');
+  });
+
+  it('keeps Next Action in brief', () => {
+    assert.ok(brief.includes('## Next Action'), 'Next Action must appear in brief');
+  });
+
+  it('includes a footer hint about --full in brief', () => {
+    assert.ok(/resume --full/.test(brief), 'brief must hint at --full for reference sections');
+  });
+
+  it('does not include the --full hint when --full is passed', () => {
+    assert.ok(!/resume --full/.test(full), '--full must not advertise itself');
+  });
+
+  it('full mode restores all reference sections', () => {
+    assert.ok(full.includes('## Architecture & Stack Decisions'));
+    assert.ok(full.includes('## Open Requirements'));
+    assert.ok(full.includes('## Test Coverage'));
+    assert.ok(full.includes('## Technical Debt'));
   });
 });

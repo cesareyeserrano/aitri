@@ -659,3 +659,48 @@ The main-decision "Trade-off" section (see above) committed to a new CI gate ana
 | 5 | Coverage gate | `test/upgrade-coverage.test.js` is NOT written. Semantic judgment cannot be collapsed to regex equality. Doc discipline + real-project canary carry the load. Revisit if evidence of the specific defect emerges. |
 
 These five points are binding on the implementation. If during alpha.1 any of them proves wrong, a new addendum amends the specific point — none is silently discarded.
+
+---
+
+## ADR-028 — 2026-04-24 — Open question: `.aitri` mixes shared and per-machine state
+
+**Status:** Open — no action until a second real signal.
+
+**Context:** During the Hub canary for v2.0.0-alpha.1 (FEEDBACK H3), Hub was observed to have `.aitri` listed in `.gitignore` with the comment `# Aitri config (project-specific, not shared)`. This creates an asymmetry with the integration contract:
+
+- Hub reads `.aitri` from other projects for pull-based change detection (per SCHEMA.md `updatedAt`).
+- Hub's own `.aitri` is not tracked, so any consumer of Hub-as-project sees nothing on a fresh clone.
+- `normalizeState.baseRef` is a git SHA but the file that stores it is not in git.
+
+The deeper issue: `.aitri/config.json` serializes two kinds of state in one file.
+
+**Shared state** (makes sense committed — Hub and future consumers depend on it):
+`approvedPhases`, `completedPhases`, `artifactHashes`, `events[]`, `updatedAt`, `verifyPassed`, `verifySummary`, `verifyRanAt`, `auditLastAt`, `rejections`, `aitriVersion`, `createdAt`, `projectName`.
+
+**Per-machine state** (noisy if committed):
+`lastSession.when` (local timestamp), `lastSession.agent` (detected env), `normalizeState.lastRun` (local event time), `normalizeState.baseRef` (meaningful only against the local workdir).
+
+When `.aitri` is committed, every `verify-run` / `complete` / `approve` / `checkpoint` rewrites per-machine fields and creates commit noise. That noise is the trigger a team cites when they decide to gitignore the file — at which point they lose the shared-state contract without realizing it.
+
+**Options considered:**
+
+1. **Split into `.aitri/config.json` (shared, tracked) + `.aitri/local.json` (per-machine, gitignored).** Clean design. Eliminates the trade-off entirely. Requires: breaking schema change, migration category in `lib/upgrade/`, update to SCHEMA.md, Hub contract update. Cost is moderate; the evidence is a single canary signal.
+2. **Document the current mixed schema + recommend commit + accept the noise.** Free. Teams make the choice consciously. Does not fix the underlying mix. Selected for now.
+3. **Do nothing — treat as Hub's local decision.** Dismissive. The mix is real; Hub's gitignoring is a predictable reaction, not a misconfiguration. Any team with more than one operator will hit the same trade-off.
+
+**Decision:** Option 2 now (documented in SCHEMA.md §"Should `.aitri` be committed?"). Option 1 stays open as an ADR-tracked question.
+
+**Rationale for deferring Option 1:**
+
+- **Single-canary evidence.** The `IDEA.md → spec/` move was dropped from v2.0.0 for exactly this reason — "opportunistic colado in the breaking-version window". Doing it with one signal would repeat that error.
+- **The cost is not trivial.** Splitting reshapes the file that every Aitri command and every subproduct reads. A breaking change here reverberates through Hub and any future consumer.
+- **The current trade-off is honest, not broken.** Documentation makes the choice explicit. Teams that care can gitignore and accept the consequences; teams that don't can commit and accept the noise.
+
+**Criterion to reopen (either condition):**
+
+- A second real project surfaces the same asymmetry (another team chooses to gitignore, or another consumer needs to read a gitignored `.aitri`).
+- A consumer (Hub or another subproduct) explicitly requests the split because the mix blocks a concrete feature.
+
+Without either, the gate is "architectural discomfort" — insufficient under the evidence-before-breakage discipline.
+
+**Scope of this ADR:** documentation only. No code changes, no test changes, no migration module. When reopened, this ADR is superseded by a new one that records the breaking-change decision.

@@ -1,6 +1,6 @@
 # Aitri — `.aitri` Schema Contract
 
-**Aitri version:** v2.0.0-alpha.1+
+**Aitri version:** v2.0.0-alpha.2+
 **Maintenance rule:** Update this file in the same commit as any `.aitri` schema change.
 
 ---
@@ -245,3 +245,35 @@ const versionMismatch  = projectVersion && installedVersion && projectVersion !=
 Always be defensive — an old project may be missing any field. Use the defaults from the tables above. `loadConfig` in Aitri applies `{ ...DEFAULTS, ...raw }` internally.
 
 Projects that run `aitri adopt --upgrade` will have missing fields written to disk automatically.
+
+---
+
+## Should `.aitri` be committed?
+
+**Default recommendation: commit it.** The schema is designed around the assumption that `.aitri` travels with the repository. Teams that gitignore it accept the trade-offs below. This is a deliberate project-level choice, not a bug in either direction — but the consequences must be understood.
+
+### What breaks if `.aitri` is gitignored
+
+| Consequence | Why |
+|---|---|
+| Hub and other subproducts cannot detect changes | Pull-based change detection reads `updatedAt` from the tracked file — if it is not in git, remote consumers see stale state on every clone. |
+| Drift detection is per-machine | `artifactHashes` is the baseline against which `hasDrift()` compares current artifact content. A new clone starts with an empty baseline and cannot tell "approved then changed" from "just approved". |
+| Approval state is per-machine | `approvedPhases` / `completedPhases` / `rejections` live only on the machine that ran the commands. Teammates see the project as un-approved until they re-run the pipeline locally. |
+| `normalizeState.baseRef` references untracked state | The field stores a git SHA, but the field itself is not in git. If two operators run `normalize` on different branches, their baselines diverge silently. |
+
+### What the schema *does* mix
+
+`.aitri` currently serializes both **shared** state (the contract above) and **per-machine** state in the same file. Fields whose values are per-machine by nature:
+
+- `lastSession.when` — local timestamp of the last pipeline event on this machine
+- `lastSession.agent` — detected from local env
+- `normalizeState.lastRun` — local event timestamp
+- `normalizeState.baseRef` — meaningful only against the local git workdir
+
+When `.aitri` is committed, these fields create commit noise on every operation that writes them (`verify-run`, `complete`, `approve`, `checkpoint`, etc.). That noise is the trigger teams cite when they decide to gitignore the file.
+
+**There is no current mechanism to split these fields.** A future major version may introduce `.aitri/local.json` (gitignored per-machine state) alongside `.aitri/config.json` (tracked shared state); this is tracked as an open question in [ADR-028](../Aitri_Design_Notes/DECISIONS.md#adr-028--2026-04-24--open-question-aitri-mixes-shared-and-per-machine-state) and will only be acted on with second-project evidence.
+
+### Guidance for subproducts
+
+Hub and other consumers MUST NOT assume `.aitri` is committed. If the file is absent or its `updatedAt` is older than the project's last git commit, treat that as "state is per-machine for this project" rather than an error. A missing `.aitri` on a fresh clone of a gitignored-.aitri project is a valid state, not a corruption signal.

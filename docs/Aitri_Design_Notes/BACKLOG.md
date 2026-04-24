@@ -37,13 +37,13 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 > Ecosystem items (Hub, Graph, future subproducts) live in their own repos' backlogs.
 > Core only tracks items that require changes to Aitri Core itself.
 
-### Core — v2.0.0 — `adopt --upgrade` as reconciliation protocol (shipped in alpha.1, pending promotion)
+### Core — v2.0.0 — `adopt --upgrade` as reconciliation protocol (shipped in alpha.1 + alpha.2 ergonomics, pending promotion)
 
-Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-reconciliation-protocol-v200) + five-point addendum.
+Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-reconciliation-protocol-v200) + five-point addendum. `.aitri` schema asymmetry tracked separately as [ADR-028](DECISIONS.md#adr-028--2026-04-24--open-question-aitri-mixes-shared-and-per-machine-state).
 
-**Status 2026-04-24:** `v2.0.0-alpha.1` shipped on branch `feat/upgrade-protocol` (not merged to main, not published). Two real canaries passed: Ultron (drift present, 21 migrations applied) + Aitri Hub (already current, zero migrations). Catalog remains founded on a single drift case (Ultron); Hub validated the "no invasion on clean projects" property without widening it.
+**Status 2026-04-24 (alpha.2):** `v2.0.0-alpha.2` staged on `feat/upgrade-protocol`. Two real canaries passed in alpha.1: Ultron (drift present, 21 migrations applied) + Aitri Hub (already current, zero migrations). Alpha.2 did not add migrations — it closed three deferred operator-ergonomics items confronted in the post-canary review (`--dry-run`, `resume` brief default, terminal-state next-action) and documented the `.aitri` mixed-state contract (SCHEMA.md + ADR-028). Catalog still founded on Ultron.
 
-**Promotion to stable v2.0.0 gated on:** a third-project canary (external adopter) runs cleanly, OR evidence motivates catalog expansion. Default path is direct promotion; alphas 2–4 collapsed into alpha.1 because the ADR's original staging (one category per alpha) turned out to be unnecessary — all categories shipped together without regression.
+**Promotion to stable v2.0.0 gated on:** a third-project canary (external adopter) runs cleanly, OR evidence motivates catalog expansion. Default path is direct promotion; alphas 2–4 collapsed into alpha.1 + alpha.2 because the ADR's original staging (one category per alpha) turned out to be unnecessary — all categories shipped together without regression.
 
 #### What shipped in alpha.1
 
@@ -57,12 +57,20 @@ Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-recon
 - [x] **Event type `upgrade_migration`** in `.aitri.events[]` with `before_hash`/`after_hash` for artifact writes (absent for state backfills). Documented in `docs/integrations/SCHEMA.md`.
 - [x] **ADR-027 addendum §4** (approval preservation) + **§5** (coverage gate NOT implemented, by decision).
 
-#### Deferred out of alpha.1 (by decision)
+#### Shipped in alpha.2 (2026-04-24)
 
-- [ ] **CLI flags** `--dry-run`, `--yes`, `--only <categories>`, `--verbose` — not implemented. Today the full protocol runs when invoked; no granular control. Not required by canaries; re-open when a real adopter asks.
+- [x] **`adopt --upgrade --dry-run`** — shipped. Safety infrastructure confronted after Hub canary required manual tar-copy to `/tmp/` to simulate preview. `--yes`, `--only`, `--verbose` remain deferred (no adopter asked).
+- [x] **`aitri resume` brief default + `--full` flag** (FEEDBACK F8) — shipped. Primary entry-point command no longer dumps 200+ lines of reference material on stable projects.
+- [x] **Terminal-state next-action** (FEEDBACK F11) — shipped. P7 `aitri validate` suppressed when deployable + fresh audit + fresh verify.
+- [x] **`.aitri` commit-vs-gitignore contract doc** (FEEDBACK H3) — shipped in SCHEMA.md + ADR-028. No code change; explicit contract.
+
+#### Deferred out of alpha.1 / alpha.2 (by decision)
+
+- [ ] **CLI flags** `--yes`, `--only <categories>`, `--verbose` — not implemented. No adopter asked; re-open when one does. (`--dry-run` landed in alpha.2.)
 - [ ] **Corte E — CAPABILITY-NEW + STRUCTURE** — `files_modified` advisory, bug audit trail advisory, agent-files regen (already inherited from Corte A), `original_brief` archival, case-mismatch detection. None have evidence of needed; all are preventive. Re-open when a canary surfaces a concrete case.
 - [ ] **`test/upgrade-coverage.test.js` gate** — explicitly NOT written. Rationale in ADR-027 addendum §5.
 - [ ] **Smoke test E2E in `test/smoke.js`** — optional, unit tests + two real canaries cover current shape. Re-open if a non-trivial upgrade path lacks coverage.
+- [ ] **`.aitri/local.json` split** — tracked in ADR-028 as open question. One real signal (Hub) is insufficient; need a second before taking the breaking-change hit.
 
 #### Dropped from v2.0.0 breaking batch (by decision)
 

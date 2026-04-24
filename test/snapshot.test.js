@@ -853,3 +853,80 @@ describe('buildPipelineEntry()', () => {
     } finally { cleanup(dir); }
   });
 });
+
+// ── F11: terminal state — suppress P7 `aitri validate` when fully stable ─────
+
+describe('nextActions — terminal state (F11)', () => {
+  // A project that is deployable AND has a fresh audit on record AND whose
+  // verify ran recently has no real next action. Reflexively suggesting
+  // `aitri validate` creates the illusion of pending work. The snapshot must
+  // emit no P7 action in that case — consumers (status, resume) render their
+  // own "idle" message.
+
+  it('suppresses P7 validate when deployable + fresh audit + fresh verify', () => {
+    const dir = tmpDir();
+    try {
+      const now = new Date().toISOString();
+      seedDeployableRoot(dir, { verifyRanAt: now, auditLastAt: now });
+      writeSpec(dir, 'AUDIT_REPORT.md', '# Audit');
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.health.deployable, true);
+      const p7 = snap.nextActions.find(a => a.priority === 7);
+      assert.equal(p7, undefined, 'P7 must be suppressed in terminal state');
+      const validates = snap.nextActions.filter(a => a.command === 'aitri validate');
+      assert.equal(validates.length, 0, 'no validate suggestion in terminal state');
+    } finally { cleanup(dir); }
+  });
+
+  it('still emits P7 validate when deployable but audit is missing', () => {
+    // P9 fires `aitri audit` for missing audit — that is legitimate pending
+    // work and the project is not terminal yet. P7 may still fire alongside.
+    const dir = tmpDir();
+    try {
+      const now = new Date().toISOString();
+      seedDeployableRoot(dir, { verifyRanAt: now });
+      // No AUDIT_REPORT.md — audit.exists=false → not terminal.
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.health.deployable, true);
+      assert.equal(snap.audit.exists, false);
+      assert.ok(
+        snap.nextActions.some(a => a.command === 'aitri validate'),
+        'P7 must still fire when no audit exists',
+      );
+    } finally { cleanup(dir); }
+  });
+
+  it('still emits P7 validate when audit exists but is stale', () => {
+    const dir = tmpDir();
+    try {
+      const now = new Date().toISOString();
+      seedDeployableRoot(dir, { verifyRanAt: now });
+      writeSpec(dir, 'AUDIT_REPORT.md', '# Audit');
+      const auditPath = path.join(dir, 'spec', 'AUDIT_REPORT.md');
+      const old = new Date(Date.now() - 90 * MS_PER_DAY);
+      fs.utimesSync(auditPath, old, old);
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.health.staleAudit, true);
+      assert.ok(
+        snap.nextActions.some(a => a.command === 'aitri validate'),
+        'P7 must still fire when audit is stale',
+      );
+    } finally { cleanup(dir); }
+  });
+
+  it('still emits P7 validate when verify is stale', () => {
+    const dir = tmpDir();
+    try {
+      const stale = new Date(Date.now() - 40 * MS_PER_DAY).toISOString();
+      const now   = new Date().toISOString();
+      seedDeployableRoot(dir, { verifyRanAt: stale, auditLastAt: now });
+      writeSpec(dir, 'AUDIT_REPORT.md', '# Audit');
+      const snap = buildProjectSnapshot(dir);
+      assert.ok(snap.health.staleVerify.length > 0);
+      assert.ok(
+        snap.nextActions.some(a => a.command === 'aitri validate'),
+        'P7 must still fire when verify is stale',
+      );
+    } finally { cleanup(dir); }
+  });
+});
