@@ -86,6 +86,86 @@ Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-recon
 - [ ] **Phase 3 canonical TC id regex** — dropped 2026-04-23. Still waiting for the second evidence case that was the original gate; forcing it through the v2 batch inverted the evidence-before-breakage logic.
 - [ ] **Command-surface audit outcomes** — remains a Design Study below. No trigger.
 
+### Core — `aitri normalize` proportionality (Ultron canary 2026-04-27)
+
+- [ ] **P1 — Normalize fires on non-behavioral file changes (root cause of friction cycle).** Three separable bugs surfaced by Ultron canary on alpha.3.
+
+  Evidence (verified, not paraphrased):
+  - **Cycle is real and recurring.** Ultron git history contains three previous workaround commits with the same shape: `9b68709 chore: advance aitri normalize baseline to current HEAD`, `0e6786a chore: advance aitri normalize baseline past CSS regeneration commit`, `35a9a95 chore: advance aitri normalize baseline past PR #1`. Each was the user manually compensating for the same broken contract.
+  - **Trigger of the most recent cycle (commit `e7f67cb`):** a one-line `go.mod` toolchain bump from 1.25.5 → 1.25.9 to resolve upstream Go stdlib CVEs. No application code touched. Aitri treated it as behavioral drift requiring full normalize ceremony.
+  - **Briefing size measured: 70,390 bytes (70KB).** Verified by `aitri normalize 2>&1 | wc -c` on Ultron at HEAD `e7f67cb`. Size is fixed regardless of file count or change size — `lib/commands/normalize.js:300-321` embeds the full content of `01_REQUIREMENTS.json`, `03_TEST_CASES.json`, and `04_IMPLEMENTATION_MANIFEST.json` into the briefing.
+  - **`--resolve` gate cost:** requires `verifyPassed === true` (`normalize.js:136`) → forces full re-run of `verify-run` + `verify-complete` (45 tests in Ultron's case) for any source change post-last-verify. Plus TTY gate (`normalize.js:158`) — agents cannot resolve. So one-line `go.mod` change → 45 tests + 70KB briefing + interactive human prompt.
+
+  Problem / Why:
+  - Aitri's contract claims to detect "code changes outside the pipeline since last build approval." The implementation treats any non-`spec/`, non-`.aitri/`, non-`node_modules/` file as drift. That includes `go.mod`, `*.md`, `Dockerfile`, `.env.example`, `Makefile`, lockfiles, CI configs, regenerated CSS bundles. None of those are behavioral.
+  - The result is surveillance fatigue: users either ignore normalize (defeats the gate) or generate "chore: advance baseline" workaround commits (Ultron has 3 in git history). Both degrade produced software — the first by reducing signal credibility, the second by polluting commit history with bookkeeping.
+  - Tier-1 evidence is direct: produced software is degraded today by users compensating for the tool instead of doing substantive work.
+
+  Sub-bugs:
+
+  **N1 — Behavioral filter for `aitri normalize` and `detectUncountedChanges` (root cause)**
+
+  Files:
+  - `lib/commands/normalize.js` — `gitChangedFiles()` (line 54) and `mtimeChangedFiles()` (line 68): apply behavioral allowlist to filter out non-behavioral patterns before counting.
+  - `lib/snapshot.js` — `detectUncountedChanges()` (line 442) currently filters only `spec/`, `.aitri`, `node_modules/`; extend with the same allowlist.
+  - `lib/upgrade/normalize-patterns.js` (new) — exported allowlist, single source of truth shared between normalize.js and snapshot.js.
+  - `docs/integrations/ARTIFACTS.md` and `docs/integrations/SCHEMA.md` — document the allowlist so consumer projects know what is auto-excluded from drift detection.
+  - `test/commands/normalize.test.js` and `test/snapshot.test.js` — add coverage for: (a) allowlist files don't trigger pending state, (b) mixed change set (allowlist + behavioral) reports only behavioral count, (c) all-allowlist diff auto-advances baseRef silently on next `aitri status` read.
+
+  Behavior:
+  - When `git diff baseRef..HEAD --name-only` returns ONLY files matching the allowlist, `aitri status` does not show the warning, `nextActions` does not emit P4 normalize, and `normalizeState.baseRef` advances to current HEAD silently on the next `loadConfig` after the diff is computed (one-time bookkeeping write, no user prompt).
+  - When the diff contains any behavioral file, the warning fires as today, but the count and the briefing's file list exclude allowlist files (they are not part of the review scope).
+  - `aitri normalize` always shows the briefing for behavioral files only. If post-filter file count is 0, prints `✅ No behavioral changes detected outside pipeline.` and advances baseline.
+
+  Allowlist (initial — extensible via `.aitri/normalize-ignore` if a project needs more):
+  - Build/dependency manifests: `go.mod`, `go.sum`, `package.json`, `package-lock.json`, `yarn.lock`, `Cargo.lock`, `Cargo.toml`, `Pipfile`, `Pipfile.lock`, `requirements*.txt`, `Gemfile`, `Gemfile.lock`, `composer.lock`, `*.lock`
+  - Documentation: `*.md`, `*.txt`, `*.rst`, `LICENSE*`, `CONTRIBUTING*`, `AUTHORS*`, `CHANGELOG*`
+  - Config / dotfiles: `.env`, `.env.*`, `.gitignore`, `.dockerignore`, `.editorconfig`, `.prettierrc*`, `.eslintrc*`
+  - CI / infra: `Dockerfile*`, `docker-compose*.yml`, `Makefile*`, `*.mk`, `.github/**`, `.gitlab-ci.yml`, `.circleci/**`, `ci/**`
+  - Generated assets: `web/static/dist/**`, `**/*.min.js`, `**/*.min.css`, `**/dist/**`, `**/build/**` (already partially in `IGNORE_DIRS` for mtime path; needs git path coverage too)
+
+  Decisions:
+  - **Allowlist, not blocklist.** Default-deny behavioral, default-allow non-behavioral. Reverse would force every project to register all their config files manually.
+  - **Baseline advances silently on all-allowlist diff.** No user prompt, no event log entry beyond a single `normalize-auto-advance` event. Rationale: surveillance-free is the contract — if there's nothing to review, there's nothing to confirm.
+  - **No allowlist override needed for v1.** Future `.aitri/normalize-ignore` (optional file) can extend; ship without it. KISS.
+  - **N1 is independent of N2 and N3.** Ship N1 alone first; verify on Ultron; then decide if N2/N3 are still needed or if N1 absorbs the perceived friction.
+
+  Acceptance:
+  - On Ultron at current HEAD (`e7f67cb`, only `go.mod` differs from baseRef), `aitri status` does NOT show "files changed outside pipeline" warning.
+  - On a project with one `.md` change AND one `internal/auth/jwt.go` change since baseRef, `aitri normalize` briefing lists only the `.go` file. Count is 1.
+  - `npm run test:all` passes with new tests covering allowlist, mixed changes, and silent baseline advance.
+  - `docs/integrations/CHANGELOG.md` carries an entry tagged `— additive` (consumer-visible: drift detection now ignores allowlisted patterns).
+
+  **N2 — Briefing proportional to change scope (polish, ship after N1 if still needed)**
+
+  Files:
+  - `lib/commands/normalize.js` — replace full-spec embedding with: file list + `git diff baseRef -- <file>` per file + only the FRs/TCs whose `files_created` mentions a changed file.
+  - `templates/phases/normalize.md` — restructure briefing template around the diff-and-relevant-spec model.
+  - `test/commands/normalize.test.js` — assert briefing size scales with changed file count, asserts cross-ref logic picks correct FRs/TCs.
+
+  Behavior: briefing for a 1-file change drops from ~70KB to <10KB. The agent reviewer still has full context for what changed but doesn't re-read the entire spec.
+
+  Decisions:
+  - Cross-ref by exact path match in `04_IMPLEMENTATION_MANIFEST.json::files_created[].path`. If no FR/TC references the file → include the FR/TC list as today (degrade gracefully).
+  - Diff per file capped at 200 lines per file; truncate with `... (N more lines, see git diff)`.
+
+  Acceptance: briefing for the Ultron-style one-line `go.mod` change (post-N1, this scenario is moot — file is allowlisted). Briefing for a one-file source code change <10KB, includes the file's diff and only FRs/TCs that reference it.
+
+  **N3 — Snapshot priority ladder unified between status and verify-complete**
+
+  Files:
+  - `lib/commands/verify.js:861-864` — replace hardcoded "Phase 5 next" with a call to `buildProjectSnapshot()` and use its `nextActions[0]`.
+  - `test/commands/verify.test.js` — add assertion that verify-complete with pending normalize emits the same next-action as `aitri status` (priority ladder respected).
+
+  Behavior: `aitri verify-complete` after success consults `buildProjectSnapshot()` and prints the same `→ Next:` as `aitri status`. If normalize is pending, both say normalize; if normalize is resolved, both say Phase 5.
+
+  Decisions:
+  - Single source of truth for next-action is `buildProjectSnapshot()`. Any command that prints "your next action is X" must consume that snapshot, not derive it locally.
+
+  Acceptance: on a project with normalize pending and verify just passed, `aitri verify-complete` and `aitri status` print the same `→ Next:` line. Test asserts the equality.
+
+  Evidence / source: Ultron canary 2026-04-27. User session reported the cycle. Independent agent in a different session corroborated it. Verified in this session by reading the code, measuring the briefing (70KB), reproducing the cycle, and finding three previous workaround commits in Ultron git history. Severity HIGH — Tier-1 (degrades produced software via meta-commit pollution and signal-credibility erosion) + generalizes to any consumer project with documentation, build manifests, or CI config.
+
 ### Core — Post-promotion housekeeping
 
 - [ ] **Rename `from-0.1.65.js` or adjust ADR to match implementation.** The module currently covers migrations introduced across v0.1.63–v0.1.82, which diverges from the ADR's per-version-boundary implication. Works today via field-presence gating. Revisit when a second brownfield at a higher baseline (e.g. `from-0.1.80.js`) splits the file naturally.
