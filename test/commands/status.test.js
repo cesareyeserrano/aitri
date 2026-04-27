@@ -281,9 +281,9 @@ describe('cmdStatus --json', () => {
     console.log = (...a) => { out += a.join(' ') + '\n'; };
     try { cmdStatus({ dir, VERSION: '0.1.83', args: [] }); } finally { console.log = orig; }
 
-    // Fix 1: counts shown even when verify failed
-    assert.ok(out.includes('verify ❌ (53/61)'), 'failed feature must show ❌ with counts');
-    assert.ok(out.includes('verify ✅ (38/38)'), 'passed feature must show ✅ with counts');
+    // Fix 1: counts shown even when verify failed (alpha.5: pass/fail/deferred bucket format)
+    assert.ok(out.includes('verify ❌ (53 ✓ 8 ✗ 0 ⊘)'), 'failed feature must show ❌ with three-bucket counts');
+    assert.ok(out.includes('verify ✅ (38 ✓ 0 ✗ 0 ⊘)'), 'passed feature must show ✅ with three-bucket counts');
 
     // Fix 2: failing feature appears before passing feature
     const idxFailing = out.indexOf('beta-failing');

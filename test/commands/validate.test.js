@@ -152,9 +152,10 @@ describe('cmdValidate() — features with verify ran', () => {
   });
 
   it('shows aggregate Σ line with summed counts across root + features', () => {
-    // root 30/30 + alpha 10/12 + beta 8/8 → 48/50
-    assert.ok(output.includes('Σ all pipelines: Passed (48/50)'),
-      `expected aggregate 48/50, got:\n${output}`);
+    // root 30/30 (pass=30 fail=0) + alpha 10/12 (pass=10 fail=2) + beta 8/8 (pass=8 fail=0)
+    //   → 48 pass / 2 fail / 0 deferred (alpha.5: three-bucket format)
+    assert.ok(output.includes('Σ all pipelines: (48 ✓ 2 ✗ 0 ⊘)'),
+      `expected aggregate (48 ✓ 2 ✗ 0 ⊘), got:\n${output}`);
   });
 
   it('flags failing feature with ❌ and passing with ✅', () => {

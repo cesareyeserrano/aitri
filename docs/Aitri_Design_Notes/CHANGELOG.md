@@ -5,6 +5,22 @@
 
 ---
 
+## [2.0.0-alpha.5] — 2026-04-27 — verify counts display: three-bucket breakdown (H5)
+
+Fifth staged pre-release on `feat/upgrade-protocol`. Display-only fix for the visual dissonance between `verify ✅` and `(passed/total)` confirmed across three canaries on alpha.4 (Zombite 4%, Hub 70-84%, Cesar 66-100%).
+
+**Three-bucket count format.** `verify ✅ (37/53)` becomes `verify ✅ (37 ✓ 0 ✗ 16 ⊘)` — passed / failed / deferred (skipped + manual). The verdict badge (`✅ / ❌ / ⬜`) keeps its meaning; the inner counts now describe coverage breadth without looking like a passing rate. Same treatment for `verify ❌` and the aggregated Σ line. Single source of truth: `lib/verify-display.js::formatVerifyCounts()`. Applied to `status`, `resume`, `validate`.
+
+**Why the old format misled.** `(passed/total)` where `total = passed + failed + skipped + manual` looked like a low passing rate when most TCs were skipped (no marker) or manual. `verify ✅` is set by `verify-complete` after confirming every MUST FR has ≥1 passing test and no critical/high bugs are open — the badge is correct, but a reader scanning `verify ✅ (2/51)` reasonably concluded the project was broken.
+
+**H7 discarded.** The proposed rehash hint in `resume`'s "Re-approved After Drift" section was redundant with A5b (alpha.3): post-event the hashes already match, so `rehash` is a no-op there. The equivalent hint at fresh-drift time already lives in `approve`. Documented in FEEDBACK.md history.
+
+**Subproduct impact:** none. `status --json` schema unchanged (`verify.summary` still carries `{ passed, failed, skipped, manual, total }`); only the text rendering changed.
+
+**Test coverage.** Two existing assertions updated in `test/commands/status.test.js` and `test/commands/validate.test.js` to match the new format. No new test infrastructure — formatter is a pure function exercised through the existing display tests.
+
+---
+
 ## [2.0.0-alpha.4] — 2026-04-27 — `aitri normalize` allowlist (Ultron canary fix)
 
 Fourth staged pre-release on `feat/upgrade-protocol`. Closes the proportionality bug (N1 from BACKLOG entry "Core — `aitri normalize` proportionality") reported by the Ultron canary 2026-04-27.
