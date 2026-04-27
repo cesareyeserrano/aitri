@@ -37,6 +37,21 @@ Features:
 
 **Reopen criterion:** first project with ≥20 features where the list becomes unreadable, OR agent confusion about the `N/M` ratio surfaces in a real session.
 
+**Reconfirmation 2026-04-27 (alpha.4 canary on Hub).** The post-N1 canary on Hub re-surfaced the visual tension. Live output:
+```
+Σ  all pipelines  Aggregated  Passed (249/294)
+hub-mvp-web                   verify ✅ (37/53)
+integration-compat-manifest   verify ✅ (25/34)
+```
+`verify ✅ (37/53)` reads as a contradiction at a glance — `✅` suggests complete, `(37/53)` reads as 70%. The aggregated `(249/294)` (84%) labelled "Passed" has the same problem. The N is "tests with explicit FR coverage", M is "tests total", but the display does not say so.
+
+**Severity escalation 2026-04-27 (alpha.4 canary on Zombite).** Zombite makes the dissonance much sharper. Live output:
+```
+Σ  all pipelines  Aggregated  Passed (17/66)
+stabilizacion                 verify ✅ (2/51)
+```
+**4% (2/51) labelled with ✅** is jarring. A reader inspecting Zombite for the first time would reasonably conclude "verify ✅" is wrong or that the project is broken. The ratio is technically correct under the current semantics ("tests with explicit FR coverage"), but the visual contract is misleading enough that an honest skim produces a wrong mental model. Two canaries now confirm; on the worse one (Zombite) the tension is severe enough to justify cheap polish in alpha.5 rather than waiting for the original "≥20 features OR agent confusion" trigger. Suggested relabel: `tests N covered / M total` or move the ratio to a separate column with an explanatory header.
+
 ---
 
 ## History
