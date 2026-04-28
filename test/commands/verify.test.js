@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, extractTCId, cmdVerifyRun } from '../../lib/commands/verify.js';
+import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, extractTCId, cmdVerifyRun, cmdVerifyComplete } from '../../lib/commands/verify.js';
 
 describe('parseRunnerOutput()', () => {
 
@@ -657,4 +657,67 @@ describe('cmdVerifyRun() — A2 schema precondition', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+});
+
+// ── Feature-context emission (alpha.6) ───────────────────────────────────────
+
+describe('cmdVerifyRun() — feature-context emits prefixed approve hint on missing Phase 4', () => {
+  it('feature scope: error message points to `aitri feature foo approve 4`', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-vr-fctx-'));
+    try {
+      fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+        projectName: 'F', artifactsDir: 'spec',
+        approvedPhases: [], completedPhases: [],
+      }));
+      let captured = '';
+      const err = (msg) => { captured = msg; throw new Error(msg); };
+      try {
+        cmdVerifyRun({
+          dir, args: [], flagValue: () => null, err,
+          featureRoot: '/parent', scopeName: 'foo',
+        });
+      } catch { /* expected */ }
+      assert.ok(captured.includes('aitri feature foo approve 4'),
+        `expected feature-prefixed approve hint, got: ${captured}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('root scope: error message points to `aitri approve 4` (regression guard)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-vr-rctx-'));
+    try {
+      fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+        projectName: 'R', artifactsDir: 'spec',
+        approvedPhases: [], completedPhases: [],
+      }));
+      let captured = '';
+      const err = (msg) => { captured = msg; throw new Error(msg); };
+      try {
+        cmdVerifyRun({ dir, args: [], flagValue: () => null, err });
+      } catch { /* expected */ }
+      assert.ok(!/aitri feature \w+ /.test(captured),
+        'root context must not emit feature-prefixed command');
+      assert.ok(captured.includes('aitri approve 4'),
+        `expected root-style approve hint, got: ${captured}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('cmdVerifyComplete() — feature-context emits prefixed verify-run hint on missing results', () => {
+  it('feature scope: error message points to `aitri feature foo verify-run`', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-vc-fctx-'));
+    try {
+      fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+      fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+        projectName: 'F', artifactsDir: 'spec',
+        approvedPhases: [1, 2, 3, 4], completedPhases: [],
+      }));
+      let captured = '';
+      const err = (msg) => { captured = msg; throw new Error(msg); };
+      try {
+        cmdVerifyComplete({ dir, err, featureRoot: '/parent', scopeName: 'foo' });
+      } catch { /* expected */ }
+      assert.ok(captured.includes('aitri feature foo verify-run'),
+        `expected feature-prefixed verify-run hint, got: ${captured}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
 });

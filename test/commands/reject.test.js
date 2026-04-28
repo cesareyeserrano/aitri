@@ -233,3 +233,45 @@ describe('cmdReject() — optional phase (discovery)', () => {
     assert.ok(config.rejections['discovery'], 'rejection for discovery must exist');
   });
 });
+
+// ── Feature-context emission (alpha.6) ───────────────────────────────────────
+
+describe('cmdReject() — feature-context Rerun hint carries `feature <name> ` prefix', () => {
+  it('emits scope-prefixed rerun command in feature scope', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig());
+      const out = captureStdout(() =>
+        cmdReject({
+          dir,
+          args:        ['requirements', '--feedback', 'change FR-001 ACs'],
+          flagValue:   makeFlagValue({ '--feedback': 'change FR-001 ACs' }),
+          err:         noopErr,
+          featureRoot: '/parent',
+          scopeName:   'foo',
+        })
+      );
+      assert.ok(out.includes('aitri feature foo run-phase requirements --feedback'),
+        `expected feature-prefixed run-phase rerun hint, got:\n${out}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('emits root-style rerun hint when featureRoot absent (regression guard)', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig());
+      const out = captureStdout(() =>
+        cmdReject({
+          dir,
+          args:      ['requirements', '--feedback', 'change FR-001 ACs'],
+          flagValue: makeFlagValue({ '--feedback': 'change FR-001 ACs' }),
+          err:       noopErr,
+        })
+      );
+      assert.ok(!/aitri feature \w+ /.test(out),
+        'root context must not emit feature-prefixed rerun');
+      assert.ok(/aitri run-phase requirements --feedback/.test(out),
+        `expected root-style rerun hint, got:\n${out}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});

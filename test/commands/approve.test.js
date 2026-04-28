@@ -539,3 +539,102 @@ describe('cmdApprove() — phase 5 shows completion message', () => {
     assert.ok(output.includes('All 5 phases'), 'should celebrate completion');
   });
 });
+
+// ── Feature-context emission (alpha.6 — scope-aware PIPELINE INSTRUCTION) ────
+//
+// These tests cover the destructive-risk fix surfaced by the Ultron canary
+// 2026-04-27. With `featureRoot` + `scopeName` set, every emitted command
+// must include the `feature <name> ` infix; without them, output is
+// byte-for-byte identical to root behavior.
+
+describe('cmdApprove() — feature-context PIPELINE INSTRUCTION carries `feature <name> ` prefix', () => {
+  // Phase 1 → Phase 2 transition (no UX FRs): "aitri feature foo run-phase architecture"
+  it('phase 1 → architecture next-action', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', ARTIFACT_CONTENT);
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+      const output = captureAll(() =>
+        cmdApprove({ dir, args: ['requirements'], err: noopErr, featureRoot: '/parent', scopeName: 'foo' })
+      );
+      assert.ok(output.includes('aitri feature foo run-phase architecture'),
+        `expected feature-prefixed run-phase, got:\n${output}`);
+      assert.ok(!/aitri run-phase architecture\b/.test(output),
+        'must not emit root-style command in feature context');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // Phase 1 with UX FRs detected → "aitri feature foo run-phase ux"
+  // (this is the exact path the Ultron canary triggered)
+  it('phase 1 → ux next-action when UX/visual FRs are present', () => {
+    const dir = tmpDir();
+    try {
+      const reqs = JSON.stringify({
+        project_name: 'T',
+        functional_requirements: [
+          { id: 'FR-001', priority: 'MUST', type: 'visual', title: 'Brand colors', acceptance_criteria: ['ac'] },
+        ],
+      });
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', reqs);
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+      const output = captureAll(() =>
+        cmdApprove({ dir, args: ['requirements'], err: noopErr, featureRoot: '/parent', scopeName: 'foo' })
+      );
+      assert.ok(output.includes('aitri feature foo run-phase ux'),
+        `expected feature-prefixed UX run-phase (Ultron canary regression), got:\n${output}`);
+      assert.ok(output.includes('aitri feature foo approve ux'),
+        `expected feature-prefixed approve hint, got:\n${output}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // Phase 4 build approved → "aitri feature foo verify-run"
+  it('phase 4 → verify-run next-action', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json', '{"files_created":[{"path":"x"}]}');
+      writeFile(dir, '.aitri', minimalConfig({
+        approvedPhases: [1, 2, 3],
+        completedPhases: [1, 2, 3, 4],
+      }));
+      const output = captureAll(() =>
+        cmdApprove({ dir, args: ['build'], err: noopErr, featureRoot: '/parent', scopeName: 'foo' })
+      );
+      assert.ok(output.includes('aitri feature foo verify-run'),
+        `expected feature-prefixed verify-run, got:\n${output}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // UX phase approved → "aitri feature foo run-phase architecture"
+  it('UX → architecture next-action', () => {
+    const dir = tmpDir();
+    try {
+      const uxContent = '## User Flows\nstuff\n## Component Inventory\nstuff\n## Nielsen Compliance\nstuff\n## Design Tokens\nstuff\n' + 'x\n'.repeat(30);
+      writeFile(dir, 'spec/01_UX_SPEC.md', uxContent);
+      writeFile(dir, '.aitri', minimalConfig({
+        approvedPhases: [1],
+        completedPhases: ['ux'],
+      }));
+      const output = captureAll(() =>
+        cmdApprove({ dir, args: ['ux'], err: noopErr, featureRoot: '/parent', scopeName: 'foo' })
+      );
+      assert.ok(output.includes('aitri feature foo run-phase architecture'),
+        `expected feature-prefixed architecture run-phase after UX, got:\n${output}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // Root context (no featureRoot) → output is unchanged. Regression guard.
+  it('root context emits no `feature <name> ` infix (regression guard)', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', ARTIFACT_CONTENT);
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+      const output = captureAll(() =>
+        cmdApprove({ dir, args: ['requirements'], err: noopErr })
+      );
+      assert.ok(!/aitri feature \w+ /.test(output),
+        'root context must not emit feature-prefixed commands');
+      assert.ok(output.includes('aitri run-phase architecture'),
+        `expected root-style run-phase architecture, got:\n${output}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});

@@ -5,6 +5,24 @@
 
 ---
 
+## [2.0.0-alpha.6] — 2026-04-27 — scope-aware command emission across CLI + phase templates
+
+Sixth staged pre-release on `feat/upgrade-protocol`. Closes the destructive-risk bug surfaced by Ultron canary 2026-04-27 mid-feature: the `aitri feature approve <name> requirements` post-action banner emitted `PIPELINE INSTRUCTION ... aitri run-phase ux`, directing the agent to overwrite the parent project's already-approved `01_UX_SPEC.md`. The user paused before saving; the literal command would have clobbered an approved root artifact with feature-scope content.
+
+**Root cause.** `cmdApprove` and siblings (`cmdComplete`, `cmdReject`, `cmdVerifyRun`, `cmdVerifyComplete`) destructured only `{ dir, args, err }` and silently dropped the `featureRoot` field that `feature.js` was passing in `featureCtx`. Without it, every emitted command was scope-blind — it always printed root-style strings even when running inside a feature dispatch. Same defect class affected the 11 phase templates in `templates/phases/*.md`, which hardcoded `Run: aitri complete X` / `Next: aitri complete X → aitri approve X` without any scope variable.
+
+**Fix.** New `lib/scope.js::commandPrefix(featureRoot, scopeName)` is the single source of truth — returns `''` for root context or `feature <name> ` (with trailing space) for feature context. Threaded through approve / complete / reject / run-phase / verify-run / verify-complete. Phase modules now accept `scopePrefix` and pass it as `{{SCOPE_PREFIX}}` to their templates. The 11 templates were rewritten to use `aitri {{SCOPE_PREFIX}}<verb> <phase>` in every instruction line. Reference text describing tools generically (e.g. `the type field is how aitri counts E2E tests`) was left untouched.
+
+**Why Phase 1 hid the bug pre-alpha.6.** Phase 1 in a feature works because `aitri run-phase 1` is blocked at root by the "all core phases approved" gate. UX is in `OPTIONAL_PHASES` and the gate doesn't apply, so the scope-blind `aitri run-phase ux` instruction was followed without resistance. The other phases were one canary away from the same exposure.
+
+**Test coverage.** +19 tests (1012/1012 green). New `test/scope.test.js` covers the helper. `test/commands/approve.test.js` covers all five PIPELINE INSTRUCTION branches under feature context (Phase 1 → architecture, Phase 1 → UX with visual FRs, Phase 4 → verify-run, UX → architecture, root regression guard). `test/commands/complete.test.js`, `test/commands/reject.test.js`, `test/commands/verify.test.js` carry parity assertions for their command emissions. `test/phases/phaseUX.test.js` asserts `{{SCOPE_PREFIX}}` substitution in both feature and root scopes.
+
+**Subproduct impact: none.** No schema change, no `.aitri` field change, no `status --json` change. Display-only fix on the human terminal surface — the Hub contract is untouched.
+
+**Workaround for v2.0.0-alpha.5 and earlier (still applicable to deployed copies):** never trust the literal command in PIPELINE INSTRUCTION when running a feature pipeline. Always prepend `feature <name> ` to whatever Aitri printed.
+
+---
+
 ## [2.0.0-alpha.5] — 2026-04-27 — verify counts display: three-bucket breakdown (H5)
 
 Fifth staged pre-release on `feat/upgrade-protocol`. Display-only fix for the visual dissonance between `verify ✅` and `(passed/total)` confirmed across three canaries on alpha.4 (Zombite 4%, Hub 70-84%, Cesar 66-100%).

@@ -191,4 +191,34 @@ describe('Phase UX — buildBriefing()', () => {
     });
     assert.ok(!b.includes('UX/UI Standards'), 'UX/UI Standards header must not appear when bestPractices is empty');
   });
+
+  // alpha.6: scopePrefix threads through {{SCOPE_PREFIX}} in instruction lines.
+  // Same shape applies to every phase template — phaseUX is the canary used by
+  // the Ultron 2026-04-27 incident, so it carries the explicit assertion.
+  it('feature-scope: instruction lines render with `feature <name> ` infix', () => {
+    const b = PHASE_DEFS['ux'].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { 'IDEA.md': 'A simple app idea.', '01_REQUIREMENTS.json': validRequirements },
+      feedback: null,
+      scopePrefix: 'feature network-monitoring ',
+    });
+    assert.ok(b.includes('aitri feature network-monitoring complete ux'),
+      'briefing must instruct feature-scoped complete');
+    assert.ok(b.includes('aitri feature network-monitoring approve ux'),
+      'briefing must instruct feature-scoped approve');
+    assert.ok(!/aitri complete ux\b/.test(b),
+      'root-style "aitri complete ux" must NOT appear when scopePrefix is set');
+  });
+
+  it('root scope: instruction lines render without any feature infix', () => {
+    const b = PHASE_DEFS['ux'].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { 'IDEA.md': 'A simple app idea.', '01_REQUIREMENTS.json': validRequirements },
+      feedback: null,
+    });
+    assert.ok(b.includes('aitri complete ux'),
+      'root briefing must keep `aitri complete ux` instruction');
+    assert.ok(!/aitri feature \w+ /.test(b),
+      'root briefing must NOT emit feature-prefixed instructions');
+  });
 });

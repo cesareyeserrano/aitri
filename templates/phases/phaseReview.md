@@ -39,7 +39,7 @@
 7. Write ## Verdict — PASS | CONDITIONAL_PASS | FAIL with justification
 8. Save to: {{ARTIFACTS_BASE}}/04_CODE_REVIEW.md
 9. Present the Delivery Summary below to the user
-10. Run: aitri complete review
+10. Run: aitri {{SCOPE_PREFIX}}complete review
 
 ## Delivery Summary
 After saving 04_CODE_REVIEW.md, present this report to the user:
@@ -56,7 +56,7 @@ Issues found ([N]):
 
 [If CONDITIONAL_PASS or FAIL — list what must be fixed before approving]
 ──────────────────────────────────────────────────────────────
-Next: aitri complete review   →   aitri approve review
+Next: aitri {{SCOPE_PREFIX}}complete review   →   aitri {{SCOPE_PREFIX}}approve review
 ```
 
 ## Output: `{{ARTIFACTS_BASE}}/04_CODE_REVIEW.md`

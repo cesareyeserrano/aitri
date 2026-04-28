@@ -257,3 +257,39 @@ describe('cmdComplete() — spec/ artifact path', () => {
     assert.ok(config.completedPhases.includes(1));
   });
 });
+
+// ── Feature-context emission (alpha.6) ───────────────────────────────────────
+
+describe('cmdComplete() — feature-context "Approved →" hint carries `feature <name> ` prefix', () => {
+  it('emits scope-prefixed approve / reject hints in feature scope', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({ artifactsDir: 'spec' }));
+      writeFile(dir, 'IDEA.md', '# Idea\nContent.\n');
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', VALID_REQUIREMENTS);
+      const out = captureStdout(() =>
+        cmdComplete({ dir, args: ['requirements'], err: noopErr, featureRoot: '/parent', scopeName: 'foo' })
+      );
+      assert.ok(out.includes('aitri feature foo approve requirements'),
+        `expected feature-prefixed approve hint, got:\n${out}`);
+      assert.ok(out.includes('aitri feature foo reject requirements'),
+        `expected feature-prefixed reject hint, got:\n${out}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('emits root-style hints when featureRoot is absent (regression guard)', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({ artifactsDir: 'spec' }));
+      writeFile(dir, 'IDEA.md', '# Idea\nContent.\n');
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', VALID_REQUIREMENTS);
+      const out = captureStdout(() =>
+        cmdComplete({ dir, args: ['requirements'], err: noopErr })
+      );
+      assert.ok(!/aitri feature \w+ /.test(out),
+        'root context must not emit feature-prefixed commands');
+      assert.ok(/aitri approve requirements\b/.test(out),
+        `expected root-style approve hint, got:\n${out}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
