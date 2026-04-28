@@ -5,6 +5,45 @@
 
 ---
 
+## [2.0.0-alpha.8] — 2026-04-28 — Go test runner output parser
+
+Eighth staged pre-release on `feat/upgrade-protocol`. Closes the highest-impact gap surfaced by the Ultron canary on alpha.7 (BACKLOG entry "P2 — Go runner output not parsed by `aitri verify-run`"). Scope deliberately minimal: only the Go parser + the `-v` warning + template documentation. Other alpha.7 canary findings (manifest schema drift, verify-run scope contamination, stale-briefing post-upgrade, `--cmd` flag in feature) remain in BACKLOG.
+
+**New parser.** `lib/commands/verify.js::parseGoOutput()` consumes `go test -v` output and emits the same `Map<tc_id, { status, notes }>` shape as the four existing parsers (Vitest, Pytest, Playwright, node:test/mocha/TAP). Routing follows the same fallback pattern: trigger when `runnerHint` matches `\bgo\s+test\b` or when no other parser detected anything.
+
+**Coherence by reuse.** The parser delegates TC-id normalization to the existing `extractTCId()` helper at [verify.js:30](../../lib/commands/verify.js#L30) — the same regex that handles Vitest/Pytest/Playwright. Go test names like `TestTC_NM_001h` have the `Test` prefix stripped, and `extractTCId()` then converts the underscore separator to canonical `TC-NM-001h`. No new normalization logic; one source of truth preserved.
+
+**Subtests excluded by construction.** Go's verbose output uses 4-space indentation for subtest results (`    --- PASS: TestX/SubY (...)`). The parser's regex anchor `^---` (column 0) excludes them. Additionally, the captured test-name char class `[A-Za-z0-9_]+` does not allow `/`, so subtest paths cannot pass even if they reached the parser. Two safeguards. Top-level test reports its own verdict (FAIL when any subtest fails) — that is the level Aitri tracks.
+
+**`-v` warning.** When `runnerHint` matches `go test` but lacks `-v`, verify-run emits a stderr warning: passes are silent in non-verbose Go output, so verify-complete would block on 0 detected passes without an actionable hint. Warning surfaces the gap before the block.
+
+**No regressions.** Audit verified before implementation:
+- `parseGoOutput` does not false-match outputs from Vitest / Pytest / Playwright / node:test (none use `^--- (PASS|FAIL|SKIP):` at column 0 with `Test` prefix).
+- The four existing parsers do not false-match Go output (different markers).
+- `extractTCId` filters non-TC test names (`TestPlainNoMarker`, `TestTCPConnection`) by its negative-lookbehind + `[-_]` separator requirement.
+- Phase 3 `validate()` has no regex constraint on TC-id format; canonical `TC-NM-001h` written into `03_TEST_CASES.json` is accepted regardless of the test-file syntax (`_` in Go vs `-` in markdown).
+
+**Test coverage.** +11 tests in `test/commands/verify.test.js` covering: pass/fail/skip detection, underscore-to-dash normalization (single + namespaced), assertion-context capture for FAIL, parent-with-subtests behavior, subtest exclusion, non-TC test rejection, non-verbose output handling, isolation from other parsers (Go vs them, them vs Go).
+
+**Fixture is real, not synthetic.** Captured from a live `go test -v` run on 2026-04-28 in `/tmp/aitri-go-fixture` — covers the exact patterns Go's runner emits. Per ADR-029: tests assert that the parser produces what the consumer (verify-run aggregation) needs, not what the test author designed.
+
+**Documentation propagated.** `templates/phases/build.md` runner-detection list and `templates/phases/tests.md` naming-convention rules now describe Go alongside the four other runners. Convention: `func TestTC_NS_NNN<suffix>(t *testing.T)` with `Test` prefix mandatory and `-v` flag required for pass detection.
+
+**Subproduct impact: additive.** No schema change, no `.aitri` field change, no breaking reader contract. Hub readers see no difference. Documented in `docs/integrations/CHANGELOG.md` with `— additive` marker.
+
+**Out of scope (still in BACKLOG):**
+- P2 manifest schema drift between briefing and validator
+- P2 verify-run runs from project root (parent test contamination)
+- P3 upgrade banner for stale briefings
+- P3 `aitri feature verify-run --cmd` flag wiring
+- P2 approve ux next-action routing to requirements when Phase 1 is approved
+- P3 `aitri feature list` from sub-directories
+- P3 Phase 3 validator NFR-* support
+
+These are independent, none destructive, none blocked by alpha.8.
+
+---
+
 ## [2.0.0-alpha.7] — 2026-04-27 — scope grammar correction (alpha.6 regression fix)
 
 Seventh staged pre-release on `feat/upgrade-protocol`. Fixes the regression introduced by alpha.6 — same root bug class as the bug alpha.6 was meant to close, just at a different layer.

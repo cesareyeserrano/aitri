@@ -66,7 +66,8 @@ aitri {{SCOPE_VERB}}verify-run{{SCOPE_ARG}} parses TC-XXX patterns directly from
   - Vitest:                  run with --reporter verbose — ✓/× TC-XXX detected automatically
   - Jest:                    run with --verbose flag     — ✓/✕ TC-XXX detected automatically
   - pytest:                  run with -v flag            — PASSED/FAILED TC-XXX detected automatically
-  - Go / Rust / other:       ensure TC-XXX appears in test output line (test name or log)
+  - Go:                      run with -v flag            — `--- PASS/FAIL/SKIP: TestTC_XXX` detected automatically (underscore in Go func names is normalized to dash → canonical TC-XXX)
+  - Rust / other:            ensure TC-XXX appears in test output line (test name or log)
 Marker comment: use your language's line comment style (// @aitri-tc TC-XXX for JS/Go/Java, # @aitri-tc TC-XXX for Python/Ruby/Shell)
 Tests not matching TC-XXX: naming are auto-classified as skip — verify-complete rejects 0 passing tests.
 {{/IF_TC_LOCK}}

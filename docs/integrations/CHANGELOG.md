@@ -18,6 +18,22 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-alpha.8 (2026-04-28) — Go test runner output parser — additive
+
+`aitri verify-run` now parses `go test -v` output for `--- PASS/FAIL/SKIP: TestTC_XXX` lines and emits the same `04_TEST_RESULTS.json` shape as the four existing runners. No schema change, no `.aitri` field change, no breaking reader contract. Hub readers see no difference.
+
+**For consumers reading `04_TEST_RESULTS.json`:** Go projects under Aitri now produce the same `results[]`, `fr_coverage[]`, and `summary` fields as JS/Python/E2E projects. Test ids are normalized to canonical form (`TestTC_NM_001h` in the test file → `TC-NM-001h` in results) — the existing `extractTCId()` helper handles the conversion.
+
+**Behavior change for projects with `test_runner: "go test ..."` in 04_IMPLEMENTATION_MANIFEST.json:**
+- Previously: TCs were auto-classified as skip; verify-complete blocked on 0 passing tests with no actionable hint.
+- Now: TCs are detected and counted correctly when the manifest declares `-v` in the runner command. A stderr warning fires when `go test` lacks `-v` so the operator can fix the manifest before verify-complete blocks.
+
+**Convention required (forward-compatible).** Go test functions must follow `func TestTC_NS_NNN<suffix>(t *testing.T)` with the `Test` prefix mandatory (Go runtime requirement) and an `@aitri-tc TC-XXX` marker comment in the test body. The underscore separator is required in Go (the language forbids `-` in identifiers); aitri normalizes to canonical dash form on parse. Documented in `templates/phases/tests.md` and `templates/phases/build.md`.
+
+**No subproduct migration needed.** This is purely a producer-side enhancement. Existing readers parse the same artifact shape they already understood.
+
+---
+
 ## v2.0.0-alpha.4 (2026-04-27) — normalize allowlist for non-behavioral files — additive
 
 Fourth staged pre-release on branch `feat/upgrade-protocol`. Closes the proportionality bug (N1) reported by the Ultron canary 2026-04-27.

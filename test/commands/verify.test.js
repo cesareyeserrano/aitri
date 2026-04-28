@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, extractTCId, cmdVerifyRun, cmdVerifyComplete } from '../../lib/commands/verify.js';
+import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, parseGoOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, extractTCId, cmdVerifyRun, cmdVerifyComplete } from '../../lib/commands/verify.js';
 
 describe('parseRunnerOutput()', () => {
 
@@ -211,6 +211,139 @@ describe('parsePlaywrightOutput()', () => {
     assert.equal(result.get('TC-FE-001h')?.status, 'pass');
   });
 
+});
+
+// ── parseGoOutput (alpha.8) ──────────────────────────────────────────────────
+//
+// Fixture captured from a real `go test -v` run on 2026-04-28 against a
+// synthetic module in /tmp/aitri-go-fixture covering: passing tests, failing
+// tests, skipped tests, parent-with-subtests, and a non-TC test that must NOT
+// be detected. The fixture is what alpha.8's parseGoOutput consumes.
+//
+// Per ADR-029: tests assert that the parser produces the same result a
+// downstream consumer (here, cmdVerifyRun's results-aggregation logic) would
+// require — not that the output matches a string the test author chose.
+
+describe('parseGoOutput() — alpha.8', () => {
+
+  // Verbose `go test -v` output. Subtests are 4-space-indented to match Go's
+  // actual format. Parent test reports FAIL when any subtest fails.
+  const verboseFixture = [
+    '=== RUN   TestTC_NM_001h',
+    '--- PASS: TestTC_NM_001h (0.00s)',
+    '=== RUN   TestTC_NM_002f',
+    '--- PASS: TestTC_NM_002f (0.00s)',
+    '=== RUN   TestTC_NM_003e',
+    '    sample_test.go:23: intentional fail to capture parser output',
+    '--- FAIL: TestTC_NM_003e (0.00s)',
+    '=== RUN   TestTC_NM_004h',
+    '    sample_test.go:29: skipped on purpose',
+    '--- SKIP: TestTC_NM_004h (0.00s)',
+    '=== RUN   TestPlainNoMarker',
+    '--- PASS: TestPlainNoMarker (0.00s)',
+    '=== RUN   TestTC_NM_005h',
+    '=== RUN   TestTC_NM_005h/inner_a',
+    '=== RUN   TestTC_NM_005h/inner_b',
+    '    sample_test.go:46: inner failure',
+    '--- FAIL: TestTC_NM_005h (0.00s)',
+    '    --- PASS: TestTC_NM_005h/inner_a (0.00s)',
+    '    --- FAIL: TestTC_NM_005h/inner_b (0.00s)',
+    'FAIL',
+    'FAIL\taitri-go-fixture\t0.524s',
+    'FAIL',
+  ].join('\n');
+
+  it('detects pass and normalizes underscores → dashes (TC_NM_001h → TC-NM-001h)', () => {
+    const result = parseGoOutput(verboseFixture);
+    assert.equal(result.get('TC-NM-001h')?.status, 'pass');
+    assert.equal(result.get('TC-NM-002f')?.status, 'pass');
+  });
+
+  it('detects fail with assertion context captured from preceding indented lines', () => {
+    const result = parseGoOutput(verboseFixture);
+    const e = result.get('TC-NM-003e');
+    assert.equal(e?.status, 'fail');
+    assert.ok(e?.notes.includes('intentional fail'),
+      `expected assertion context in notes, got: ${e?.notes}`);
+  });
+
+  it('detects skip', () => {
+    const result = parseGoOutput(verboseFixture);
+    assert.equal(result.get('TC-NM-004h')?.status, 'skip');
+  });
+
+  it('reports parent test as fail when subtests fail (top-level only, subtests excluded)', () => {
+    const result = parseGoOutput(verboseFixture);
+    assert.equal(result.get('TC-NM-005h')?.status, 'fail');
+    // Subtests must NOT appear as separate entries
+    for (const id of result.keys()) {
+      assert.ok(!id.includes('inner_'), `subtest leaked into results: ${id}`);
+      assert.ok(!id.includes('/'),       `subtest leaked into results: ${id}`);
+    }
+  });
+
+  it('ignores non-TC tests (TestPlainNoMarker, TestTCPConnection)', () => {
+    const result = parseGoOutput(verboseFixture);
+    assert.ok(!result.has('PlainNoMarker'),       'TestPlainNoMarker must not be detected');
+    // Confirm against TCPConnection-style false positive
+    const r2 = parseGoOutput('--- PASS: TestTCPConnection (0.00s)');
+    assert.equal(r2.size, 0, 'TestTCPConnection (no separator before digits) must not be detected');
+  });
+
+  it('returns 5 TCs (PASS + PASS + FAIL + SKIP + FAIL parent) — no subtests, no PlainNoMarker', () => {
+    const result = parseGoOutput(verboseFixture);
+    assert.equal(result.size, 5,
+      `expected 5 entries, got ${result.size}: ${[...result.keys()].join(', ')}`);
+    assert.deepEqual(
+      [...result.keys()].sort(),
+      ['TC-NM-001h', 'TC-NM-002f', 'TC-NM-003e', 'TC-NM-004h', 'TC-NM-005h'].sort(),
+    );
+  });
+
+  it('non-verbose go test output (FAIL only) — pass-only run reports nothing detected', () => {
+    // Without -v, `go test ./...` only emits failures. A passing-only run has
+    // no `--- PASS:` lines — verify-complete will block on 0 passing tests, which
+    // is the correct signal to the operator that they need -v.
+    const nonVerbosePass = 'ok\taitri-go-fixture\t0.001s';
+    const result = parseGoOutput(nonVerbosePass);
+    assert.equal(result.size, 0, 'non-verbose pass-only output produces no detections (expected)');
+  });
+
+  it('non-verbose with failure — only FAIL lines visible, parser still detects them', () => {
+    // Without -v Go does emit `--- FAIL:` lines (even when -v absent).
+    const nonVerboseFail = [
+      '--- FAIL: TestTC_NM_003e (0.00s)',
+      '    sample_test.go:23: intentional fail',
+      'FAIL',
+    ].join('\n');
+    const result = parseGoOutput(nonVerboseFail);
+    assert.equal(result.get('TC-NM-003e')?.status, 'fail');
+  });
+
+  it('handles namespaced TC ids (TC_FE_NM_001h → TC-FE-NM-001h)', () => {
+    const out = '--- PASS: TestTC_FE_NM_001h (0.00s)';
+    const result = parseGoOutput(out);
+    assert.equal(result.get('TC-FE-NM-001h')?.status, 'pass');
+  });
+
+  it('does not false-match outputs from other runners (no "--- PASS:" pattern)', () => {
+    // Vitest output
+    assert.equal(parseGoOutput('  ✓ TC-001: works (1ms)').size, 0);
+    // pytest output
+    assert.equal(parseGoOutput('tests/foo.py::test_TC_001h_x PASSED').size, 0);
+    // Playwright
+    assert.equal(parseGoOutput('  ✓  1 tests/e2e/x.spec.js › TC-021: ok (1s)').size, 0);
+    // node:test
+    assert.equal(parseGoOutput('  ✔ TC-001: ok (1ms)').size, 0);
+  });
+
+  it('other parsers do not false-match Go output (regression guard)', () => {
+    // Confirms isolation: existing parsers see the Go fixture and detect nothing
+    assert.equal(parseRunnerOutput(verboseFixture).size, 0,  'parseRunnerOutput must not detect Go output');
+    assert.equal(parseVitestOutput(verboseFixture).size, 0,  'parseVitestOutput must not detect Go output');
+    assert.equal(parsePytestOutput(verboseFixture).size, 0,  'parsePytestOutput must not detect Go output');
+    assert.equal(parsePlaywrightOutput(verboseFixture).size, 0, 'parsePlaywrightOutput must not detect Go output');
+  });
 });
 
 describe('buildFRCoverage()', () => {

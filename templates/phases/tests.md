@@ -117,6 +117,7 @@ If a behavior is genuinely hard to verify observationally → document it as `"m
 - Steps specific enough for a developer to implement directly
 - E2E tests run via Playwright MUST follow the same TC-XXX: naming: test('TC-XXX: description', ...)
   This allows aitri {{SCOPE_VERB}}verify-run{{SCOPE_ARG}} --e2e to auto-detect them from Playwright output
+- Go test functions MUST use the canonical TC-XXX id with underscores as separators because Go syntax forbids `-` in identifiers: `func TestTC_NS_001h(t *testing.T)`. The `Test` prefix is mandatory. aitri normalizes underscores to dashes on parse — canonical id stored in `03_TEST_CASES.json` stays `TC-NS-001h`. Run `go test -v` so passes are visible in output
 
 ## Mandatory gates by FR type (test LEVEL of implementation, not just presence)
 - FR type UX:          must include test for responsive layout at 375px viewport AND visual component rendering
