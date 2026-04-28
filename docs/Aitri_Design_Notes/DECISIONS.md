@@ -704,3 +704,33 @@ When `.aitri` is committed, every `verify-run` / `complete` / `approve` / `check
 Without either, the gate is "architectural discomfort" — insufficient under the evidence-before-breakage discipline.
 
 **Scope of this ADR:** documentation only. No code changes, no test changes, no migration module. When reopened, this ADR is superseded by a new one that records the breaking-change decision.
+
+---
+
+## ADR-029 — 2026-04-28 — Output-contract tests must execute against the consumer, not string-match a designed shape
+
+**Status:** Active.
+
+**Context:** v2.0.0-alpha.6 shipped a fix for the Ultron-canary destructive bug (alpha.4: scope-blind `PIPELINE INSTRUCTION` could overwrite the parent's approved UX spec). The fix introduced `commandPrefix(featureRoot, scopeName) → 'feature <name> '` placed before the verb, producing strings like `aitri feature network-monitoring complete ux`. The full test suite (1012/1012 green) included new feature-context assertions in `approve.test.js`, `complete.test.js`, `reject.test.js`, `verify.test.js`, and `phaseUX.test.js` — every one passed.
+
+The Ultron canary on alpha.6 caught the regression at handoff #1: literal copy-paste of the emitted command failed with `Feature "complete" not found`. Reason — `feature.js:42-50` parses the **first token after `feature` as the verb**, not as the name. The actual CLI grammar is `aitri feature <verb> <name> <phase>`, not the inverted form alpha.6 emitted. 8/8 handoffs in the canary reported the same broken pattern; promotion of alpha.6 to v2.0.0 stable would have shipped the bug.
+
+**Why every test passed.** Each new assertion was of the form `assert.ok(out.includes('aitri feature foo run-phase architecture'))` — verifying that the output matched the string the test author **designed**. The author of the test was the same agent that designed the helper. Both held the same wrong mental model (single prefix before the verb). The test confirmed self-consistency, not correctness against the actual parser.
+
+**Decision:** When a test asserts properties of an output that another part of the system will parse, the assertion must execute the output against the actual parser logic (or a faithful local mirror of it), not match a string the test author chose. "The output must be parseable by the consumer" is the contract; "the output looks like X" is a proxy that fails when author and consumer mental models drift.
+
+**Implementation in alpha.7:** new `test/scope.test.js` block extracts every `aitri feature <X> <Y>` from a synthetic output stream and applies the dispatch logic from `feature.js` (first-token-is-verb) to verify `<X>` is a recognized verb. If the alpha.6 inversion ever reappears, this test fails on the first occurrence — without waiting for an external canary.
+
+**Trade-off:** more setup per output-contract test (the test must know enough about the consumer to reproduce its parse). Mitigation: when the consumer is internal (feature.js, phase validators, etc.), import its actual logic rather than mirror it. The cost is acceptable; the alternative — alpha.6 — is shipping broken contracts that pass green CI.
+
+**Where else this principle applies (radar, not commitments):**
+
+- **Manifest schema → `phase4.js::validate()`.** The build briefing presents fields as optional; the validator rejects when missing. Today's tests check the validator, not the briefing-against-validator pair. A round-trip test would assert that a manifest produced by following the briefing literally passes `validate()`. The Ultron canary's "alpha.7 manifest schema drift" finding is exactly this gap.
+- **Briefing → state transitions.** Tests check that `complete` updates state correctly when given a valid artifact. Less tested: the briefing the agent receives produces an artifact that the validator accepts.
+- **`status --json` → Hub readers.** ARTIFACTS.md and STATUS_JSON.md are the contracts; consumer code parses against them. A round-trip test would generate a representative snapshot, write it as `status --json` would, and parse it through Hub's reader (or a local mirror).
+
+**Rule for the test suite going forward:** when adding a test for any output Aitri produces that another piece of code or external consumer will read, the assertion shape must be "the consumer can parse this output correctly", not "this output contains the string I expected". If the consumer is internal, import or mirror the parse. If external, document the parse as part of the contract.
+
+**Scope of this ADR:** principle binding on future tests. Existing tests are not retroactively rewritten — they migrate to the new shape when their surface produces a defect that the round-trip variant would have caught.
+
+**Evidentiary note:** the alpha.6 → alpha.7 cycle is the third instance in this project where canary signal exposed a defect that internal tests missed (others: ADR-027 §4 hash-preservation, ADR-026 Phase 1 vagueness rule). The pattern — "tests written by the implementer, against fixtures the implementer chose, passing while real-project use exposes the defect" — is now explicit. The round-trip principle is the structural counter to the pattern, but it works only if applied; vigilance over each new test is required.
