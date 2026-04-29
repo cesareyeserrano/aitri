@@ -18,6 +18,26 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-alpha.9 (2026-04-28) — round-trip fixes from canary + diagnosis — additive
+
+Closes the four code defects + two presentation defects surfaced by the audit + canary + diagnosis sequence on alpha.8. All changes are additive or relaxations — old readers continue to work unchanged. Hub readers see no behavioural difference; the only producer-side change visible in artifacts is the relaxed `04_IMPLEMENTATION_MANIFEST.json` schema (see below).
+
+**Producer-side changes visible in artifacts:**
+
+- `04_IMPLEMENTATION_MANIFEST.json`: `setup_commands` and `environment_variables` are now optional. Absent ≡ `[]`. When present, must be an array. Per-entry shape is documented in `templates/phases/build.md` (strings for `setup_commands`; objects with `name`/`default` for `environment_variables`). Producers may now omit either key when the project has no setup steps or env vars. Old readers handle absence gracefully (the keys were already optional in practice for downstream consumers); the change is purely on the validator side. Schema doc (`ARTIFACTS.md`) updated to match the actual stored shape.
+- `03_TEST_CASES.json`: `requirement_id` now accepts NFR ids (`NFR-xxx`) when the NFR is declared in `01_REQUIREMENTS.json::non_functional_requirements[]`. Previously only FR ids were accepted, forcing agents to model performance/security/accessibility requirements as FRs. No reader-side change — the field has always been a string.
+
+**`.aitri` schema changes:** none. Read-side canonicalisation in `state.js` coerces numeric phase strings (`"1"`) back to numbers (`1`) on load and on save, preserving alias keys (`"ux"`, `"discovery"`, `"review"`) verbatim. Existing readers were already tolerant of mixed types via `.map(String)` patterns; the canonicalisation is defence in depth, not a contract change.
+
+**Producer-side UX changes (no reader impact):**
+- `aitri adopt --upgrade --dry-run` no longer claims "would be a no-op" when the version string would change.
+- `aitri status` text now surfaces `health.deployable` next to the phase table.
+- `aitri feature verify-run` runs the test command from the feature directory, not the parent. This affects tests-on-disk, not artifact shape.
+
+**No subproduct migration needed.**
+
+---
+
 ## v2.0.0-alpha.8 (2026-04-28) — Go test runner output parser — additive
 
 `aitri verify-run` now parses `go test -v` output for `--- PASS/FAIL/SKIP: TestTC_XXX` lines and emits the same `04_TEST_RESULTS.json` shape as the four existing runners. No schema change, no `.aitri` field change, no breaking reader contract. Hub readers see no difference.

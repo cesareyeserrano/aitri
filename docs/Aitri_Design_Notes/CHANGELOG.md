@@ -5,6 +5,48 @@
 
 ---
 
+## [2.0.0-alpha.9] — 2026-04-28 — round-trip fixes from audit + canary + diagnosis
+
+Ninth staged pre-release on `feat/upgrade-protocol`. Closes six defects surfaced by the audit (4) + Hub canary diagnosis (2). All accepted as `FIX-IN-ALPHA` per the audit triage; none required `BLOCKER-2.0` carve-outs except via straightforward code changes. 1038 tests pass, zero skipped, zero todo.
+
+**Process note.** This release follows the audit + canary + diagnosis sequence the user ran against alpha.8 — the first time alpha.X has been gated by external review rather than internal canary alone. Hub remains pinned at alpha.4 by deliberate decision: the actual `aitri adopt --upgrade` against Hub is the canary action for alpha.9, not alpha.8.
+
+**Code defects fixed:**
+
+1. `lib/upgrade/index.js` — dry-run `--upgrade` no longer claims "would be a no-op" when the version string would change. The user-facing message now reads "only the version string would change" without the contradictory no-op line; the no-op line still fires when the upgrade is genuinely a no-op (no migrations, no version bump, no inferences). Source: diagnostic session against the alpha.8 canary on Hub.
+
+2. `lib/commands/status.js` — text renderer surfaces `health.deployable` next to the phase table. Previously the per-phase line `✅ deploy Deployment Approved` (Phase 5 pipeline status) was the only deploy-related signal, which a user could misread as "ready to ship" when the composite deploy gate was actually blocked (e.g. by version mismatch). Now a dedicated `❌ deployable Deploy readiness Not ready — N blocker(s)` line appears whenever any phase has progress and `health.deployable === false`. Mirrors what `aitri resume` already did. Source: diagnostic session against the alpha.8 canary.
+
+3. `lib/state.js` — `loadConfig` and `saveConfig` canonicalise numeric phase strings (`"1"`) back to numbers (`1`) in `approvedPhases`, `completedPhases`, and `driftPhases`. Alias keys (`"ux"`, `"discovery"`, `"review"`) are preserved verbatim. Closes the BACKLOG entry "P2 — Approve UX next-action routes to `requirements` instead of `architecture` when Phase 1 is already approved" (Ultron canary alpha.6). Defence in depth: regardless of which write-path produced a stray string, downstream `Set.has(<number>)` and alias matches now work consistently.
+
+4. `lib/commands/verify.js` — `aitri feature verify-run` now spawns the test runner with `cwd: dir` (the feature subdirectory) instead of `cwd: featureRoot || dir` (the parent project root). Previously, feature `verify-run` ran tests from the parent — the alpha.6 canary saw 52 of 78 skipped tests come from the parent rather than the feature pipeline. Test runners that walk up from cwd to find `package.json` / config still resolve correctly; what changes is that test discovery is now scoped to the feature.
+
+5. `lib/phases/phase3.js` — `requirement_id` on a TC now accepts NFR ids (`NFR-xxx`) when the NFR is declared in `01_REQUIREMENTS.json::non_functional_requirements[]`. Previously the gate rejected NFR-* outright with the message "Non-functional requirements cannot be TC targets — test coverage flows through FRs", forcing the agent to either invent an FR wrapper or misclassify the requirement (canary 2026-04-28: 14 TCs reassigned by hand). NFRs are testable (perf, security, accessibility) and now treated as first-class TC targets. Briefing (`templates/phases/tests.md`) updated to match.
+
+6. `lib/phases/phase4.js` — `setup_commands` and `environment_variables` in `04_IMPLEMENTATION_MANIFEST.json` are now optional. Absent ≡ `[]`; when present, must be an array. Per-entry shape lives in the briefing (`templates/phases/build.md`), not in the validator — this avoids re-creating the drift the alpha.7 canary exposed (briefing said `[]` was OK; validator required keys present). Round-trip aligned per ADR-029.
+
+**Tests added (15 new):**
+
+- `test/upgrade.test.js` — dry-run with version bump must NOT claim "no-op" (positive); dry-run on already-current project still says "no-op" (negative).
+- `test/commands/status.test.js` — text status surfaces `deployable Not ready` when blocked (positive); does not advertise deployable on fresh project (negative).
+- `test/state.test.js` — phase-key canonicalisation (4 tests covering `approvedPhases`, `completedPhases`, `driftPhases`, alias preservation).
+- `test/commands/approve.test.js` — UX → architecture routing remains correct even when `approvedPhases` on disk is `["1"]` (string).
+- `test/commands/verify.test.js` — feature `verify-run` spawn cwd equals feature dir, not parent (full integration test with a real runner script).
+- `test/phases/phase3.test.js` — NFR ids accepted when declared (positive); undeclared NFR ids still rejected (negative).
+- `test/phases/phase4.test.js` — setup_commands absent / explicitly empty / wrong type (3 cases).
+
+**Schema docs.** `docs/integrations/ARTIFACTS.md` updated to reflect the actual stored shape of `environment_variables` (array of objects, not bare object — the doc had drifted from `lib/phases/phase4.js validate()` and from `templates/phases/build.md`). The integration CHANGELOG carries the same set of changes with the consumer-facing framing.
+
+**What this release does NOT do:**
+
+- It does NOT re-canary Hub. Hub remains pinned at alpha.4. The actual `aitri adopt --upgrade` against Hub will produce a clean version pin → alpha.9 — that is the canary action for the next decision point.
+- It does NOT change cadence policy. The audit's recommendation to require an external canary citation in every alpha release commit is a process change, not a code change; it lives in the conversation, not in the codebase.
+- It does NOT address the third canary gate (BLOCKER-2.0 from the audit). Identifying a non-Hub, non-author project remains open and is what gates v2.0 stable, not alpha.X.
+
+**Files changed:** `package.json`, `bin/aitri.js`, `lib/upgrade/index.js`, `lib/commands/status.js`, `lib/state.js`, `lib/commands/verify.js`, `lib/phases/phase3.js`, `lib/phases/phase4.js`, `templates/phases/tests.md`, `templates/phases/build.md`, plus the four `docs/integrations/*.md` headers + the integration `CHANGELOG.md` + this file. 7 test files updated.
+
+---
+
 ## [2.0.0-alpha.8] — 2026-04-28 — Go test runner output parser
 
 Eighth staged pre-release on `feat/upgrade-protocol`. Closes the highest-impact gap surfaced by the Ultron canary on alpha.7 (BACKLOG entry "P2 — Go runner output not parsed by `aitri verify-run`"). Scope deliberately minimal: only the Go parser + the `-v` warning + template documentation. Other alpha.7 canary findings (manifest schema drift, verify-run scope contamination, stale-briefing post-upgrade, `--cmd` flag in feature) remain in BACKLOG.

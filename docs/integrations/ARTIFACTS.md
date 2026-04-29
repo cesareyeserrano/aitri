@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-alpha.8+
+**Aitri version:** v2.0.0-alpha.9+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -150,7 +150,7 @@ Written by Phase 3 (QA persona). Test cases keyed to FRs, user stories, and acce
 - Each FR must have a minimum of 3 TCs, with at least one `happy_path` and one `negative` scenario (edge_case is encouraged but not enforced)
 - Each FR must have at least one TC with id ending in `h` (happy path) and one ending in `f` (failure)
 - Minimum 2 `e2e` test cases total
-- `requirement_id` must be a single FR id — comma-separated ids are rejected
+- `requirement_id` must be a single id from `01_REQUIREMENTS.json` — either a functional requirement (`FR-xxx`) or a non-functional requirement (`NFR-xxx`). NFR ids are accepted as TC targets when the NFR is declared in `non_functional_requirements[]` (v2.0.0-alpha.9+). Comma-separated ids are rejected.
 - For multi-FR TCs, use `"frs": ["FR-001","FR-002"]` (string array) instead of a comma-separated `requirement_id`. `frs` is recognized by `aitri verify-run` (v0.1.90+); when present it wins over `requirement_id`.
 - If `01_REQUIREMENTS.json` is present: TC `ac_id` values are cross-checked against AC ids in `user_stories[].acceptance_criteria`; all MUST FRs must have at least one TC
 - `verify-run` (v0.1.90+) refuses to run and refuses to write `04_TEST_RESULTS.json` if `test_cases[]` is non-empty and no entry exposes `requirement_id` or `frs` (legacy `requirement` field alone is not enough; migrate explicitly).
@@ -170,9 +170,9 @@ Written by Phase 4 (Developer persona). Implementation tracking and test runner 
   "files_created": ["path/to/new-file.js"],
   "files_modified": ["path/to/existing-file.js"],
   "setup_commands": ["npm install", "npm run build"],
-  "environment_variables": {
-    "KEY": "description or default value"
-  },
+  "environment_variables": [
+    { "name": "DATABASE_URL", "default": "postgres://localhost/dev" }
+  ],
   "technical_debt": [
     {
       "fr_id": "FR-001",
@@ -185,7 +185,7 @@ Written by Phase 4 (Developer persona). Implementation tracking and test runner 
 ```
 
 **Validation rules (enforced by `aitri complete 4`):**
-- Required fields: `setup_commands`, `environment_variables`
+- `setup_commands` and `environment_variables` are optional. When present they must be arrays; when absent they are treated as `[]`. (v2.0.0-alpha.9+ — earlier versions required the keys to be present even when empty.)
 - At least one of `files_created` or `files_modified` must be a non-empty array — supports both greenfield (new files only) and modification/redesign work
 - `technical_debt` field is required — use `[]` if no substitutions were made
 - Each `technical_debt` entry must have `fr_id` and a non-generic `substitution`
