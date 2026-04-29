@@ -96,6 +96,17 @@ Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-recon
 
 - [x] **Go test runner output parser** — `parseGoOutput()` in verify.js consumes `go test -v` output (`--- PASS|FAIL|SKIP: TestTC_XXX`); reuses existing `extractTCId()` for normalization (`TC_NM_001h` → canonical `TC-NM-001h`). Subtests excluded by column-0 anchor + char class. Stderr warning when `runnerHint` is `go test` without `-v`. Templates updated. Closes one of the 5 alpha.7 canary findings; the other 4 remain open below.
 
+#### Shipped in alpha.9 (2026-04-28)
+
+Six defects closed — 4 from the alpha.8 audit, 2 from the Hub canary diagnosis. First alpha.X gated by external review (audit + canary + diagnosis sequence) rather than internal canary alone. 1038 tests, zero skipped.
+
+- [x] **Dry-run honesty** (commit `0606c12`) — `aitri adopt --upgrade --dry-run` no longer claims "would be a no-op" when the version pin is changing. Surfaced by diagnostic session against alpha.8 Hub canary; Hub at alpha.4 was being misled by the contradictory "only the version string would change" + "no-op" pair.
+- [x] **Status text surfaces deployable** (commit `4a5f6ea`) — `aitri status` text output now shows `❌/✅ deployable Deploy readiness ...` next to the phase table (mirrors `aitri resume`). Closes the gap where a row of green checkmarks could be misread as "ready to ship" when `health.deployable` was actually blocked. Surfaced by diagnostic session.
+- [x] **Phase-key types canonicalised in state.js** (commit `8c8341f`) — closes "P2 — Approve UX next-action routes to `requirements` instead of `architecture`" (Ultron canary alpha.6). `loadConfig` and `saveConfig` now coerce numeric strings (`"1"`) to numbers (`1`) for `approvedPhases`, `completedPhases`, `driftPhases`. Alias keys (`"ux"`, `"discovery"`, `"review"`) preserved verbatim. Defence in depth: regardless of which write-path produced a stray string, downstream `Set.has(<number>)` works.
+- [x] **Feature verify-run cwd** (commit `3603a49`) — closes "P2 — `aitri feature verify-run` runs tests from project root" (Ultron canary alpha.6). `spawnSync` now uses `cwd: dir` (feature subdirectory) instead of `cwd: featureRoot || dir`. Test discovery is scoped to the feature.
+- [x] **Phase 3 accepts NFR ids** (commit `48ac68f`) — closes "P3 — Phase 3 validator rejects `requirement_id: NFR-XXX`" (Ultron canary 2026-04-28, 14 TCs reassigned by hand). `requirement_id` is valid if it matches either `functional_requirements[].id` or `non_functional_requirements[].id`. Briefing in `templates/phases/tests.md` updated to match.
+- [x] **Phase 4 manifest schema relaxed** (commit `9e3802c`) — closes "P2 — Manifest schema drift between briefing and validator" (Ultron canary alpha.7, 3 sequential rejections). `setup_commands` and `environment_variables` are now optional in `04_IMPLEMENTATION_MANIFEST.json`. Absent ≡ `[]`. When present, must be an array. Per-entry shape stays in the briefing (`templates/phases/build.md`), keeping the validator gate shape-only — avoids re-creating the same drift.
+
 #### Deferred out of alpha.1 / alpha.2 / alpha.3 (by decision)
 
 - [ ] **A2 — Features sub-pipelines not upgraded by root `adopt --upgrade`** — evidence stands (Zombite's `stabilizacion` feature kept `aitriVersion: null` after root upgrade). Reconsidered for alpha.3 and deferred: implementing it requires deciding whether migrations apply per-scope (root-only vs cascading to features) and how diagnose composes findings across scopes. Not a point-release change. Re-open for v2.0.0 pre-stable or v2.0.1.
@@ -113,32 +124,7 @@ Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-recon
 
 ### Core — alpha.7 canary findings (Ultron 2026-04-28) — open items
 
-Canary on v2.0.0-alpha.7 validated the grammar fix end-to-end (6/6 emissions copy-paste literal, no regression of alpha.6's inverted-order bug). Five secondary findings surfaced. **The Go runner parser shipped in alpha.8** (see CHANGELOG). Four remain open — none are blockers, none are destructive.
-
-- [ ] **P2 — Manifest schema drift between briefing (lists fields as optional) and validator (rejects when missing).**
-
-  Evidence: Ultron canary on Phase 4 with skeleton manifest. Validator rejected sequentially on: `setup_commands` missing, `environment_variables` missing, `test_files` empty. The build briefing ([templates/phases/build.md](../../templates/phases/build.md)) presents these fields as optional (`{ files_created:[], files_modified:[], setup_commands:[], environment_variables:[{name, default}], ... }` reads as a shape, not a contract). Agent following the briefing literally produces an artifact the validator rejects three times in a row.
-
-  Files: `lib/phases/phase4.js` `validate()` for the actual gate; `templates/phases/build.md` for the briefing shape. One must align with the other.
-
-  Decision pending: relax validator to accept empty `setup_commands` + `environment_variables`, OR update briefing to mark them required. Empty-but-required is also acceptable if the briefing says so. Lean toward (a) — these fields are scaffolding, not behavioral. A project with no env vars or no setup is legitimate.
-
-  Acceptance: a manifest with only `files_created` + `test_runner` + `technical_debt` either (a) passes validate() with a documentation update, or (b) fails with a single error message that lists ALL missing fields at once, not three sequential errors.
-
-- [ ] **P2 — `aitri feature verify-run` runs tests from project root, picks up parent project tests too.**
-
-  Evidence: Ultron canary on `network-monitoring` feature. `verify-run` executed `go test ./...` from `cwd = /Ultron` (parent), recording 78 skipped tests — 52 of which were the parent project's own tests with `no marker detected`. Did not contaminate counts in this case (0 TCs auto-detected anyway), but a feature whose TC ids overlap with the parent's would inflate or deflate results unpredictably.
-
-  Files: [lib/commands/verify.js:355-360](../../lib/commands/verify.js#L355-L360) `spawnSync` uses `cwd: featureRoot || dir`. For feature scope, `featureRoot` is the parent — so it runs FROM the parent. That's the bug.
-
-  Behavior options:
-    - (a) Run from `dir` (feature dir) instead of `featureRoot` for feature scope. Tests local to the feature get picked up; parent's tests are excluded by default.
-    - (b) Keep current behavior but require `test_runner` in feature manifest to include a path filter (`go test ./internal/network/... -v`).
-    - (c) Detect feature scope and inject a path filter automatically based on `files_created` paths in the manifest.
-
-  Lean toward (a). Simplest, most predictable. Feature pipelines own their own test scope. If a feature needs to test something at the parent level, it can override `test_runner`.
-
-  Acceptance: feature canary run on a project where parent has a `_test.go` file with a TC-ID that matches a feature TC-ID — verify-run picks the FEATURE's test, not the parent's, and the parent's TC is reported as "not in feature scope" (or simply not seen).
+Canary on v2.0.0-alpha.7 validated the grammar fix end-to-end (6/6 emissions copy-paste literal, no regression of alpha.6's inverted-order bug). Five secondary findings surfaced. **The Go runner parser shipped in alpha.8; manifest schema drift and feature verify-run cwd shipped in alpha.9** (see "Shipped in alpha.9" above and CHANGELOG). Two remain open — neither is a blocker.
 
 - [ ] **P3 — Upgrade banner does not warn that in-flight briefings emitted by an older Aitri are still cached in agent terminals.**
 
@@ -162,19 +148,7 @@ Canary on v2.0.0-alpha.7 validated the grammar fix end-to-end (6/6 emissions cop
 
 ### Core — Secondary findings from Ultron canary 2026-04-27 (alpha.6/7 session)
 
-Three independent issues surfaced by the Ultron canary that validated the alpha.6 → alpha.7 scope-grammar fix. Tracked separately because each has its own evidence and fix shape; bundling would muddy the diagnosis.
-
-- [ ] **P2 — Approve UX next-action routes to `requirements` instead of `architecture` when Phase 1 is already approved.**
-
-  Evidence: Ultron canary feature `network-monitoring`, alpha.6. State at the time: `.aitri.approvedPhases` contained at minimum the value Aitri wrote on Phase 1 approve (verified via prior canary handoff). After `aitri feature approve network-monitoring ux`, the post-action banner emitted: `→ Continue with optional phases or run: aitri feature run-phase network-monitoring requirements` (re-grammared as alpha.7 form). The expected branch was `aitri feature run-phase network-monitoring architecture`, gated by `phase === 'ux' && approved.has(1)` in [approve.js:305](../../lib/commands/approve.js#L305).
-
-  Hypothesis: `approved.has(1)` returned `false` despite Phase 1 being approved. Possible causes — (a) `config.approvedPhases` stored as strings (`['1']`) not numbers (`[1]`), making `Set.has(1)` miss; (b) feature `.aitri` lost Phase 1 entry between alpha.4 (when canary started) and alpha.6 (when this branch was hit) due to some intervening write path; (c) the `approved` Set was rebuilt after the cascade-invalidate path stripped Phase 1.
-
-  Files to investigate: `lib/commands/approve.js:248,304` (Set construction + has check), `lib/state.js` saveConfig (type coercion), `lib/commands/feature.js` cascade behavior. Reproduce by running `aitri feature run-phase <name> ux` after Phase 1 was approved; capture `.aitri.approvedPhases` raw JSON before/after.
-
-  Behavior: when Phase 1 is approved, UX-after-1 must route to architecture. Acceptance: a unit test that seeds `.aitri.approvedPhases = [1]` (number), runs `cmdApprove({ args: ['ux'] })`, and asserts the next-action emits `aitri ${sv}run-phase${sa} architecture`, not `requirements`.
-
-  Why P2 not P1: not destructive; the user can manually run `aitri feature run-phase <name> architecture` and it works (canary did exactly that and continued cleanly). But it confuses the agent's "PIPELINE INSTRUCTION is your only next action" rule, which is supposed to be authoritative.
+Originally three independent issues surfaced by the Ultron canary that validated the alpha.6 → alpha.7 scope-grammar fix. **The Approve UX routing fix and the Phase 3 NFR acceptance both shipped in alpha.9** (see "Shipped in alpha.9" above and CHANGELOG). One remains open.
 
 - [ ] **P3 — `aitri feature list` does not traverse upward to find the project root.**
 
@@ -186,17 +160,27 @@ Three independent issues surfaced by the Ultron canary that validated the alpha.
 
   Acceptance: from any sub-directory of an Aitri project, `aitri feature list` either lists the features or prints a message that names "not at project root" as the reason. Test: create a project with `features/foo`, cd into a deep subdir, assert output mentions either the features or the project-root reason.
 
-- [ ] **P3 — Phase 3 validator rejects `requirement_id: NFR-XXX` despite `type_coverage_matrix` accepting NFR keys.**
+### Core — Ultron canary findings against alpha.9 (2026-04-28)
 
-  Evidence: Ultron canary on Phase 3 of `network-monitoring`. The agent assigned 14 TCs to NFR ids; `aitri feature complete tests` rejected each with "requirement_id must be FR-*". Workaround: reassigned all 14 TCs to FR ids manually.
+- [ ] **P1 — `adopt --upgrade` infers `completedPhases` without respecting `in_progress` state or pre-existing rejections.**
 
-  Files: [lib/phases/phase3.js](../../lib/phases/phase3.js) `validate()` — likely checks `requirement_id` matches `^FR-` regex while `type_coverage_matrix` schema accepts both FR and NFR keys.
+  Evidence: Ultron canary against alpha.9 on 2026-04-28. State pre-upgrade: `.aitri.aitriVersion` = `2.0.0-alpha.4`, Phase 1 approved, phases `ux/2/3/4/5` `in_progress` with artifacts on disk, Phase 5 with a rejection on file (`Docker→systemd, 2026-03-18`). `aitri adopt --upgrade --dry-run` proposed stamping `ux/2/3/4/5` as completed. Operator halted at dry-run; real upgrade NOT executed. Findings file: `/tmp/ultron-canary-alpha9/FINDINGS.md` + raw outputs `01_*.txt – 03_*.txt`.
 
-  Behavior: either (a) accept NFR-* in `requirement_id` (consistent with matrix), or (b) explicitly reject NFR-* in BOTH places with a clear message. Current state is internally inconsistent.
+  Problem: STATE-MISSING inference (in `lib/upgrade/diagnose.js`) treats artifact-presence-on-disk as sufficient evidence to mark a phase `completed`. Two cases where this is wrong:
+  - **`in_progress`**: artifact exists but `aitri complete` has not been run. Marking it `completed` bypasses `validate()` entirely — a malformed artifact that would have been caught now flows downstream.
+  - **Rejected**: a human operator deliberately said "this artifact is not acceptable, redo." The rejection record stays in `config.rejections` but the pipeline state moves forward as if approved. Corrupts operator intent. Asymmetric with ADR-027 §3 which preserves approvals — by symmetry it must preserve rejections.
 
-  Decision: lean toward (a). NFRs are first-class requirements; testing them is legitimate (e.g. an NFR for response time can have a TC that asserts the threshold). The matrix already encodes that. Phase 1 schema lets you write NFRs with `acceptance_criteria` — those criteria deserve TCs.
+  Files: `lib/upgrade/diagnose.js` (the inference catalog), `lib/upgrade/index.js` (where `inferred[]` is applied to `config.completedPhases`), `lib/state.js` (where `config.rejections` is read).
 
-  Acceptance: `aitri complete 3` accepts a TC with `requirement_id: NFR-001` when `type_coverage_matrix['NFR-001']` exists. New test in `test/phases/phase3.test.js` covering the NFR coverage case.
+  Behavior: phase inference must skip a phase when (a) it is currently `in_progress` (artifact present without a corresponding `complete` event), or (b) it has an entry in `config.rejections`. In both cases, the phase stays as it was — the upgrade reports the skip in the dry-run preview and the real run, so the operator knows the phase needs explicit attention.
+
+  Decisions pre-resolved: do NOT auto-clear rejections during upgrade — that is the operator's call (re-run the phase, inspect, re-approve). Do NOT auto-complete in_progress — same reason.
+
+  Acceptance: a project seeded with `approvedPhases: [1]`, artifacts on disk for phases 2–5, an `in_progress` event on phase 4, and a `rejections.5` entry — running `runUpgrade()` produces `completedPhases: [1]` (unchanged), reports phase 4 as "in progress, not auto-completed" and phase 5 as "rejected, not auto-completed" in the upgrade report, and the dry-run preview matches the real run output.
+
+  Why P1: this is destructive in the "corrupts operator intent" sense — the canary explicitly halted because executing the upgrade would have stamped a rejected phase as completed. ADR-027 framed `adopt --upgrade` as "non-destructive reconciliation"; this defect breaks that contract.
+
+  Pre-existing across alpha.X: NOT introduced by alpha.9. Hub canary did not surface it because Hub had all phases approved (no in_progress, no rejections). Ultron is the first project encountered with both states. Likely present since alpha.1 or earlier.
 
 ### Core — `aitri normalize` proportionality (Ultron canary 2026-04-27)
 
