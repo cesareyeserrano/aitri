@@ -836,6 +836,205 @@ describe('lib/upgrade/migrations/from-0.1.65 — STATE-MISSING: normalizeState',
   });
 });
 
+// ── Z2 (alpha.13): artifactHashes backfill ──────────────────────────────────
+//
+// Projects upgraded from pre-alpha schemas have approvedPhases populated but
+// artifactHashes absent. Without backfill, drift detection silently dies.
+// Surfaced by Zombite root canary 2026-04-29 (alpha.4 → alpha.12 path).
+
+describe('lib/upgrade/migrations/from-0.1.65 — STATE-MISSING: artifactHashes backfill (Z2)', () => {
+  function seedArtifacts(dir) {
+    fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), '{"functional_requirements":[]}');
+    fs.writeFileSync(path.join(dir, 'spec/02_SYSTEM_DESIGN.md'),  '# Design');
+    fs.writeFileSync(path.join(dir, 'spec/03_TEST_CASES.json'),   '{"test_cases":[]}');
+    fs.writeFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), '{"files_created":[]}');
+    fs.writeFileSync(path.join(dir, 'spec/05_PROOF_OF_COMPLIANCE.json'),     '{"requirement_compliance":[]}');
+  }
+
+  it('backfills artifactHashes for every approved phase when field is empty', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1, 2, 3, 4, 5], artifactHashes: {} });
+      seedArtifacts(dir);
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      const c = loadConfig(dir);
+      assert.ok(c.artifactHashes);
+      assert.ok(c.artifactHashes['1'], 'phase 1 hash backfilled');
+      assert.ok(c.artifactHashes['2'], 'phase 2 hash backfilled');
+      assert.ok(c.artifactHashes['3'], 'phase 3 hash backfilled');
+      assert.ok(c.artifactHashes['4'], 'phase 4 hash backfilled');
+      assert.ok(c.artifactHashes['5'], 'phase 5 hash backfilled');
+      // The hash must equal the on-disk content hash — that locks the SSoT.
+      const expected = hashArtifact(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(c.artifactHashes['1'], expected);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('backfills only missing phases — preserves existing hashes (idempotent)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, {
+        approvedPhases: [1, 2, 3],
+        artifactHashes: { '1': 'preexisting-hash-do-not-touch' },
+      });
+      seedArtifacts(dir);
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      const c = loadConfig(dir);
+      assert.equal(c.artifactHashes['1'], 'preexisting-hash-do-not-touch', 'must not overwrite existing hash');
+      assert.ok(c.artifactHashes['2'], 'phase 2 hash backfilled');
+      assert.ok(c.artifactHashes['3'], 'phase 3 hash backfilled');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('skips phases whose artifact is missing on disk', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1, 2], artifactHashes: {} });
+      // Only phase 1 has an artifact on disk.
+      fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), '{}');
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      const c = loadConfig(dir);
+      assert.ok(c.artifactHashes['1']);
+      assert.equal(c.artifactHashes['2'], undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('handles optional phase keys (ux, discovery)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: ['discovery', 'ux', 1], artifactHashes: {} });
+      fs.writeFileSync(path.join(dir, 'spec/00_DISCOVERY.md'), '# d');
+      fs.writeFileSync(path.join(dir, 'spec/01_UX_SPEC.md'),    '# ux');
+      fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), '{}');
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      const c = loadConfig(dir);
+      assert.ok(c.artifactHashes['discovery'], 'discovery hash backfilled');
+      assert.ok(c.artifactHashes['ux'],        'ux hash backfilled');
+      assert.ok(c.artifactHashes['1'],         'phase 1 hash backfilled');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does not fire when all approved phases already have hashes (idempotent re-run)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, {
+        approvedPhases:  [1, 2],
+        artifactHashes: { '1': 'h1', '2': 'h2' },
+      });
+      seedArtifacts(dir);
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      const c = loadConfig(dir);
+      assert.deepEqual(c.artifactHashes, { '1': 'h1', '2': 'h2' });
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does not fire when approvedPhases is empty (no work to lock in)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [], artifactHashes: {} });
+      seedArtifacts(dir);
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      const c = loadConfig(dir);
+      // Empty object preserved (writeLegacyConfig seeds {}). No new keys.
+      assert.deepEqual(c.artifactHashes, {});
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('emits upgrade_migration events per backfilled phase', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1, 2], artifactHashes: {} });
+      seedArtifacts(dir);
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      const c = loadConfig(dir);
+      const evs = c.events.filter(e =>
+        e.event === 'upgrade_migration' && e.target?.startsWith('.aitri#artifactHashes['));
+      assert.equal(evs.length, 2, 'one event per phase backfilled');
+      assert.ok(evs.some(e => e.target === '.aitri#artifactHashes[1]'));
+      assert.ok(evs.some(e => e.target === '.aitri#artifactHashes[2]'));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// ── Z5 (alpha.13): legacy 04_TEST_RESULTS.json schema flagging ──────────────
+//
+// Surfaced by Zombite root canary 2026-04-29: `.aitri.verifyPassed: true` but
+// the artifact had pre-alpha shape (`suite_summary`, no `results[]`). Upgrade
+// passed silently as "schema canonical" — validate kept reporting deployable.
+// Fix per backlog: flag-only finding (Option A); operator runs verify-run to
+// regenerate.
+
+describe('lib/upgrade/migrations/from-0.1.65 — VALIDATOR-GAP: legacy test results schema (Z5)', () => {
+  it('flags when verifyPassed is true and artifact lacks results[] + summary', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { verifyPassed: true });
+      // Pre-alpha shape: suite_summary, no results, no summary
+      fs.writeFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), JSON.stringify({
+        executed_at: '2026-03-10T00:00:00.000Z',
+        suite_summary: { total_tests: 27, passed: 27, failed: 0, skipped: 0 },
+        fr_coverage: [{ fr_id: 'FR-001', status: 'covered', evidence: ['TC-001'] }],
+      }));
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const f = findings.find(x => x.target === '04_TEST_RESULTS.json' && /legacy/.test(x.transform));
+      assert.ok(f, 'expected a legacy-schema finding');
+      assert.equal(f.category, 'validatorGap');
+      assert.equal(f.autoMigratable, false);
+      assert.match(f.reason, /aitri verify-run/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does NOT flag when artifact already has modern shape (results[] + summary)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { verifyPassed: true });
+      fs.writeFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), JSON.stringify({
+        executed_at: '2026-04-01T00:00:00.000Z',
+        results: [{ tc_id: 'TC-001', status: 'pass' }],
+        summary: { total: 1, passed: 1, failed: 0, skipped: 0 },
+        fr_coverage: [],
+      }));
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      assert.equal(findings.find(x => x.target === '04_TEST_RESULTS.json' && /legacy/.test(x.transform)), undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does NOT flag when verifyPassed is false (no deploy gate to mislead)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { verifyPassed: false });
+      fs.writeFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), JSON.stringify({
+        suite_summary: { total_tests: 0 },
+      }));
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      assert.equal(findings.find(x => x.target === '04_TEST_RESULTS.json' && /legacy/.test(x.transform)), undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does NOT flag when 04_TEST_RESULTS.json is absent (not yet a deploy claim)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { verifyPassed: true });
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      assert.equal(findings.find(x => x.target === '04_TEST_RESULTS.json' && /legacy/.test(x.transform)), undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('flag survives migrateAll (non-auto-migratable → returned in flagged[])', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { verifyPassed: true });
+      fs.writeFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), JSON.stringify({
+        suite_summary: { total_tests: 5 },
+      }));
+      let result;
+      silence(() => { result = migrateAll(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')), '0.1.99'); });
+      const flagged = result.flagged.find(f => f.target === '04_TEST_RESULTS.json' && /legacy/.test(f.transform));
+      assert.ok(flagged);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 // ── Approval preservation across shape-only migrations (Option B) ────────────
 //
 // §2 guarantees migrations change shape, not content. Therefore an approval

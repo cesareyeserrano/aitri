@@ -666,6 +666,116 @@ describe('nextActions ordering', () => {
     } finally { cleanup(dir); }
   });
 
+  // ── alpha.12 — no-op verify-run loop guard ─────────────────────────────────
+  // When Phase 4 is approved and verify-run produced 0 passed + 0 failed +
+  // ≥1 skipped (skeleton tests, missing markers, no real implementation),
+  // re-running verify-run is a no-op. resume must route to verify-complete
+  // instead, where the actionable diagnostic ("All N skipped — at least 1
+  // must pass") lives. Generalises across any project — surfaced by Ultron
+  // canary on a feature whose Phase 4 was approved with skeleton-only manifest.
+  describe('Phase 4 approved + verify-run all-skip → verify-complete', () => {
+    function seedPhase4Approved(dir, events) {
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        approvedPhases:  [1, 2, 3, 4],
+        completedPhases: [1, 2, 3, 4],
+        verifyRanAt: '2026-04-29T14:55:47.563Z',
+        events,
+      });
+      writeJsonSpec(dir, '01_REQUIREMENTS.json', {
+        project_name: 'p',
+        functional_requirements:     [{ id: 'FR-001', priority: 'MUST', type: 'logic', title: 't', acceptance_criteria: ['AC1'] }],
+        non_functional_requirements: [], user_stories: [],
+      });
+      writeSpec(dir, '02_SYSTEM_DESIGN.md', '# d\n');
+      writeJsonSpec(dir, '03_TEST_CASES.json', { test_cases: [] });
+      writeJsonSpec(dir, '04_IMPLEMENTATION_MANIFEST.json', { files_created: ['x'], technical_debt: [] });
+    }
+
+    it('routes to verify-complete when last verify-run was 0/0/skipped', () => {
+      const dir = tmpDir();
+      try {
+        seedPhase4Approved(dir, [
+          { at: '2026-04-29T14:55:47.563Z', event: 'verify-run', phase: 'verify',
+            passed: 0, failed: 0, skipped: 78, manual: 0 },
+        ]);
+        const snap = buildProjectSnapshot(dir);
+        const action = snap.nextActions.find(a => a.priority === 5);
+        assert.ok(action, 'expected a priority-5 verify next-action');
+        assert.equal(action.command, 'aitri verify-complete');
+        assert.match(action.reason, /verify-run produced 0 passed \/ 78 skipped/);
+        assert.equal(action.severity, 'warn');
+      } finally { cleanup(dir); }
+    });
+
+    it('still recommends verify-run when verify never ran', () => {
+      const dir = tmpDir();
+      try {
+        saveConfig(dir, {
+          projectName: 'p', artifactsDir: 'spec',
+          approvedPhases:  [1, 2, 3, 4],
+          completedPhases: [1, 2, 3, 4],
+        });
+        writeJsonSpec(dir, '01_REQUIREMENTS.json', {
+          project_name: 'p',
+          functional_requirements:     [{ id: 'FR-001', priority: 'MUST', type: 'logic', title: 't', acceptance_criteria: ['AC1'] }],
+          non_functional_requirements: [], user_stories: [],
+        });
+        writeSpec(dir, '02_SYSTEM_DESIGN.md', '# d\n');
+        writeJsonSpec(dir, '03_TEST_CASES.json', { test_cases: [] });
+        writeJsonSpec(dir, '04_IMPLEMENTATION_MANIFEST.json', { files_created: ['x'], technical_debt: [] });
+        const snap = buildProjectSnapshot(dir);
+        const action = snap.nextActions.find(a => a.priority === 5);
+        assert.ok(action);
+        assert.equal(action.command, 'aitri verify-run');
+        assert.equal(action.reason, 'Phase 4 approved — run verify next');
+      } finally { cleanup(dir); }
+    });
+
+    it('still recommends verify-run when last run had failures (re-run may help)', () => {
+      const dir = tmpDir();
+      try {
+        seedPhase4Approved(dir, [
+          { at: '2026-04-29T14:55:47.563Z', event: 'verify-run', phase: 'verify',
+            passed: 5, failed: 2, skipped: 0, manual: 0 },
+        ]);
+        const snap = buildProjectSnapshot(dir);
+        const action = snap.nextActions.find(a => a.priority === 5);
+        assert.equal(action.command, 'aitri verify-run');
+      } finally { cleanup(dir); }
+    });
+
+    it('still recommends verify-run when last run was all-manual (no skips)', () => {
+      const dir = tmpDir();
+      try {
+        seedPhase4Approved(dir, [
+          { at: '2026-04-29T14:55:47.563Z', event: 'verify-run', phase: 'verify',
+            passed: 0, failed: 0, skipped: 0, manual: 3 },
+        ]);
+        const snap = buildProjectSnapshot(dir);
+        const action = snap.nextActions.find(a => a.priority === 5);
+        assert.equal(action.command, 'aitri verify-run');
+      } finally { cleanup(dir); }
+    });
+
+    it('feature scope produces aitri feature verify-complete', () => {
+      const dir = tmpDir();
+      try {
+        saveConfig(dir, { projectName: 'root', artifactsDir: 'spec' });
+        const featDir = path.join(dir, 'features', 'billing');
+        fs.mkdirSync(path.join(featDir, 'spec'), { recursive: true });
+        seedPhase4Approved(featDir, [
+          { at: '2026-04-29T14:55:47.563Z', event: 'verify-run', phase: 'verify',
+            passed: 0, failed: 0, skipped: 12, manual: 0 },
+        ]);
+        const snap = buildProjectSnapshot(dir);
+        const action = snap.nextActions.find(a => a.scope === 'feature:billing');
+        assert.ok(action);
+        assert.equal(action.command, 'aitri feature verify-complete billing');
+      } finally { cleanup(dir); }
+    });
+  });
+
   it('feature scope produces aitri feature commands', () => {
     const dir = tmpDir();
     try {

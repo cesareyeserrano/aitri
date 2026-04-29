@@ -903,6 +903,205 @@ describe('cmdVerifyRun() — feature-context emits prefixed approve hint on miss
   });
 });
 
+// ── Z1 (alpha.13): verify-run invalidates stale verifyPassed ─────────────────
+//
+// Defect: re-running verify-run with degraded results (all-skip or any failure)
+// did not reset config.verifyPassed. Status / resume / validate continued to
+// report "deployable: ready" while the latest verify-run was 0/0/N skipped.
+// Surfaced by Zombite canary 2026-04-29 on alpha.12. Generalises to any project
+// that re-runs verify-run after a code change without re-running verify-complete.
+describe('cmdVerifyRun() — Z1 verifyPassed invalidation', () => {
+  function seedProject(dir, opts = {}) {
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+      projectName: 'p',
+      artifactsDir: 'spec',
+      approvedPhases:  [1, 2, 3, 4],
+      completedPhases: [1, 2, 3, 4],
+      verifyPassed:    opts.priorPassed ?? true,
+      verifySummary:   opts.priorPassed === false ? undefined : { total: 5, passed: 5, failed: 0, skipped: 0 },
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), JSON.stringify({
+      functional_requirements: [{ id: 'FR-001', title: 'r', priority: 'must-have' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/03_TEST_CASES.json'), JSON.stringify({
+      test_cases: opts.testCases ?? [
+        { id: 'TC-001', title: 't', requirement_id: 'FR-001', expected_result: 'r' },
+      ],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), JSON.stringify({
+      files_created: [{ path: 'runner.js' }],
+      test_runner: opts.runner ?? 'node runner.js',
+    }));
+    fs.writeFileSync(path.join(dir, 'runner.js'), opts.runnerScript ?? '');
+  }
+
+  function readConfig(dir) {
+    return JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8'));
+  }
+
+  function silent(fn) {
+    const origLog = console.log; const origErr = process.stderr.write;
+    console.log = () => {}; process.stderr.write = () => true;
+    try { return fn(); } finally { console.log = origLog; process.stderr.write = origErr; }
+  }
+
+  it('all-skip results invalidate prior verifyPassed', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z1-allskip-'));
+    try {
+      seedProject(dir, {
+        runnerScript: '// no markers, no output',
+      });
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      const cfg = readConfig(dir);
+      assert.equal(cfg.verifyPassed, false, 'verifyPassed must reset after all-skip verify-run');
+      assert.equal(cfg.verifySummary, undefined, 'verifySummary must be cleared');
+      assert.ok(cfg.verifyRanAt, 'verifyRanAt must still be stamped');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('healthy results (passed > 0, failed === 0) preserve prior verifyPassed', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z1-healthy-'));
+    try {
+      seedProject(dir, {
+        runnerScript: `console.log('✔ TC-001 — runner ran');\n`,
+      });
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      const cfg = readConfig(dir);
+      assert.equal(cfg.verifyPassed, true, 'healthy verify-run must NOT reset verifyPassed');
+      assert.ok(cfg.verifySummary, 'verifySummary must be preserved');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('any failure resets verifyPassed even with some passes', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z1-fail-'));
+    try {
+      seedProject(dir, {
+        testCases: [
+          { id: 'TC-001', title: 't', requirement_id: 'FR-001', expected_result: 'r' },
+          { id: 'TC-002', title: 't', requirement_id: 'FR-001', expected_result: 'r' },
+        ],
+        runnerScript: `console.log('✔ TC-001 — pass');\nconsole.log('✖ TC-002 — fail');\nprocess.exit(1);\n`,
+      });
+      // Suppress prompt for bug registration in non-TTY (it returns early on no stdin TTY).
+      silent(() => {
+        try { cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }); }
+        catch { /* runner exit-code 1 may surface, ignore */ }
+      });
+      const cfg = readConfig(dir);
+      assert.equal(cfg.verifyPassed, false, 'failure in verify-run must reset verifyPassed');
+      assert.equal(cfg.verifySummary, undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does not crash when verifyPassed was already false', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z1-already-false-'));
+    try {
+      seedProject(dir, {
+        priorPassed: false,
+        runnerScript: '// no markers',
+      });
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      const cfg = readConfig(dir);
+      assert.equal(cfg.verifyPassed, false);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// ── Z3 (alpha.13): verify-complete next-action respects phase 5 state ────────
+//
+// Defect: verify-complete always emitted "next: run-phase 5" regardless of
+// whether phase 5 was already approved. When operator re-runs verify after a
+// code change to a deployed product, the instruction contradicted resume /
+// status. Surfaced by Zombite canary 2026-04-29.
+describe('cmdVerifyComplete() — Z3 next-action respects phase 5 state', () => {
+  function seedReady(dir, opts = {}) {
+    const phase5Approved = opts.phase5Approved ?? false;
+    const approved = phase5Approved ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+      projectName: 'p', artifactsDir: 'spec',
+      approvedPhases:  approved,
+      completedPhases: approved,
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), JSON.stringify({
+      functional_requirements: [{ id: 'FR-001', title: 'r', priority: 'must-have' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/03_TEST_CASES.json'), JSON.stringify({
+      test_cases: [{ id: 'TC-001', title: 't', requirement_id: 'FR-001', expected_result: 'r' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), JSON.stringify({
+      files_created: [{ path: 'x.js' }], test_runner: 'node --test',
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), JSON.stringify({
+      executed_at: new Date().toISOString(),
+      test_runner: 'node --test',
+      exit_code: 0,
+      results: [{ tc_id: 'TC-001', status: 'pass' }],
+      fr_coverage: [{ fr_id: 'FR-001', tests_passing: 1, tests_failing: 0, tests_skipped: 0, tests_manual: 0, status: 'covered' }],
+      summary: { total: 1, passed: 1, failed: 0, skipped: 0 },
+    }));
+  }
+
+  function captureLog(fn) {
+    const lines = [];
+    const origLog = console.log; const origErr = process.stderr.write;
+    console.log = (...a) => { lines.push(a.join(' ')); };
+    process.stderr.write = () => true;
+    try { fn(); } finally { console.log = origLog; process.stderr.write = origErr; }
+    return lines.join('\n');
+  }
+
+  it('phase 5 NOT approved → emits "next: run-phase 5" (regression guard)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z3-p5no-'));
+    try {
+      seedReady(dir, { phase5Approved: false });
+      const out = captureLog(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } }));
+      assert.match(out, /run-phase 5/);
+      assert.match(out, /PIPELINE INSTRUCTION/);
+      assert.doesNotMatch(out, /aitri validate/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('phase 5 approved (root scope) → emits "next: aitri validate"', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z3-p5yes-'));
+    try {
+      seedReady(dir, { phase5Approved: true });
+      const out = captureLog(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } }));
+      assert.match(out, /aitri validate/);
+      assert.match(out, /already approved/i);
+      assert.doesNotMatch(out, /run-phase 5/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('phase 5 approved (feature scope) → no PIPELINE INSTRUCTION, points to feature status', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z3-feat-'));
+    try {
+      seedReady(dir, { phase5Approved: true });
+      const out = captureLog(() => cmdVerifyComplete({
+        dir, err: (m) => { throw new Error(m); },
+        featureRoot: '/parent', scopeName: 'foo',
+      }));
+      assert.doesNotMatch(out, /PIPELINE INSTRUCTION/);
+      assert.match(out, /aitri feature status foo/);
+      assert.doesNotMatch(out, /run-phase 5/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('phase 5 NOT approved (feature scope) → emits feature-prefixed run-phase 5 (regression guard)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z3-feat-no-'));
+    try {
+      seedReady(dir, { phase5Approved: false });
+      const out = captureLog(() => cmdVerifyComplete({
+        dir, err: (m) => { throw new Error(m); },
+        featureRoot: '/parent', scopeName: 'foo',
+      }));
+      assert.match(out, /aitri feature run-phase foo 5/);
+      assert.match(out, /PIPELINE INSTRUCTION/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 describe('cmdVerifyComplete() — feature-context emits prefixed verify-run hint on missing results', () => {
   it('feature scope: error message points to `aitri feature verify-run foo`', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-vc-fctx-'));

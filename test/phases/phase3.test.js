@@ -34,6 +34,28 @@ describe('Phase 3 — validate()', () => {
     assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /test_cases array is required/);
   });
 
+  // Z4 (alpha.13) — duplicate-id detection. Without this guard, downstream
+  // counts diverge silently. Surfaced by Zombite canary 2026-04-29 (feature
+  // `stabilizacion` had `TC-STB-006h` listed 6 times across 51 entries).
+  it('throws when test_cases contain duplicate ids', () => {
+    const d = JSON.parse(validP3());
+    // Force a duplicate by appending a second TC with an existing id.
+    d.test_cases.push(makeTC('TC-001h', 'FR-001', 'unit', 'happy_path'));
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)),
+      /Duplicate TC id\(s\) in test_cases:.*TC-001h.*×2/);
+  });
+
+  it('lists every duplicate with its count when more than one collides', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases.push(makeTC('TC-001h', 'FR-001', 'unit', 'happy_path'));
+    d.test_cases.push(makeTC('TC-001h', 'FR-001', 'unit', 'happy_path')); // ×3 total
+    d.test_cases.push(makeTC('TC-002h', 'FR-002', 'unit', 'happy_path')); // ×2 total
+    let msg = '';
+    try { PHASE_DEFS[3].validate(JSON.stringify(d)); } catch (e) { msg = e.message; }
+    assert.match(msg, /TC-001h \(×3\)/);
+    assert.match(msg, /TC-002h \(×2\)/);
+  });
+
   it('throws when a requirement has fewer than 3 test cases', () => {
     const d = JSON.parse(validP3());
     d.test_cases = d.test_cases.filter(tc => !(tc.requirement_id === 'FR-001' && tc.id === 'TC-001f'));

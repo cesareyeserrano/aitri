@@ -18,6 +18,39 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-alpha.13 (2026-04-29) — Zombite canary fixes Z1-Z5 — breaking
+
+Five defects surfaced by Zombite canary on alpha.12 (third-project external canary, alpha.4 → alpha.12 upgrade). Two of the five (Z1, Z2) change observable producer behaviour that subproduct readers must adopt; the others fix bugs without contract impact but are bundled here for cohesion.
+
+**Z1 — `verify-run` invalidates stale `verifyPassed`** (breaking — deploy-gate semantics change). Re-running `verify-run` with degraded results (passed === 0 with skips, OR any failures) now resets `config.verifyPassed = false` and clears `config.verifySummary`. Healthy results (passed > 0, failed === 0) leave the flag alone. Previously `verifyPassed` only reset on phase-4/5 cascade — the verify-run path never invalidated, so subproducts reading `.aitri.verifyPassed` could trust a stale "true" while the latest verify-run was 0/0/N skipped. **Hub impact:** any reader that mirrors deploy-readiness from `.aitri.verifyPassed` may now see the flag drop to false more often (which is correct — it was lying before).
+
+**Z2 — `adopt --upgrade` backfills missing `artifactHashes`** (additive). New STATE-MISSING migration: when `approvedPhases.length > 0` and `artifactHashes` is absent or empty, hash each approved artifact on disk and stamp the field. Idempotent (preserves existing entries). Per-phase `upgrade_migration` events with `target: '.aitri#artifactHashes[<phase>]'` and `transform: 'backfill artifactHashes[<phase>] from on-disk <artifact>'`. Closes the silent-drift-detection failure on projects that predate the field.
+
+**Z3 — `verify-complete` next-action respects phase 5 state** (cosmetic, no consumer contract). When phase 5 is already approved, the post-success `PIPELINE INSTRUCTION` block emits `aitri validate` (root) or no instruction (feature scope) instead of always emitting `aitri run-phase 5`.
+
+**Z4 — Phase 3 validate rejects duplicate TC ids** (additive — stricter validation). `complete 3` throws when `03_TEST_CASES.json::test_cases[]` contains repeated `id` values. Error message lists each duplicate with its count. Closes the cardinality drift between `summary.manual` (Set size) and `results.length` (array length) seen on Zombite's `stabilizacion` feature (51 entries / 46 unique).
+
+**Z5 — `adopt --upgrade` flags legacy 04_TEST_RESULTS.json schema** (additive — new finding type). New VALIDATOR-GAP finding when `verifyPassed: true` but the artifact lacks `results[]` and/or `summary` (pre-alpha shape with `suite_summary`). Non-auto-migratable (Option A per backlog) — operator runs `aitri verify-run` to regenerate. Surfaces in `upgradeFindings[]` and the upgrade report's findings section.
+
+**Consumer impact summary:**
+- Hub-style readers tracking `verify.passed` from `.aitri` will see the value reset more frequently after verify-run with degraded results. This is honest — the prior behaviour was the bug.
+- Hub-style readers iterating `.aitri.events[]` may now see `upgrade_migration` events with new target shapes (`.aitri#artifactHashes[<phase>]`). Old readers that filter on `event === 'upgrade_migration'` continue to work; readers that switch on `target` should add a wildcard or array-bracket-aware match.
+- No artifact schema changes. No `.aitri` schema removals or renames.
+
+---
+
+## v2.0.0-alpha.12 (2026-04-29) — no-op verify-run loop guard in `nextActions[]` — additive
+
+`status --json::nextActions[]` priority-5 entry (Phase 4 approved + verify not passed) now emits `aitri verify-complete` (or `aitri feature verify-complete <name>`) instead of `verify-run` when the previous `verify-run` produced 0 passed + 0 failed + ≥1 skipped. Reason string changes to `verify-run produced 0 passed / N skipped — verify-complete reports what's missing` and severity becomes `warn`.
+
+**Why:** prior to alpha.12, `resume`/`status` recommended `verify-run` whenever Phase 4 was approved and verify had not passed, regardless of whether `verify-run` had already run. A project that approved Phase 4 with skeleton tests, missing `@aitri-tc` markers, or a misconfigured runner would loop on identical no-op `verify-run` recommendations. Routing to `verify-complete` surfaces the existing diagnostic ("All N test(s) are skipped — at least 1 must pass"). Surfaced by Ultron canary on `feature verify-run network-monitoring` — generalises to any project, not Ultron-specific.
+
+**Consumer impact:** Hub-style readers that special-case the priority-5 command on the string `"verify-run"` may want to also recognise `"verify-complete"` at the same priority. Reason text remains the only operator-facing line; the priority bucket is unchanged.
+
+**Internal snapshot extension (not in `status --json` payload):** `pipeline.verify.lastRunSummary` (consumed only by `lib/snapshot.js::nextPhaseAction`) — derived from the latest `verify-run` event. Not part of the public projection; subproducts that read the JSON do not see this field.
+
+---
+
 ## v2.0.0-alpha.11 (2026-04-29) — `adopt --upgrade` skips cascade-stale phases — additive
 
 Tightens the alpha.10 fix after the Ultron canary against alpha.10 surfaced a third edge case the inference logic did not cover. Aitri Hub did not surface this either: Hub's events buffer carried completed events for every approved phase. Ultron's events buffer had recent activity for phase 1 (cascade re-approval) but zero events for phases 2/3/4 — those events were either evicted past the 20-entry cap, or the cascade itself never recorded a `started` for them. Artifacts for 2/3/4 remained on disk from the prior build.
