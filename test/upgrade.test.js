@@ -590,6 +590,40 @@ describe('lib/upgrade — no-op UX on already-current project', () => {
       assert.doesNotMatch(out, /already current/);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
+
+  it('dry-run with version bump does NOT claim "would be a no-op"', () => {
+    // Defect: a dry-run that would bump the version string was emitting
+    // "(dry-run: re-running without --dry-run would be a no-op.)" alongside
+    // "only the version string would change" — contradicting itself. A user
+    // reading "no-op" could skip the upgrade and leave the project pinned.
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.99' });
+      writeTcs(dir, [{ id: 'TC-001', requirement_id: 'FR-001' }]);
+      // First run tracks phase 3 so skipped[] becomes non-empty afterwards.
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR }));
+      // Dry-run with a different VERSION: noOp (nothing to migrate) + versionBumped.
+      const out = captureStdout(() =>
+        runUpgrade({ dir, VERSION: '0.2.0', rootDir: ROOT_DIR, dryRun: true })
+      );
+      assert.match(out, /only the version string would change/);
+      assert.doesNotMatch(out, /would be a no-op/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('dry-run on already-current project still says "would be a no-op"', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.99' });
+      writeTcs(dir, [{ id: 'TC-001', requirement_id: 'FR-001' }]);
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR }));
+      const out = captureStdout(() =>
+        runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR, dryRun: true })
+      );
+      assert.match(out, /already current/);
+      assert.match(out, /would be a no-op/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
 });
 
 describe('lib/upgrade — approval preservation (Option B)', () => {
