@@ -29,16 +29,33 @@ describe('Phase 4 — validate()', () => {
     assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /files_created or files_modified must be a non-empty array/);
   });
 
-  it('throws when setup_commands is missing', () => {
+  // alpha.9: setup_commands / environment_variables are now optional.
+  // Absence ≡ []. The canary (alpha.7) hit three sequential rejections because
+  // the briefing presented these as `[]`-by-default while the validator
+  // required the keys to be present. Round-trip aligned per ADR-029.
+  it('passes when setup_commands is absent (treated as [])', () => {
     const d = JSON.parse(validP4());
     delete d.setup_commands;
-    assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /Manifest missing fields.*setup_commands/);
+    assert.doesNotThrow(() => PHASE_DEFS[4].validate(JSON.stringify(d)));
   });
 
-  it('throws when environment_variables is missing', () => {
+  it('passes when environment_variables is absent (treated as [])', () => {
     const d = JSON.parse(validP4());
     delete d.environment_variables;
-    assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /Manifest missing fields.*environment_variables/);
+    assert.doesNotThrow(() => PHASE_DEFS[4].validate(JSON.stringify(d)));
+  });
+
+  it('passes when setup_commands and environment_variables are explicitly []', () => {
+    const d = JSON.parse(validP4());
+    d.setup_commands = [];
+    d.environment_variables = [];
+    assert.doesNotThrow(() => PHASE_DEFS[4].validate(JSON.stringify(d)));
+  });
+
+  it('throws when setup_commands is the wrong type (e.g. string)', () => {
+    const d = JSON.parse(validP4());
+    d.setup_commands = 'npm install';
+    assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /setup_commands must be an array/);
   });
 
   it('throws when files_created is empty and files_modified is absent', () => {

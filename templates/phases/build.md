@@ -124,6 +124,7 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
     technical_debt:[{fr_id, substitution, reason, effort_to_fix:"low|medium|high"}],
     test_runner: "<exact command matching your stack>",
     test_files: ["<test files containing @aitri-tc markers>"] }
+  setup_commands and environment_variables are optional fields. When the project has none, you may either include them as empty arrays `[]` or omit the keys entirely — the validator accepts both forms (alpha.9). technical_debt is required, even if empty.
   test_runner examples by stack:
     JavaScript/TypeScript: "npm test" | "vitest run --reporter verbose" | "jest --verbose" | "node --test tests/"
     Python:                "pytest -v" | "python -m pytest -v"
