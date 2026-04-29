@@ -794,6 +794,74 @@ describe('cmdVerifyRun() — A2 schema precondition', () => {
 
 // ── Feature-context emission (alpha.6) ───────────────────────────────────────
 
+describe('cmdVerifyRun() — feature-context cwd', () => {
+  // Defect: Ultron alpha.6 canary saw 52 of 78 skipped tests come from the
+  // parent project rather than the feature pipeline. Root cause: cmdVerifyRun
+  // spawned the runner with `cwd: featureRoot || dir`, which in feature scope
+  // is the parent project root. Test discovery then walked the parent's tree.
+  // After the fix, cwd is `dir` (the feature subdirectory) — the runner reports
+  // its own cwd and we assert it matches the feature dir, not the parent.
+  it('runs the test command from the feature dir, not the parent', () => {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-vr-fparent-'));
+    const featureDir = path.join(parent, 'features', 'foo');
+    try {
+      fs.mkdirSync(featureDir, { recursive: true });
+
+      // Runner records its cwd to a sibling file and emits one TC pass marker.
+      const runner = path.join(featureDir, 'runner.js');
+      fs.writeFileSync(
+        runner,
+        `import fs from 'node:fs';
+fs.writeFileSync('cwd-snapshot.txt', process.cwd());
+console.log('✔ TC-001 — runner ran in this cwd');
+`,
+        'utf8'
+      );
+
+      fs.mkdirSync(path.join(featureDir, 'spec'), { recursive: true });
+      fs.writeFileSync(path.join(featureDir, '.aitri'), JSON.stringify({
+        projectName: 'foo',
+        artifactsDir: 'spec',
+        approvedPhases: [1, 2, 3, 4],
+        completedPhases: [1, 2, 3, 4],
+      }));
+      fs.writeFileSync(path.join(featureDir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({
+          files_created: [{ path: 'runner.js' }],
+          test_runner: 'node runner.js',
+        }));
+      fs.writeFileSync(path.join(featureDir, 'spec/03_TEST_CASES.json'), JSON.stringify({
+        test_cases: [{ id: 'TC-001', title: 't', requirement_id: 'FR-001', expected_result: 'r' }],
+      }));
+      fs.writeFileSync(path.join(featureDir, 'spec/01_REQUIREMENTS.json'), JSON.stringify({
+        functional_requirements: [{ id: 'FR-001', title: 'r', priority: 'must-have' }],
+      }));
+
+      // Suppress stdout/stderr from the runner during the test.
+      const origLog = console.log; const origErr = process.stderr.write;
+      console.log = () => {}; process.stderr.write = () => true;
+      try {
+        cmdVerifyRun({
+          dir: featureDir,
+          args: [],
+          flagValue: () => null,
+          err: (m) => { throw new Error(m); },
+          featureRoot: parent,
+          scopeName: 'foo',
+        });
+      } finally {
+        console.log = origLog; process.stderr.write = origErr;
+      }
+
+      const cwdSnapshot = fs.readFileSync(path.join(featureDir, 'cwd-snapshot.txt'), 'utf8');
+      assert.equal(fs.realpathSync(cwdSnapshot), fs.realpathSync(featureDir),
+        `runner cwd must equal the feature dir; got ${cwdSnapshot}`);
+      assert.notEqual(fs.realpathSync(cwdSnapshot), fs.realpathSync(parent),
+        'runner must not have run from the parent project root');
+    } finally { fs.rmSync(parent, { recursive: true, force: true }); }
+  });
+});
+
 describe('cmdVerifyRun() — feature-context emits prefixed approve hint on missing Phase 4', () => {
   it('feature scope: error message points to `aitri feature approve foo 4`', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-vr-fctx-'));
