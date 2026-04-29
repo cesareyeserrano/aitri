@@ -178,12 +178,18 @@ describe('lib/upgrade — STATE-MISSING preserves operator intent', () => {
       cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
       writeArtifact(dir, '01_REQUIREMENTS.json');
       writeArtifact(dir, '02_SYSTEM_DESIGN.md', '# Design\n'.repeat(5));
+      // Phase 1 has a `completed` event so the alpha.11 hasNoEventHistory
+      // check lets it through. Phase 2 only has a `started` — preserved by
+      // the alpha.10 isInProgress check. Both rules exercised in one run.
+      const c0 = loadConfig(dir);
+      appendEvent(c0, 'completed', 1);
+      saveConfig(dir, c0);
       seedInProgress(dir, 2);
 
       silence(() => runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR }));
 
       const c = loadConfig(dir);
-      assert.ok(c.completedPhases.includes(1), 'phase 1 (no in_progress signal) must still infer');
+      assert.ok(c.completedPhases.includes(1), 'phase 1 (completed event present) must infer');
       assert.ok(!c.completedPhases.includes(2), 'phase 2 (started, not completed) must NOT be auto-completed');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
@@ -194,6 +200,12 @@ describe('lib/upgrade — STATE-MISSING preserves operator intent', () => {
       cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
       writeArtifact(dir, '01_REQUIREMENTS.json');
       writeArtifact(dir, '03_TEST_CASES.json');
+
+      // Phase 1 has a `completed` event so alpha.11's hasNoEventHistory
+      // doesn't preserve it; phase 3 will be rejected explicitly below.
+      const c0 = loadConfig(dir);
+      appendEvent(c0, 'completed', 1);
+      saveConfig(dir, c0);
 
       // Round-trip: reach `config.rejections` through the actual reject command,
       // not by hand-writing the JSON. If reject's storage shape ever changes,
@@ -208,7 +220,7 @@ describe('lib/upgrade — STATE-MISSING preserves operator intent', () => {
       silence(() => runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR }));
 
       const c = loadConfig(dir);
-      assert.ok(c.completedPhases.includes(1), 'phase 1 (clean) must still infer');
+      assert.ok(c.completedPhases.includes(1), 'phase 1 (completed event present) must infer');
       assert.ok(!c.completedPhases.includes(3), 'phase 3 (rejected) must NOT be auto-completed');
       assert.ok(c.rejections[3], 'rejection record must survive the upgrade');
       assert.equal(c.rejections[3].feedback, 'Coverage gap on FR-002');
@@ -323,6 +335,110 @@ describe('lib/upgrade — STATE-MISSING preserves operator intent', () => {
 
       assert.ok(loadConfig(dir).completedPhases.includes(1),
         'legacy project (no events) must continue to be inferred — no regression');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // alpha.11: third edge case the alpha.10 fix did not cover. Surfaced by the
+  // Ultron canary against alpha.10 on 2026-04-29.
+  //
+  // Real Ultron pre-upgrade had `events[]` rich with phase-1 activity (cascade
+  // re-approval at 22:15-22:17), but ZERO entries for phases 2/3/4 — those
+  // events had been evicted past the 20-entry cap, OR the cascade itself
+  // never recorded a `started` for them. Artifacts for 2/3/4 still on disk
+  // from the prior build. Alpha.10 fell through to legacy inference and
+  // proposed marking 2/3/4 completed — corrupting the cascade's intent.
+  it('skips a phase whose artifact is on disk but has zero events when buffer is non-empty', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      writeArtifact(dir, '01_REQUIREMENTS.json');
+      writeArtifact(dir, '02_SYSTEM_DESIGN.md', '# Design\n'.repeat(5));
+
+      // Phase 1 has explicit completed/approved events; phase 2 has none.
+      // The events buffer is non-empty (positive evidence the project is
+      // active and tracked), so the legacy "artifact-presence ≡ completed"
+      // fallback must NOT fire for phase 2.
+      const c0 = loadConfig(dir);
+      appendEvent(c0, 'started',   1);
+      appendEvent(c0, 'completed', 1);
+      appendEvent(c0, 'approved',  1);
+      saveConfig(dir, c0);
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR }));
+
+      const c = loadConfig(dir);
+      assert.ok(c.completedPhases.includes(1),
+        'phase 1 (completed event in buffer) must be inferred');
+      assert.ok(!c.completedPhases.includes(2),
+        'phase 2 (artifact on disk, zero events, non-empty buffer) must NOT be auto-completed');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('reports a phase skipped for "no event history" under Preserved (operator action required)', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      writeArtifact(dir, '01_REQUIREMENTS.json');
+      writeArtifact(dir, '02_SYSTEM_DESIGN.md', '# Design\n'.repeat(5));
+
+      const c0 = loadConfig(dir);
+      appendEvent(c0, 'completed', 1);
+      saveConfig(dir, c0);
+
+      let out = '';
+      const origLog = console.log;
+      const origErr = process.stderr.write.bind(process.stderr);
+      console.log = (...a) => { out += a.join(' ') + '\n'; };
+      process.stderr.write = () => true;
+      try { runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR, dryRun: true }); }
+      finally { console.log = origLog; process.stderr.write = origErr; }
+
+      assert.match(out, /Preserved \(operator action required\)/);
+      assert.match(out, /no event history, possibly stale/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('Ultron alpha.11 scenario: phase 1 active in events, phases 2-4 cascade-stale, phase 5 rejected', () => {
+    // Tighter version of the existing Ultron scenario: artifacts for ux/2/3/4/5
+    // exist on disk, BUT only phase 1 has events (mirrors real .aitri post-cascade).
+    // No `started` events for 2/3/4 — the alpha.10 isInProgress check returns false
+    // for them. Without alpha.11's hasNoEventHistory, the legacy fallback would
+    // wrongly infer them completed.
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+
+      const c0 = loadConfig(dir);
+      c0.approvedPhases = [1];
+      appendEvent(c0, 'completed', 1);
+      appendEvent(c0, 'approved',  1);
+      appendEvent(c0, 'started',   'ux');
+      saveConfig(dir, c0);
+
+      writeArtifact(dir, '01_UX_SPEC.md', '# UX\n'.repeat(5));
+      writeArtifact(dir, '01_REQUIREMENTS.json');
+      writeArtifact(dir, '02_SYSTEM_DESIGN.md', '# Design\n'.repeat(5));
+      writeArtifact(dir, '03_TEST_CASES.json');
+      writeArtifact(dir, '04_IMPLEMENTATION_MANIFEST.json');
+      writeArtifact(dir, '05_PROOF_OF_COMPLIANCE.json');
+
+      // Phase 5 rejected via the real producer.
+      silence(() => cmdReject({
+        dir,
+        args: ['deploy', '--feedback', 'Docker→systemd'],
+        flagValue: (name) => name === '--feedback' ? 'Docker→systemd' : null,
+        err: (msg) => { throw new Error(msg); },
+      }));
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR }));
+
+      const c = loadConfig(dir);
+      assert.deepEqual(c.approvedPhases, [1], 'pre-existing approval must survive');
+      assert.ok(!c.completedPhases.includes(2), 'phase 2 (cascade-stale) must NOT auto-complete');
+      assert.ok(!c.completedPhases.includes(3), 'phase 3 (cascade-stale) must NOT auto-complete');
+      assert.ok(!c.completedPhases.includes(4), 'phase 4 (cascade-stale) must NOT auto-complete');
+      assert.ok(!c.completedPhases.includes(5), 'phase 5 (rejected) must NOT auto-complete');
+      assert.ok(c.rejections[5], 'phase 5 rejection must survive upgrade');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
