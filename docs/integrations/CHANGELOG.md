@@ -18,6 +18,29 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-alpha.11 (2026-04-29) — `adopt --upgrade` skips cascade-stale phases — additive
+
+Tightens the alpha.10 fix after the Ultron canary against alpha.10 surfaced a third edge case the inference logic did not cover. Aitri Hub did not surface this either: Hub's events buffer carried completed events for every approved phase. Ultron's events buffer had recent activity for phase 1 (cascade re-approval) but zero events for phases 2/3/4 — those events were either evicted past the 20-entry cap, or the cascade itself never recorded a `started` for them. Artifacts for 2/3/4 remained on disk from the prior build.
+
+**Producer-side behaviour change in `aitri adopt --upgrade`:**
+
+The STATE-MISSING phase-inference step now skips a phase when the events buffer is non-empty AND the phase has zero events of any kind. Rationale: in an active project, absence of any event is positive evidence the phase is not currently tracked — typically a leftover artifact from a cascade-invalidated build that the operator deliberately reset by re-approving a lower phase. Auto-completing it would silently re-introduce a phase the cascade just removed.
+
+The legacy fallback (events buffer empty → infer from artifact presence) is preserved verbatim. Projects upgrading from old Aitri versions whose events log was never populated continue to work as before.
+
+Skip reasons that now surface under `Preserved (operator action required)`:
+- `rejected, not auto-completed` (alpha.10)
+- `in progress, not auto-completed` (alpha.10)
+- `no event history, possibly stale (not auto-completed)` (alpha.11)
+
+**`.aitri` schema changes:** none. The change is purely in `lib/upgrade/index.js::inferCompletedPhases` — a new `hasNoEventHistory` helper guards the legacy fallback when the buffer indicates active tracking.
+
+**Reader impact:** none. `completedPhases` after upgrade is more accurate, never less. Hub already tolerates phases being absent from `completedPhases`.
+
+**No subproduct migration needed.**
+
+---
+
 ## v2.0.0-alpha.10 (2026-04-29) — `adopt --upgrade` preserves operator intent — additive
 
 Fixes the P1 surfaced by the Ultron canary on alpha.9 (BACKLOG: "Core — Ultron canary findings against alpha.9"). Aitri Hub did not surface the defect because all of its phases were approved; Ultron is the first project encountered with `in_progress` and `rejections` state present at upgrade time.

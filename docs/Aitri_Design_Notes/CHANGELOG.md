@@ -5,6 +5,37 @@
 
 ---
 
+## [2.0.0-alpha.11] — 2026-04-29 — `adopt --upgrade` skips cascade-stale phases (alpha.10 follow-up)
+
+Eleventh staged pre-release on `feat/upgrade-protocol`. Tightens the alpha.10 fix after the Ultron canary against alpha.10 surfaced a third edge case the inference logic did not cover.
+
+**Why a follow-up so quickly.** Velocity is intentional in this case, not vibe-coding: Ultron's canary halted at the dry-run for alpha.10 (correctly — operator-intent guarded) but the proposed report still showed phases 2/3/4 being marked completed. Investigation revealed alpha.10 only solved two of three real-world states. Shipping alpha.11 closes the gap before Ultron's actual upgrade — same canary protocol, no Ultron mutation reached state.
+
+**The third edge case (alpha.11 closes):** events buffer non-empty AND phase has zero events of any kind. The alpha.10 `isInProgress` check looks for `started` without matching `completed`/`approved` — phases that have NO events at all return false. Falling through to the legacy artifact-on-disk inference is correct for projects upgrading from old Aitri (where the events buffer was never populated), but wrong for active projects where the absence-of-events signals "the cascade just removed this from `completedPhases` and the artifact on disk is stale."
+
+**Real Ultron state that surfaced this:** `events[]` rich with phase-1 activity (cascade re-approval at 22:15-22:17 on Apr 27), zero entries for phases 2/3/4 (evicted or never recorded), artifacts for 2/3/4 still on disk from prior build, phase 5 rejected (Mar 18). Without alpha.11, the upgrade would have stamped 2/3/4 as completed, silently re-introducing what the cascade had cleared.
+
+**Code change:**
+
+- `lib/upgrade/index.js::hasNoEventHistory(events, phaseNum)` — new helper. Returns true when `events[]` is non-empty and the phase has zero events. Returns false when `events[]` is empty (legacy upgrade fallback unchanged).
+- `inferCompletedPhases` consults this helper after `isRejected` and `isInProgress`. When it fires, the phase is added to `skipped[]` with reason `'no event history, possibly stale (not auto-completed)'`.
+- The skip reason joins the existing `Preserved (operator action required)` group in the upgrade report. Operator guidance updated to mention that artifacts may be stale leftover from cascade and can be deleted before next upgrade if so.
+
+**Tests added (4 new):**
+
+- positive: `events[]` non-empty + phase has zero events + artifact on disk → phase NOT inferred.
+- report: dry-run output surfaces "no event history" line under "Preserved (operator action required)".
+- Ultron alpha.11 scenario: phase 1 with events, phases 2/3/4 with no events but artifacts on disk, phase 5 rejected — none auto-complete.
+- Two existing alpha.10 tests updated to add an explicit `completed` event for phase 1 (the new rule applies to phase 1 too — without an event, it would also be preserved). The tests now exercise the alpha.10 and alpha.11 rules together more realistically.
+
+**Schema docs.** Integration `CHANGELOG.md` updated; `ARTIFACTS.md` / `SCHEMA.md` / `STATUS_JSON.md` headers bumped. No reader contract change — `completedPhases` after upgrade is more accurate, never less.
+
+**Files changed:** `package.json`, `bin/aitri.js`, `lib/upgrade/index.js`, `test/upgrade.test.js`, plus the four `docs/integrations/*.md` headers + integration `CHANGELOG.md` + this file. 1046 tests, 0 skipped.
+
+**What this release does NOT do:** still does not re-canary Ultron. Operator runs `aitri adopt --upgrade --dry-run` against Ultron next; if the Preserved section now lists 2/3/4 + 5 + ux correctly (and proposes inferring nothing), proceed with the real run.
+
+---
+
 ## [2.0.0-alpha.10] — 2026-04-29 — `adopt --upgrade` preserves operator intent
 
 Tenth staged pre-release on `feat/upgrade-protocol`. Closes the single P1 surfaced by the Ultron canary against alpha.9 (BACKLOG: "Core — Ultron canary findings against alpha.9"). The canary halted at dry-run; no destructive run reached real Ultron state.
