@@ -143,6 +143,7 @@ Written by Phase 3 (QA persona). Test cases keyed to FRs, user stories, and acce
 
 **Validation rules (enforced by `aitri complete 3`):**
 - Required: `test_plan`, `test_cases` (non-empty)
+- TC `id` values must be unique across `test_cases[]` (v2.0.0-alpha.13+) — duplicates break downstream cardinality (`summary.manual` = Set size vs `results.length` = array length)
 - `type` must be: `unit` | `integration` | `e2e`
 - `scenario` must be: `happy_path` | `edge_case` | `negative`
 - Each TC must have: `requirement_id`, `user_story_id`, `ac_id`

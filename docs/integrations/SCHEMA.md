@@ -46,11 +46,11 @@ Present after any `aitri init` or `aitri adopt --upgrade`.
 
 | Field | Type | Default when absent | Description |
 |---|---|---|---|
-| `artifactHashes` | `object<string, string>` | `{}` | `{ "1": "<sha256>", ... }` — SHA-256 of each artifact file. Written on `approve` and `complete` (v0.1.63+) |
+| `artifactHashes` | `object<string, string>` | `{}` | `{ "1": "<sha256>", ... }` — SHA-256 of each artifact file. Written on `approve` and `complete` (v0.1.63+). Backfilled from on-disk artifacts by `adopt --upgrade` for projects whose approvedPhases is non-empty but the field is absent or empty (v2.0.0-alpha.13+) |
 | `driftPhases` | `array<string>` | absent in old projects | Phases in drift state. Set by `run-phase` when re-running an approved phase; cleared by `complete`/`approve` |
 | `events` | `array<Event>` | `[]` | Pipeline activity log (max 20, most recent last) |
-| `verifyPassed` | `boolean` | `false` | `true` if `aitri verify-complete` passed. Required to unlock Phase 5 |
-| `verifySummary` | `object` | `null` | Last test run summary: `{ passed, failed, skipped, total }` |
+| `verifyPassed` | `boolean` | `false` | `true` if `aitri verify-complete` passed. Required to unlock Phase 5. Reset to `false` by `aitri verify-run` when latest results would not pass `verify-complete` — i.e. `passed === 0` with skips, OR any failures (v2.0.0-alpha.13+). Healthy results (passed > 0, failed === 0) leave the flag alone |
+| `verifySummary` | `object` | `null` | Last test run summary: `{ passed, failed, skipped, total }`. Set by `verify-complete` on success; cleared by `verify-run` when `verifyPassed` resets (v2.0.0-alpha.13+) |
 | `verifyRanAt` | `string` ISO 8601 | `null` | Timestamp of last `aitri verify-run` execution (set on every run, regardless of pass/fail). Drives test-staleness signals (v0.1.79+) |
 | `auditLastAt` | `string` ISO 8601 | `null` | Timestamp of last `aitri audit` invocation. Persisted because `AUDIT_REPORT.md` mtime resets on git clone (v0.1.79+) |
 | `rejections` | `object<string, Rejection>` | `{}` | Map of phase key → last rejection. Key is phase as string (`"1"`, `"2"`, etc.) |
