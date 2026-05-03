@@ -18,6 +18,32 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-alpha.25 (2026-05-03) — orphan IDEA.md classified-ref handling — additive
+
+**`aitri adopt --upgrade` now classifies stale IDEA.md references into three buckets and auto-fixes the structural ones in fields Aitri owns** (additive — no schema change, no event-shape change, finding text is CLI-only and not part of any subproduct contract). Refines alpha.24's all-or-nothing pre-flight scan into a schema-aware classifier per [ADR-031](../Aitri_Design_Notes/DECISIONS.md#adr-031--2026-05-03--destructive-migrations-structural-auto-fix-where-aitri-owns-the-schema-honor-system-elsewhere).
+
+**No subproduct-visible contract change.** All effects are confined to the upgrade migration's behavior on `04_IMPLEMENTATION_MANIFEST.json` array elements (`files_created[*]`, `files_modified[*]`, `test_files[*]`) plus the `validatorGap` finding's `reason` text. Subproducts that read `.aitri.upgradeFindings[]` continue to receive the same shape (`{category, target, transform, reason, recordedAt}`) — only the `reason` text is more precise.
+
+**What changes for upgrades from alpha.24:**
+
+- Projects in **stale-ref state** (IDEA.md already absorbed pre-alpha.25) see a finding listing the **narrative** subset of references (free-form JSON values, project-extension fields, Markdown bodies). Frozen records (`04_TEST_RESULTS.json`, `05_PROOF_OF_COMPLIANCE.json`) are silently skipped — their content is auto-generated immutable evidence; modifying it falsifies history. **Effective change for Hub:** the upgradeFinding now lists 4 actionable artifacts (was 6 in alpha.24); the 2 frozen artifacts that were previously surfaced are correctly understood as out-of-scope.
+- Projects in **pre-flight state** (IDEA.md present + Phase 1 approved + `original_brief` empty) get a richer migration: any `04_IMPLEMENTATION_MANIFEST.json` array element that exactly equals `"IDEA.md"` (string form) or has `.path === "IDEA.md"` (Hub's enriched object form, accepted by phase4.js since arrayness is the only shape constraint) is mechanically dropped. `artifactHashes['4']` is re-stamped if Phase 4 was approved. If after dropping, no `narrative` references remain, the absorb proceeds in the same upgrade run; otherwise the absorb is blocked until the operator resolves narrative references manually.
+
+**Why `— additive` and not `— breaking`:**
+
+- No artifact field shape changed. `04_IMPLEMENTATION_MANIFEST.json::files_modified[]` continues to be `string[]` OR `{path, ...}[]`; alpha.25 only drops elements that are `"IDEA.md"`/`{path: "IDEA.md"}` from such arrays.
+- No `.aitri` field added, removed, or renamed. `upgradeFindings[]` shape unchanged.
+- No event-type added; `upgrade_migration` event keeps the same payload (`from_version`, `to_version`, `category`, `target`, `transform`, `before_hash`, `after_hash`).
+- `validatorGap` finding `target` value is `"IDEA.md"` (pre-flight) or `"IDEA.md (absorbed)"` (stale-ref) — same values alpha.24 used; only the `reason` text and the actionable file list count differ.
+- `reason` text is human-facing and not a contract surface — no subproduct may parse it for state decisions.
+
+**Cross-references:**
+- ADR-031 — principle behind the three-bucket classification.
+- alpha.24 release notes (predecessor) — alpha.24 introduced the regex pre-flight scan; alpha.25 schema-aware-refines it.
+- alpha.22 — validate.js absorbed-brief acceptance; same incident class.
+
+---
+
 ## v2.0.0-alpha.22 (2026-05-02) — validate accepts absorbed `original_brief` in lieu of IDEA.md — additive
 
 **`aitri validate` no longer falsely flags `IDEA.md` as missing on projects where the alpha.17 orphan-IDEA migration absorbed it** (additive — no schema change, new optional `absorbed` flag on the IDEA.md artifact entry in `--json` output). Closes a contract gap shipped together in alpha.17 + alpha.21 and surfaced 2026-05-02 PM by `aitri validate` on Ultron post alpha.14 → alpha.21 upgrade.

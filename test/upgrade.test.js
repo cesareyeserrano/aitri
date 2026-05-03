@@ -1328,37 +1328,40 @@ describe('lib/upgrade/migrations/from-0.1.65 — orphan IDEA.md absorption', () 
   });
 });
 
-// ── Orphan IDEA.md absorption — pre-flight scan + stale-ref detection (alpha.24) ─
+// ── Orphan IDEA.md classified-ref handling (alpha.25) ────────────────────────
 //
 // Background: alpha.17 introduced the auto-absorb migration but did not check
 // whether downstream artifacts referenced IDEA.md as a literal path. Hub
 // surfaced the gap on 2026-05-02: its `hub-web-only` feature treated IDEA.md
 // as user-facing documentation tracked in 04_IMPLEMENTATION_MANIFEST.json
-// (`path: "IDEA.md"`) plus 14+ references across TCs, system design, and
-// proof of compliance. The alpha.17 migration silently unlinked the file
-// and broke `aitri verify-run` invisibly.
+// (`files_modified[i].path === "IDEA.md"`) plus 5 references across TCs,
+// system design, and proof of compliance. The alpha.17 migration silently
+// unlinked the file and broke `aitri verify-run` invisibly.
 //
-// alpha.24 closes the gap with two paths through diagnoseOrphanIdea:
-//   (a) PRE-FLIGHT: when IDEA.md still exists, scan root + features for
-//       /\bIDEA\.md\b/. If any match, block auto-absorption and emit a
-//       validatorGap finding listing the offenders.
-//   (b) STALE-REF DETECTION: when IDEA.md is already absent (post-absorb)
-//       and Phase 1 is approved, scan again. Surface the same offenders
-//       so an already-broken project can fix forward without restoring the
-//       file. Auto-fix is impossible — references could be intentional
-//       documentation or test assertions; only the operator knows.
+// alpha.24 added an all-or-nothing pre-flight scan (regex-based).
+// alpha.25 refines it into a three-bucket classification per ADR-031 and
+// lib/upgrade/idea-ref-classifier.js:
 //
-// 01_REQUIREMENTS.json is excluded from the scan at every level because
-// `original_brief` legitimately holds the absorbed IDEA.md content as a
-// substring (the absorbed text, not a path reference).
+//   auto_fixable — fields Aitri owns (manifest::files_created/files_modified/
+//                  test_files). Mechanical drop. Migration applies it AND,
+//                  when narrative is empty, proceeds with the absorb in the
+//                  same run.
+//   narrative   — anywhere else (free-form JSON, project extensions, Markdown
+//                  bodies). Flagged; blocks the absorb.
+//   frozen      — 04_TEST_RESULTS.json + 05_PROOF_OF_COMPLIANCE.json. Silently
+//                  skipped — immutable historical evidence by design.
+//
+// Auto-fix runs even when narrative blocks absorb (independently committable).
 
-describe('lib/upgrade/migrations/from-0.1.65 — orphan IDEA.md pre-flight scan + stale-ref detection (alpha.24)', () => {
+describe('lib/upgrade/migrations/from-0.1.65 — orphan IDEA.md classified ref handling (alpha.25)', () => {
   function writeReqsArtifact(dir, data = { functional_requirements: [] }) {
     fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), JSON.stringify(data, null, 2));
   }
 
-  it('PRE-FLIGHT: blocks auto-absorb when 04_IMPLEMENTATION_MANIFEST.json references IDEA.md as a path', () => {
+  // ── PRE-FLIGHT — auto-fix mechanics ──
+
+  it('PRE-FLIGHT auto-fix: drops "IDEA.md" string element from files_modified[] and absorbs in same run', () => {
     const dir = tmpDir();
     try {
       writeLegacyConfig(dir, { approvedPhases: [1] });
@@ -1366,23 +1369,333 @@ describe('lib/upgrade/migrations/from-0.1.65 — orphan IDEA.md pre-flight scan 
       fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
       fs.writeFileSync(
         path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
-        JSON.stringify({ files: [{ path: 'IDEA.md', kind: 'doc' }] }, null, 2),
+        JSON.stringify({ files_created: ['src/main.js'], files_modified: ['IDEA.md'], test_files: ['t.test.js'] }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), 'utf8'));
+      assert.deepEqual(m.files_modified, [], 'IDEA.md must be dropped from files_modified');
+      assert.deepEqual(m.files_created, ['src/main.js'], 'unrelated entries must remain');
+
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), false, 'IDEA.md must be unlinked after absorb');
+      const r = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(r.original_brief, '# Brief\n');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT auto-fix: drops object element with .path === "IDEA.md" (Hub enriched shape)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({
+          files_modified: [
+            { path: 'IDEA.md', change: 'rewrote' },
+            { path: 'src/main.js', change: 'edit' },
+          ],
+        }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), 'utf8'));
+      assert.equal(m.files_modified.length, 1);
+      assert.equal(m.files_modified[0].path, 'src/main.js');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT auto-fix: drops "IDEA.md" from files_created[], test_files[] (multi-array)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({
+          files_created: ['IDEA.md', 'a.js'],
+          files_modified: ['b.js'],
+          test_files: ['IDEA.md', 't.test.js'],
+        }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), 'utf8'));
+      assert.deepEqual(m.files_created, ['a.js']);
+      assert.deepEqual(m.test_files, ['t.test.js']);
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), false);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT auto-fix: re-stamps artifactHashes[4] when Phase 4 was approved', () => {
+    const dir = tmpDir();
+    try {
+      cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      const manifestRel = 'spec/04_IMPLEMENTATION_MANIFEST.json';
+      fs.writeFileSync(
+        path.join(dir, manifestRel),
+        JSON.stringify({ files_modified: ['IDEA.md', 'src/main.js'] }, null, 2),
+      );
+
+      // Pretend Phase 4 was approved with the pre-fix manifest.
+      const c0 = loadConfig(dir);
+      c0.approvedPhases = [1, 4];
+      const preHash = hashArtifact(fs.readFileSync(path.join(dir, manifestRel), 'utf8'));
+      c0.artifactHashes = { ...(c0.artifactHashes || {}), '4': preHash };
+      saveConfig(dir, c0);
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const c = loadConfig(dir);
+      const postContent = fs.readFileSync(path.join(dir, manifestRel), 'utf8');
+      assert.equal(c.artifactHashes['4'], hashArtifact(postContent),
+        'artifactHashes[4] must be re-stamped to match post-fix manifest');
+      assert.notEqual(c.artifactHashes['4'], preHash);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT auto-fix: does NOT add artifactHashes[4] when Phase 4 was never approved', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({ files_modified: ['IDEA.md', 'src/main.js'] }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const c = JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8'));
+      assert.equal((c.artifactHashes || {})['4'], undefined,
+        'must not synthesize a Phase 4 baseline that never existed');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT auto-fix: emits upgrade_migration event with before/after hashes', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({ files_modified: ['IDEA.md', 'src/main.js'] }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const c = JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8'));
+      const fixEvent = (c.events || []).find(e =>
+        e.event === 'upgrade_migration' &&
+        e.target === 'spec/04_IMPLEMENTATION_MANIFEST.json'
+      );
+      assert.ok(fixEvent, 'expected upgrade_migration event for the manifest auto-fix');
+      assert.ok(fixEvent.before_hash && fixEvent.after_hash, 'event must carry before/after hashes');
+      assert.notEqual(fixEvent.before_hash, fixEvent.after_hash);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT auto-fix: refuses to drop when result would leave both files_created and files_modified empty (degenerate)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({ files_modified: ['IDEA.md'] }, null, 2),  // only IDEA.md
       );
 
       const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
-      const f = findings.find(x => x.target === 'IDEA.md');
-      assert.ok(f, 'expected an orphan-IDEA finding');
-      assert.equal(f.autoMigratable, false, 'pre-flight scan must block absorption');
-      assert.match(f.reason, /04_IMPLEMENTATION_MANIFEST\.json/);
-      assert.match(f.reason, /literal path/);
-
-      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
-      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), true,
-        'IDEA.md must NOT be unlinked when references exist');
-      const after = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
-      assert.equal(after.original_brief, undefined, 'original_brief must NOT be populated when blocked');
+      const autoFix = findings.find(f => f.autoMigratable && f.target === 'spec/04_IMPLEMENTATION_MANIFEST.json');
+      assert.equal(autoFix, undefined, 'auto-fix must NOT be emitted for a degenerate post-state');
+      // The manifest ref falls to narrative instead → blocks absorb.
+      const narrative = findings.find(f => f.target === 'IDEA.md' && f.autoMigratable === false);
+      assert.ok(narrative, 'degenerate auto-fix candidate must be reclassified as narrative');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
+
+  // ── PRE-FLIGHT — narrative blocks absorb ──
+
+  it('PRE-FLIGHT narrative: Markdown body containing IDEA.md → blocks absorb', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(path.join(dir, 'spec/02_SYSTEM_DESIGN.md'),
+        '# Design\n\nThe brief lives at IDEA.md historically.\n');
+
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const narrative = findings.find(f => f.target === 'IDEA.md' && f.autoMigratable === false);
+      assert.ok(narrative, 'expected narrative finding');
+      assert.match(narrative.reason, /02_SYSTEM_DESIGN\.md/);
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), true, 'IDEA.md must be preserved when narrative blocks');
+      const r = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(r.original_brief, undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT mixed: auto-fix applies AND narrative blocks absorb (independently committable)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({
+          files_modified: [{ path: 'IDEA.md', change: 'x' }, { path: 'a.js', change: 'y' }],
+          technical_debt: [{ fr_id: 'FR-001', substitution: 'see IDEA.md for context' }],
+        }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      // Auto-fix DID apply (files_modified IDEA.md entry dropped)
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), 'utf8'));
+      assert.equal(m.files_modified.length, 1);
+      assert.equal(m.files_modified[0].path, 'a.js');
+      // Narrative ref in technical_debt remains untouched
+      assert.match(m.technical_debt[0].substitution, /IDEA\.md/);
+      // Absorb did NOT happen (narrative blocked)
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), true);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT narrative: test_data.files containing "IDEA.md" → narrative (free-form, NOT auto-fixed)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/03_TEST_CASES.json'),
+        JSON.stringify({ test_cases: [{ id: 'TC-001', test_data: { files: ['README.md', 'IDEA.md'] } }] }, null, 2),
+      );
+
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const autoFix = findings.find(f => f.autoMigratable && String(f.target).includes('03_TEST_CASES'));
+      assert.equal(autoFix, undefined, 'free-form test_data must NOT be auto-fixed');
+      const narrative = findings.find(f => f.target === 'IDEA.md' && f.autoMigratable === false);
+      assert.ok(narrative, 'expected narrative finding instead');
+      assert.match(narrative.reason, /03_TEST_CASES\.json/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // ── PRE-FLIGHT — frozen silently skipped ──
+
+  it('PRE-FLIGHT frozen: 04_TEST_RESULTS.json containing IDEA.md → no finding, absorb proceeds', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_TEST_RESULTS.json'),
+        JSON.stringify({ results: [{ tc_id: 'TC-001', notes: 'grep IDEA.md returned 0' }] }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), false, 'absorb must proceed when only frozen refs exist');
+      const r = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(r.original_brief, '# Brief\n');
+      // The TEST_RESULTS file must remain untouched
+      const tr = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), 'utf8'));
+      assert.match(tr.results[0].notes, /IDEA\.md/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT frozen: 05_PROOF_OF_COMPLIANCE.json containing IDEA.md → no finding, absorb proceeds', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/05_PROOF_OF_COMPLIANCE.json'),
+        JSON.stringify({ evidence: 'grep IDEA.md returns zero matches' }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), false);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT frozen + narrative mixed: narrative finding emitted; frozen NOT mentioned in reason', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(path.join(dir, 'spec/02_SYSTEM_DESIGN.md'), '# Design\n\nIDEA.md narrative.\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_TEST_RESULTS.json'),
+        JSON.stringify({ results: [{ tc_id: 'TC-001', notes: 'IDEA.md was checked' }] }, null, 2),
+      );
+      fs.writeFileSync(
+        path.join(dir, 'spec/05_PROOF_OF_COMPLIANCE.json'),
+        JSON.stringify({ evidence: 'IDEA.md grep' }, null, 2),
+      );
+
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const narrative = findings.find(f => f.target === 'IDEA.md' && f.autoMigratable === false);
+      assert.ok(narrative, 'expected narrative finding');
+      assert.doesNotMatch(narrative.reason, /grep IDEA\.md returns zero/, 'frozen evidence text must not appear in finding');
+      // Frozen filenames may appear in educational copy — only the actionable
+      // list before "Aitri does not auto-rewrite..." should be checked.
+      const filesListed = narrative.reason.match(/inside \d+ artifact\(s\): (.+?)\. Aitri does not/);
+      assert.ok(filesListed, 'reason must list the artifact files');
+      assert.match(filesListed[1], /02_SYSTEM_DESIGN\.md/);
+      assert.doesNotMatch(filesListed[1], /04_TEST_RESULTS\.json/);
+      assert.doesNotMatch(filesListed[1], /05_PROOF_OF_COMPLIANCE\.json/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // ── PRE-FLIGHT — false-positive guard preserved ──
+
+  it('PRE-FLIGHT: ignores 01_REQUIREMENTS.json content (original_brief may legitimately contain IDEA.md text)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir, { functional_requirements: [], note: 'see IDEA.md for context' });
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const absorb = findings.find(x => x.target === 'IDEA.md' && x.autoMigratable === true);
+      assert.ok(absorb, 'expected absorb finding (no narrative refs from 01_REQUIREMENTS.json)');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('PRE-FLIGHT: clean project (no references) auto-absorbs', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Clean brief\n');
+      fs.writeFileSync(path.join(dir, 'spec/02_SYSTEM_DESIGN.md'), '# Design\n\nNo path references here.\n');
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), false);
+      const after = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(after.original_brief, '# Clean brief\n');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // ── Feature scope (read-only A2 invariant) ──
 
   it('PRE-FLIGHT: scans feature artifacts (read-only — does not violate A2)', () => {
     const dir = tmpDir();
@@ -1394,60 +1707,25 @@ describe('lib/upgrade/migrations/from-0.1.65 — orphan IDEA.md pre-flight scan 
       const featSpec = path.join(dir, 'features/foo/spec');
       fs.mkdirSync(featSpec, { recursive: true });
       fs.writeFileSync(
-        path.join(featSpec, '03_TEST_CASES.json'),
-        JSON.stringify({ test_cases: [{ id: 'TC-001', given: 'IDEA.md exists', when: 'read IDEA.md', expected_result: 'present' }] }, null, 2),
+        path.join(featSpec, '02_SYSTEM_DESIGN.md'),
+        '# Feature Design\n\nReads from IDEA.md occasionally.\n',
       );
 
       const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
-      const f = findings.find(x => x.target === 'IDEA.md');
+      const f = findings.find(x => x.target === 'IDEA.md' && x.autoMigratable === false);
       assert.ok(f, 'feature-level reference must be detected');
-      assert.equal(f.autoMigratable, false);
-      assert.match(f.reason, /features\/foo\/spec\/03_TEST_CASES\.json/);
+      assert.match(f.reason, /features\/foo\/spec\/02_SYSTEM_DESIGN\.md/);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('PRE-FLIGHT: ignores 01_REQUIREMENTS.json content (original_brief may legitimately contain IDEA.md text)', () => {
-    const dir = tmpDir();
-    try {
-      writeLegacyConfig(dir, { approvedPhases: [1] });
-      // The brief text itself happens to mention "IDEA.md" — this must NOT block.
-      writeReqsArtifact(dir, { functional_requirements: [], note: 'see IDEA.md for context' });
-      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+  // ── STALE-REF (file absent + Phase 1 approved) ──
 
-      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
-      const f = findings.find(x => x.target === 'IDEA.md');
-      assert.ok(f, 'expected an orphan-IDEA finding');
-      assert.equal(f.autoMigratable, true,
-        '01_REQUIREMENTS.json content must NOT count as a path reference (false-positive guard)');
-    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  });
-
-  it('PRE-FLIGHT: regression — clean project (no references) still auto-absorbs', () => {
-    const dir = tmpDir();
-    try {
-      writeLegacyConfig(dir, { approvedPhases: [1] });
-      writeReqsArtifact(dir);
-      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Clean brief\n');
-      fs.writeFileSync(path.join(dir, 'spec/02_SYSTEM_DESIGN.md'), '# Design\n\nNo path references here.\n');
-
-      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
-      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), false, 'IDEA.md must be removed (clean path)');
-      const after = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
-      assert.equal(after.original_brief, '# Clean brief\n');
-    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  });
-
-  it('STALE-REF DETECTION: IDEA.md absent + references remaining → flag (no auto-fix)', () => {
+  it('STALE-REF: narrative refs only → narrative finding (no auto-fix)', () => {
     const dir = tmpDir();
     try {
       writeLegacyConfig(dir, { approvedPhases: [1] });
       writeReqsArtifact(dir, { functional_requirements: [], original_brief: 'previously absorbed' });
-      // No IDEA.md on disk (already absorbed by a prior alpha.17+ upgrade).
-      // But a downstream artifact still references it as a path.
-      fs.writeFileSync(
-        path.join(dir, 'spec/05_PROOF_OF_COMPLIANCE.json'),
-        JSON.stringify({ evidence: 'grep IDEA.md returns zero matches' }, null, 2),
-      );
+      fs.writeFileSync(path.join(dir, 'spec/02_SYSTEM_DESIGN.md'), '# Design\n\nIDEA.md mentioned.\n');
 
       const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
       const f = findings.find(x => String(x.target).startsWith('IDEA.md'));
@@ -1455,11 +1733,54 @@ describe('lib/upgrade/migrations/from-0.1.65 — orphan IDEA.md pre-flight scan 
       assert.equal(f.autoMigratable, false);
       assert.equal(f.target, 'IDEA.md (absorbed)');
       assert.match(f.reason, /no longer exists/);
-      assert.match(f.reason, /05_PROOF_OF_COMPLIANCE\.json/);
+      assert.match(f.reason, /02_SYSTEM_DESIGN\.md/);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('STALE-REF DETECTION negative: IDEA.md absent + no references → no finding (clean post-absorb state)', () => {
+  it('STALE-REF: frozen-only refs → no finding (clean post-absorb)', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir, { functional_requirements: [], original_brief: 'previously absorbed' });
+      // Stale ref ONLY in frozen records — must NOT surface
+      fs.writeFileSync(
+        path.join(dir, 'spec/05_PROOF_OF_COMPLIANCE.json'),
+        JSON.stringify({ evidence: 'grep IDEA.md returns zero matches' }, null, 2),
+      );
+
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      assert.equal(findings.find(x => String(x.target).startsWith('IDEA.md')), undefined,
+        'frozen refs must not surface in stale-ref mode');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('STALE-REF: narrative + frozen mixed → narrative finding lists narrative files only', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir, { functional_requirements: [], original_brief: 'previously absorbed' });
+      fs.writeFileSync(path.join(dir, 'spec/02_SYSTEM_DESIGN.md'), '# Design\n\nIDEA.md mentioned.\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/05_PROOF_OF_COMPLIANCE.json'),
+        JSON.stringify({ evidence: 'IDEA.md was here' }, null, 2),
+      );
+
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const f = findings.find(x => String(x.target).startsWith('IDEA.md'));
+      assert.ok(f);
+      // Extract the actionable file list (the colon-separated section before
+      // the "Update those references..." sentence). Frozen file names may
+      // appear in the reason's educational copy ("Frozen historical records
+      // (04_TEST_RESULTS.json, 05_PROOF_OF_COMPLIANCE.json) are intentionally
+      // not surfaced...") — that mention is informative, not actionable.
+      const fileList = f.reason.match(/narrative fields[^:]*: (.+?)\. Update those references/);
+      assert.ok(fileList, 'reason must list the narrative artifact files');
+      assert.match(fileList[1], /02_SYSTEM_DESIGN\.md/);
+      assert.doesNotMatch(fileList[1], /05_PROOF_OF_COMPLIANCE\.json/, 'frozen file must not be in the actionable list');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('STALE-REF: clean post-absorb (no refs anywhere) → no finding', () => {
     const dir = tmpDir();
     try {
       writeLegacyConfig(dir, { approvedPhases: [1] });
@@ -1467,8 +1788,103 @@ describe('lib/upgrade/migrations/from-0.1.65 — orphan IDEA.md pre-flight scan 
       fs.writeFileSync(path.join(dir, 'spec/02_SYSTEM_DESIGN.md'), '# Design\n\nNothing here.\n');
 
       const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
-      assert.equal(findings.find(x => String(x.target).startsWith('IDEA.md')), undefined,
-        'no orphan-IDEA finding when post-absorb state is clean');
+      assert.equal(findings.find(x => String(x.target).startsWith('IDEA.md')), undefined);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // ── Hub-shape regression ──
+
+  it('Hub-shape regression: 1 auto-fixable + narrative in 4 files + 2 frozen → exactly that distribution', () => {
+    // Synthetic project mirroring Hub's exact reference shape (PRE-FLIGHT path —
+    // Hub itself is already in stale-ref mode, but PRE-FLIGHT exercises the
+    // load-bearing logic).
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Hub-like brief\n');
+
+      // Narrative in root UX_SPEC
+      fs.writeFileSync(path.join(dir, 'spec/01_UX_SPEC.md'), '# UX\n\nIDEA.md mentioned in narrative.\n');
+
+      // Feature spec — narrative across 3 files + auto-fixable in manifest + frozen 2
+      const featSpec = path.join(dir, 'features/hub-like/spec');
+      fs.mkdirSync(featSpec, { recursive: true });
+      fs.writeFileSync(path.join(featSpec, '02_SYSTEM_DESIGN.md'), '# Design\n\nFiles edited: IDEA.md, BACKLOG.md.\n');
+      fs.writeFileSync(
+        path.join(featSpec, '03_TEST_CASES.json'),
+        JSON.stringify({ test_cases: [{ id: 'TC-001', given: 'IDEA.md exists' }] }, null, 2),
+      );
+      fs.writeFileSync(
+        path.join(featSpec, '04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({
+          // Auto-fixable: files_modified[i].path === "IDEA.md"
+          files_modified: [{ path: 'IDEA.md', change: 'rewrote' }, { path: 'src/main.js', change: 'edit' }],
+          // Narrative within same file: technical_debt substring
+          technical_debt: [{ fr_id: 'FR-001', substitution: 'see IDEA.md for context' }],
+        }, null, 2),
+      );
+      // Frozen × 2
+      fs.writeFileSync(
+        path.join(featSpec, '04_TEST_RESULTS.json'),
+        JSON.stringify({ results: [{ tc_id: 'TC-001', notes: 'IDEA.md was checked' }] }, null, 2),
+      );
+      fs.writeFileSync(
+        path.join(featSpec, '05_PROOF_OF_COMPLIANCE.json'),
+        JSON.stringify({ evidence: 'IDEA.md verified' }, null, 2),
+      );
+
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const autoFixes = findings.filter(f => f.autoMigratable && f.target?.includes('04_IMPLEMENTATION_MANIFEST'));
+      assert.equal(autoFixes.length, 1, 'exactly 1 auto-fix finding (one manifest with one fixable element)');
+      assert.match(autoFixes[0].transform, /files_modified\[0\]\.path/);
+
+      const narrative = findings.find(f => f.target === 'IDEA.md' && f.autoMigratable === false);
+      assert.ok(narrative, 'narrative finding present');
+      // Extract the actionable file list (frozen names appear in educational
+      // copy too — only the list before "Aitri does not auto-rewrite..." is
+      // actionable).
+      const listMatch = narrative.reason.match(/inside \d+ artifact\(s\): (.+?)\. Aitri does not/);
+      assert.ok(listMatch, 'reason must list the narrative artifact files');
+      const list = listMatch[1];
+      assert.match(list, /spec\/01_UX_SPEC\.md/);
+      assert.match(list, /02_SYSTEM_DESIGN\.md/);
+      assert.match(list, /03_TEST_CASES\.json/);
+      assert.match(list, /04_IMPLEMENTATION_MANIFEST\.json/);
+      // Frozen NOT in actionable list
+      assert.doesNotMatch(list, /04_TEST_RESULTS\.json/);
+      assert.doesNotMatch(list, /05_PROOF_OF_COMPLIANCE\.json/);
+
+      // Absorb finding NOT present (narrative blocks)
+      const absorb = findings.find(f => f.target === 'IDEA.md' && f.autoMigratable === true);
+      assert.equal(absorb, undefined, 'absorb finding must not appear when narrative blocks');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // ── Idempotency ──
+
+  it('Idempotent: re-running diagnose after auto-fix produces no new auto-fix work', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir);
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n');
+      fs.writeFileSync(
+        path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'),
+        JSON.stringify({ files_modified: ['IDEA.md', 'src/main.js'] }, null, 2),
+      );
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+      // First run: auto-fix + absorb. IDEA.md now gone.
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), false);
+
+      // Second run: nothing to do.
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const ideaFindings = findings.filter(f =>
+        String(f.target).startsWith('IDEA.md') ||
+        String(f.target).includes('04_IMPLEMENTATION_MANIFEST.json')
+      );
+      assert.equal(ideaFindings.length, 0, 're-running must produce no IDEA-related findings');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
