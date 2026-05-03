@@ -18,6 +18,30 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-alpha.26 (2026-05-03) — phase 2 + phaseUX no longer require IDEA.md (absorbed-brief regression hotfix) — additive
+
+**`aitri run-phase architecture` and `aitri run-phase ux` now succeed on projects whose IDEA.md was absorbed into `01_REQUIREMENTS.json#original_brief`** (additive — no schema change, no event-shape change, no `.aitri` field change). Closes the post-archive regression class established by ADR-031 addendum: every code path that previously assumed IDEA.md presence must be audited when the destructive op ships.
+
+**Behaviour change for subproducts: none.** No artifact field changed; no `.aitri` field changed; no event-type changed; no CLI command added or renamed. The fix is internal to phase definition modules (`lib/phases/phase2.js` + `lib/phases/phaseUX.js`): both removed `'IDEA.md'` from their `inputs` arrays. `buildBriefing` already only consumes `01_REQUIREMENTS.json` (which carries `original_brief` since v0.1.89). The declaration was dead but `lib/commands/run-phase.js` enforces input presence at the gate level, hard-failing on the missing file even though the briefing did not consume it.
+
+**Why `— additive` and not `— breaking`:**
+
+- No artifact schema changed. Phase 2 still produces `02_SYSTEM_DESIGN.md` with the same required sections; phaseUX still produces `01_UX_SPEC.md` with the same required sections.
+- No `.aitri` field added, removed, or renamed.
+- No event-type added or modified.
+- No CLI command added or renamed; no flag added or renamed.
+- The only observable change is positive — a previously-failing scenario (`run-phase architecture` on absorbed-brief project) now succeeds. No prior valid scenario regresses.
+- `templates/phases/phaseUX.md` updated narrative reference to point at `01_REQUIREMENTS.json#original_brief` instead of `IDEA.md` for design-token derivation context — text-only change to the briefing prompt; not a contract surface.
+
+**Why a release.** Per CLAUDE.md "Purpose over process": Tier-1 hotfix justified by real consumer (Ultron) blocked. Same exception class that justified alpha.22 (validate.js absorbed-brief acceptance).
+
+**Cross-references:**
+- ADR-031 addendum (post-destructive on-disk audit protocol) — codifies the bidirectional obligation that producer-side ADR-031 was missing.
+- alpha.22 release notes — first instance of this regression class (validate.js).
+- alpha.25 release notes — second instance (the upgrade migration's pre-flight scan).
+
+---
+
 ## v2.0.0-alpha.25 (2026-05-03) — orphan IDEA.md classified-ref handling — additive
 
 **`aitri adopt --upgrade` now classifies stale IDEA.md references into three buckets and auto-fixes the structural ones in fields Aitri owns** (additive — no schema change, no event-shape change, finding text is CLI-only and not part of any subproduct contract). Refines alpha.24's all-or-nothing pre-flight scan into a schema-aware classifier per [ADR-031](../Aitri_Design_Notes/DECISIONS.md#adr-031--2026-05-03--destructive-migrations-structural-auto-fix-where-aitri-owns-the-schema-honor-system-elsewhere).

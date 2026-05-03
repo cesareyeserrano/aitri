@@ -29,7 +29,7 @@ Required sections (in order):
 1. ## User Flows — per screen, per user persona. For each flow: entry point, steps, exit point, error path
 2. ## Component Inventory — table per screen: component | states (default/loading/error/empty/disabled) | behavior | Nielsen heuristics applied
 3. ## Nielsen Compliance — per screen: list each relevant heuristic, how the design satisfies it, and any trade-off made
-4. ## Design Tokens — **always required**. Every product has a visual layer the developer will implement. Define: color roles (background, surface, primary, accent, error, text-primary, text-secondary, border), type scale (font family rationale, size scale, weights), spacing scale. Derive tokens from: (1) archetype defaults, (2) explicit visual FRs if present, (3) product context and IDEA.md otherwise. Every token must state its reason — no arbitrary choices.
+4. ## Design Tokens — **always required**. Every product has a visual layer the developer will implement. Define: color roles (background, surface, primary, accent, error, text-primary, text-secondary, border), type scale (font family rationale, size scale, weights), spacing scale. Derive tokens from: (1) archetype defaults, (2) explicit visual FRs if present, (3) product context — read it from `01_REQUIREMENTS.json` (the `original_brief` field carries the absorbed seed brief; `project_summary` carries the refined description) otherwise. Every token must state its reason — no arbitrary choices.
 
 ## Rules
 - Every UX/visual FR must have a corresponding screen or component in the spec

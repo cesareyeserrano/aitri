@@ -819,3 +819,35 @@ The alpha.24 surface is incomplete. It detects, but it does not differentiate. A
 - Decides: the three-category model and the auto-fix/block/skip rules.
 - Does not decide: the specific field-path map (which fields are `auto_fixable` for any given artifact). That map lives in code (`idea-ref-classifier.js`) and is updated as new auto-fixable cases are identified per consumer signal.
 - Does not decide: whether to extend auto-fix to free-form `test_data`. The current answer is no (§2 binding); a future ADR may revisit if a real consumer surfaces a need that narrative-flag cannot cover.
+
+### Addendum — 2026-05-03 (alpha.26) — Post-destructive on-disk audit protocol
+
+ADR-031 codified the **producer side** of the destructive-op contract (the migration that performs the unlink/rename/move). The Ultron blocker reported 2026-05-03 — re-running `aitri run-phase architecture` failed with `Missing required file: IDEA.md` after Phase 1 absorption — surfaced the missing **consumer side**: every code path that previously assumed the file's presence is a latent bug class that survives the producer fix.
+
+**Bug class.** When a destructive on-disk operation ships (here: `lib/commands/approve.js` archives `IDEA.md` into `01_REQUIREMENTS.json#original_brief` and unlinks the file on first approve of Phase 1, since v0.1.89), every callsite that was written before the change and depends on the file's presence becomes a future blocker. The blocker doesn't fire immediately because those callsites typically run BEFORE the destructive op (greenfield projects) or are gated by schema (artifact validators) — they fire on the **second pass**: re-runs, re-validations, re-builds on already-approved projects.
+
+**Three observed instances of this class so far:**
+1. `lib/commands/validate.js` gated on `fs.existsSync('IDEA.md')` → falsely reported `❌ IDEA.md` post-absorption. Closed by alpha.22 (`ideaBriefStatus` helper accepts either path).
+2. `lib/upgrade/migrations/from-0.1.65.js::diagnoseOrphanIdea` unlinked IDEA.md without scanning downstream artifacts → broke Hub. Closed by alpha.24 (regex pre-flight) + alpha.25 (schema-aware classifier).
+3. `lib/phases/phase2.js` and `lib/phases/phaseUX.js` declared `IDEA.md` as a required input, but `buildBriefing` never read `inputs['IDEA.md']`. The `run-phase.js` gate hard-failed on missing inputs even though the briefing was unaffected. Closed by alpha.26 (declaration removed; structural guard test added).
+
+**Three hotfixes on the same producer event = systemic gap, not three coincidences.** Per-incident fixes plug the hole the user just found; the next incident is wherever the next consumer hits the next stale assumption.
+
+**Audit protocol** (mandatory when a destructive on-disk op is added, applied retroactively for the IDEA.md case in alpha.26):
+
+1. Identify the file/path being removed.
+2. `grep -rn "<filename>" lib/ templates/ --include='*.js' --include='*.md'` — enumerate every callsite.
+3. Classify each callsite:
+   - **Pre-destructive consumer** (runs before the destructive op fires): unaffected, no change.
+   - **Post-destructive consumer** (runs after): must be updated to read from the new SSoT (e.g. `original_brief`) OR have its dependency on the file removed entirely (dead declaration).
+   - **The destructive op itself** (the producer): subject to ADR-031's pre-flight scan rules.
+4. Add a **structural guard test** that prevents regression at the type/schema level. For the IDEA.md case: `test/phases/inputs-contract.test.js` walks `PHASE_DEFS` and asserts no post-Phase-1 phase declares IDEA.md as a required input.
+5. Functional regression test for at least one real-world reproduction (e.g. `cmdRunPhase('architecture')` on an absorbed-brief fixture must not throw).
+6. Document the audit in this addendum so the next destructive op author knows the protocol exists.
+
+**Why this addendum is not a separate ADR.** The producer-side principle (ADR-031) and the consumer-side principle are two halves of the same invariant: *destructive on-disk operations carry a bidirectional audit obligation*. Splitting them into separate ADRs invites someone to read one and miss the other. The producer-side already lives here; the consumer-side joins it as the addendum.
+
+**Scope of this addendum:**
+- Decides: the bidirectional obligation is part of ADR-031's contract.
+- Decides: the post-destructive audit protocol is the operationalization of "consumer-side coverage".
+- Does not decide: whether to add a generic "files Aitri removes" registry that could automate the audit. That's a future enhancement gated on a second destructive op shipping (today only IDEA.md is removed; one data point is insufficient).

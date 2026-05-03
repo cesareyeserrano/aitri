@@ -176,6 +176,58 @@ describe('cmdRunPhase() — missing input for phase 2', () => {
   });
 });
 
+// ── alpha.26: absorbed-brief regression — phase 2 + phaseUX must run when
+// IDEA.md has been absorbed by approve.js (since v0.1.89). Reproduces the
+// Ultron blocker reported 2026-05-03: re-running `aitri run-phase architecture`
+// after Phase 1 approval failed because phase2.js declared IDEA.md as a
+// required input but never used inputs['IDEA.md'] in buildBriefing.
+describe('cmdRunPhase() — absorbed brief (alpha.26)', () => {
+  it('phase 2 (architecture) succeeds with only 01_REQUIREMENTS.json — no IDEA.md required', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({ approvedPhases: [1], completedPhases: [1] }));
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', VALID_REQUIREMENTS);
+      // Deliberately NO IDEA.md on disk — simulates post-absorb state.
+      const { stdout } = captureAll(() =>
+        cmdRunPhase({
+          dir, args: ['architecture'], flagValue: makeFlagValue(), err: noopErr, rootDir: ROOT_DIR,
+        })
+      );
+      assert.ok(stdout.length > 0, 'briefing must be emitted to stdout');
+      assert.ok(/Architect|architecture|System Design/i.test(stdout),
+        'briefing must contain architect-related content');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('phase 2 (architecture) does NOT error with "Missing required file: IDEA.md"', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({ approvedPhases: [1], completedPhases: [1] }));
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', VALID_REQUIREMENTS);
+      // No IDEA.md — must NOT trigger the missing-file gate.
+      assert.doesNotThrow(() => captureAll(() =>
+        cmdRunPhase({
+          dir, args: ['architecture'], flagValue: makeFlagValue(), err: noopErr, rootDir: ROOT_DIR,
+        })
+      ));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('phaseUX succeeds with only 01_REQUIREMENTS.json — no IDEA.md required', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, '.aitri', minimalConfig({ approvedPhases: [1], completedPhases: [1] }));
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', VALID_REQUIREMENTS);
+      const { stdout } = captureAll(() =>
+        cmdRunPhase({
+          dir, args: ['ux'], flagValue: makeFlagValue(), err: noopErr, rootDir: ROOT_DIR,
+        })
+      );
+      assert.ok(stdout.length > 0, 'briefing must be emitted to stdout');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 describe('cmdRunPhase() — unknown phase', () => {
   it('throws usage error', () => {
     const dir = tmpDir();

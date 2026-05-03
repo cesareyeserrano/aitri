@@ -5,6 +5,54 @@
 
 ---
 
+## [2.0.0-alpha.26] — 2026-05-03 — phase 2 + phaseUX no longer require IDEA.md (absorbed-brief regression hotfix)
+
+Twenty-sixth staged pre-release on `feat/upgrade-protocol`. Tier-1 hotfix surfaced 2026-05-03 by Ultron canary post alpha.25 install: re-running `aitri run-phase architecture` on an absorbed-brief project failed with `Missing required file: IDEA.md`. Same incident class as alpha.22 (validate.js), but at a different surface — phase input declarations rather than artifact validators.
+
+**The bug.** `lib/phases/phase2.js:17` and `lib/phases/phaseUX.js:16` declared `inputs: ['IDEA.md', '01_REQUIREMENTS.json']`. Neither phase's `buildBriefing` actually consumed `inputs['IDEA.md']` — they only rendered REQUIREMENTS_JSON (which carries `original_brief` since v0.1.89). `lib/commands/run-phase.js:75-83` enforces input presence at the gate level: missing required input → `err()` throw, before `buildBriefing` is even called. Result: any project where Phase 1 was approved (IDEA.md absorbed and unlinked by `aitri approve 1` since v0.1.89) failed to re-run Phase 2 or phaseUX. The pattern affected every project that uses Aitri normally — Phase 1 approval is mandatory for any pipeline reaching Phase 2.
+
+**Why this was not caught earlier.** Greenfield projects and CI runs typically run phases in order without re-running Phase 2 after Phase 1 approval. The bug surfaces on the **second pass** — refining the architecture after FR changes, the canonical post-approval workflow. Ultron is the first author canary to exercise this path post-alpha.17.
+
+**Three observed instances of the same class** (per ADR-031 addendum):
+1. `lib/commands/validate.js` gating on `fs.existsSync('IDEA.md')` — closed by alpha.22.
+2. `lib/upgrade/migrations/from-0.1.65.js::diagnoseOrphanIdea` unlinking without pre-flight — closed by alpha.24 + alpha.25.
+3. `lib/phases/{phase2,phaseUX}.js` declaring IDEA.md as required input but not using it — closed by this release.
+
+**Three hotfixes on the same producer event = systemic gap, not three coincidences.** ADR-031 addendum codifies the bidirectional audit protocol: every callsite that depends on the file's presence must be enumerated and reclassified when a destructive on-disk op ships. Applied retroactively here for the IDEA.md case.
+
+**Files touched.**
+- `lib/phases/phase2.js` — removed `'IDEA.md'` from `inputs`; added inline comment explaining the absorbed-brief invariant. `buildBriefing` unchanged (already correct).
+- `lib/phases/phaseUX.js` — same change. Plus updated the user-personas fallback message text to reference `01_REQUIREMENTS.json#original_brief` instead of `IDEA.md`.
+- `templates/phases/phaseUX.md` — updated the design-tokens derivation guidance to point at `01_REQUIREMENTS.json` (with `original_brief` for absorbed seed brief, `project_summary` for refined description) instead of `IDEA.md`.
+- `bin/aitri.js` — VERSION bump to `2.0.0-alpha.26`.
+- `package.json` — version bump.
+- `test/phases/inputs-contract.test.js` (new) — structural guard test: walks `PHASE_DEFS` and asserts no post-Phase-1 phase declares `IDEA.md` as required input. Sanity check confirms `discovery` (the only legitimate IDEA.md reader) keeps it.
+- `test/commands/run-phase.test.js` — three new functional tests under `cmdRunPhase() — absorbed brief (alpha.26)` describe block: phase 2 succeeds without IDEA.md; phase 2 doesn't throw "Missing required file"; phaseUX succeeds without IDEA.md. Reproduces the exact Ultron repro shape.
+- `docs/integrations/{README,STATUS_JSON,SCHEMA,ARTIFACTS}.md` — version header bump per release-sync.
+- `docs/integrations/CHANGELOG.md` — entry tagged `— additive`.
+- `docs/Aitri_Design_Notes/DECISIONS.md` — ADR-031 addendum added (post-destructive on-disk audit protocol).
+- `docs/Aitri_Design_Notes/BACKLOG.md` — "Shipped in alpha.26" subsection added.
+
+**Tests added.** 3 new structural + 3 new functional. Suite total: 1141 → 1147 passing, 0 failures (`npm run test:all`).
+
+**Audit (per ADR-031 addendum protocol).** `grep -rn "IDEA\.md" lib/ templates/` enumerated and classified every callsite:
+- **Pre-Phase-1 consumers (correct, no change):** `lib/commands/{init,wizard,adopt,feature}.js`, `lib/phases/phase1.js` (dynamic mode), `lib/phases/phaseDiscovery.js`, `lib/commands/run-phase.js:61` (first-run word-count warning, gated on absent 01_REQUIREMENTS.json).
+- **Producer (the destructive op):** `lib/commands/approve.js` (archive + unlink on Phase 1 approve).
+- **Post-Phase-1 consumers — fixed in alpha.22:** `lib/commands/validate.js`.
+- **Post-Phase-1 consumers — fixed in alpha.24/25:** `lib/upgrade/migrations/from-0.1.65.js`.
+- **Post-Phase-1 consumers — fixed in alpha.26 (this release):** `lib/phases/phase2.js`, `lib/phases/phaseUX.js`, `templates/phases/phaseUX.md`.
+- **No remaining gaps.** Confirmed by structural guard test.
+
+**Why a bump.** Observable behavior change: `aitri run-phase architecture` and `aitri run-phase ux` now succeed where they previously failed. Per CLAUDE.md: change in phase lifecycle / observable CLI output → bump.
+
+**Why `— additive` in integrations CHANGELOG.** No artifact schema, no `.aitri` field, no event-type, no CLI command/flag changed. Only fix: previously-failing scenario now succeeds. No prior valid scenario regresses. Same shape as alpha.22.
+
+**Bypass of velocity gate** justified per CLAUDE.md "Purpose over process" exception — Tier-1 bug, real consumer (Ultron) blocked, removal of an incorrect assumption (not new abstraction).
+
+**Pre-stable status.** v2.0.0 stable promotion remains gated on a third-party adopter validating end-to-end. Author canaries clean as of alpha.26 (Hub, Ultron, Zombite, Cesar). The destructive-op audit class is now closed for IDEA.md — three hotfixes converged on a complete fix; the structural guard prevents recurrence.
+
+---
+
 ## [2.0.0-alpha.25] — 2026-05-03 — orphan IDEA.md classified-ref handling
 
 Twenty-fifth staged pre-release on `feat/upgrade-protocol`. Refines alpha.24's all-or-nothing pre-flight scan into a three-bucket schema-aware classifier per ADR-031, so corrections travel forward in the upgrade for fields Aitri owns and the operator's manual triage scope shrinks to references in fields Aitri does not own. Closes the third hotfix in the alpha.17 → alpha.22 → alpha.24 → alpha.25 arc: the principle is now codified, not just patched.
