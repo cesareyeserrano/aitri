@@ -5,6 +5,64 @@
 
 ---
 
+## [2.0.0-alpha.27] — 2026-05-03 — `aitri approve 1` pre-flight scan (producer-side at-approve gate)
+
+Twenty-seventh staged pre-release on `feat/upgrade-protocol`. **Closes the producer-side gap of the IDEA.md absorption arc.** alpha.22/24/25/26 closed consumer-side instances (validate.js, upgrade migrator, phase inputs); alpha.27 closes the original producer at the destructive op itself — `lib/commands/approve.js::archiveIdeaIntoRequirements`.
+
+**The producer-side bug.** Since v0.1.89, `aitri approve 1` archives IDEA.md content into `01_REQUIREMENTS.json#original_brief` and unlinks the file. **The destructive op never scanned downstream artifacts for IDEA.md path references.** Hub paid the cost: `tests/integration/hub-web-only.test.js` did `readFileSync('IDEA.md')` for TC-015h + TC-018f; `04_IMPLEMENTATION_MANIFEST.json::files_modified[i].path === "IDEA.md"`. After approve fired, those refs broke at the next `aitri verify-run` — silently invisible until tests ran.
+
+**The fourth instance of the same class** (chronological):
+1. `validate.js` gating on `fs.existsSync('IDEA.md')` — closed alpha.22.
+2. `lib/upgrade/migrations/from-0.1.65.js::diagnoseOrphanIdea` unlinking without pre-flight — closed alpha.24/25.
+3. `lib/phases/{phase2,phaseUX}.js` declaring IDEA.md as required input — closed alpha.26.
+4. `lib/commands/approve.js::archiveIdeaIntoRequirements` running the destructive op without scanning — **closed by this release**.
+
+**ADR-031 Addendum 2 codifies the producer-side principle.** Addendum 1 (alpha.26) was consumer-side (audit every callsite when destructive op ships). Addendum 2 (this release) is producer-side: the destructive op itself must classify + block + auto-fix at execution time. Bidirectional obligation now codified end-to-end.
+
+**Behavior — exact rules** (mirror of alpha.25 migrator, applied at approve-time):
+
+- Pre-flight runs only on **first approve of Phase 1** + IDEA.md present at root. Re-approves and absent-file states skip the scan (no destructive op to gate against).
+- Classifier (`lib/upgrade/idea-ref-classifier.js`, alpha.25) returns three buckets:
+  - `auto_fixable` — manifest array elements with value `"IDEA.md"` (string) or `{path: "IDEA.md", ...}` (Hub's enriched shape). **Mechanically dropped + re-stamp `artifactHashes['4']` if Phase 4 approved + emit `approve_preflight_autofix` event with before/after hashes.**
+  - `narrative` — anywhere else (free-form JSON, project extensions, Markdown bodies, free-text strings). **BLOCK approve via `err()` with actionable error message listing each ref by file + JSON-path.**
+  - `frozen` — `04_TEST_RESULTS.json` + `05_PROOF_OF_COMPLIANCE.json`. **Silently skip** — immutable historical evidence.
+- Auto-fixes apply BEFORE block check. They are independently committable (operator can `git diff` and revert if intentional). On block path, `saveConfig` runs first to persist the auto-fix events.
+- **No escape flag** — operator's correct path on block is to edit refs and re-run. Adding `--accept-stale-refs` would re-create the silent breakage Addendum 2 is closing.
+
+**Files touched.**
+- `lib/commands/approve.js` — added imports from classifier; added `setPhaseHashIfApproved` helper; added `applyPreflightAutoFixes` + `buildPreflightBlockMessage` helpers; integrated into `cmdApprove` between completion gate and absorb call.
+- `bin/aitri.js` — VERSION bump to `2.0.0-alpha.27`.
+- `package.json` — version bump.
+- `test/commands/approve.test.js` — new describe block `cmdApprove() — alpha.27 pre-flight scan on first-approve of phase 1` with 7 tests covering: block on narrative; block message format (file + JSON-path enumeration); auto-fix manifest then absorb; auto-fix runs even when narrative blocks; frozen silently skipped; clean project regression guard; no trigger on re-approve.
+- `docs/integrations/{README,STATUS_JSON,SCHEMA,ARTIFACTS}.md` — version header bump per release-sync.
+- `docs/integrations/CHANGELOG.md` — entry tagged `— additive` (new event type `approve_preflight_autofix`; no schema field changed; no existing event-shape modified).
+- `docs/Aitri_Design_Notes/DECISIONS.md` — ADR-031 Addendum 2 added.
+- `docs/Aitri_Design_Notes/BACKLOG.md` — "Shipped in alpha.27" subsection added.
+
+**Tests added.** 7 new tests in `test/commands/approve.test.js`. Suite total: 1146 → 1153 passing, 0 failures (`npm run test:all`).
+
+**Canary validation (per ADR-029 — predictions written ahead of execution).** Synthetic projects only, since Hub + Ultron + Cesar + Zombite all have Phase 1 already approved (the gate Addendum 2 closes only fires on first-approve, not retroactively).
+- Synthetic clean (no refs) → approve absorbs as before. Regression guard.
+- Synthetic with manifest auto_fixable only → drops entry + absorbs in one approve.
+- Synthetic with narrative ref in 02_SYSTEM_DESIGN → blocks with actionable error; IDEA.md preserved; original_brief not populated.
+- Synthetic with mixed (auto-fix + narrative) → auto-fix applies, narrative blocks; IDEA.md preserved; auto-fix mutations + event persist.
+- Synthetic with frozen-only (TEST_RESULTS / PROOF_OF_COMPLIANCE) → absorbs without block (frozen silently skipped).
+
+**Why a bump.** New observable behavior in `aitri approve 1` (pre-flight scan can block; can mutate downstream manifests; can emit new event type). Per CLAUDE.md: change in approve gate behavior + new event type → bump.
+
+**Why `— additive` in integrations CHANGELOG.** No artifact schema field changed; no `.aitri` field added or removed; no existing event-shape modified. New event type `approve_preflight_autofix` follows the existing additive-events contract (SCHEMA.md: "unknown event types MUST be tolerated"). New error message is human-facing CLI text, not a parser contract.
+
+**Net effect of ADR-031 + Addenda 1 + 2 (the IDEA.md class is closed):**
+| Phase of destructive op | Coverage | Shipped in |
+|---|---|---|
+| Producer-time at first-approve | Pre-flight scan + block + auto-fix | alpha.27 (this) |
+| Migration-time for already-broken projects | Classifier + advisory + auto-fix | alpha.24 + alpha.25 |
+| Consumer audit (codepaths assuming presence) | Per-callsite enumeration + structural guard test | alpha.22 + alpha.26 |
+
+**Pre-stable status.** v2.0.0 stable promotion remains gated on a third-party adopter validating end-to-end. Author canaries clean as of alpha.27 (Hub, Ultron, Zombite, Cesar). The IDEA.md producer-side gap is empirically closed — six releases (alpha.17, .22, .24, .25, .26, .27) converged on the bidirectional contract codified in ADR-031.
+
+---
+
 ## [2.0.0-alpha.26] — 2026-05-03 — phase 2 + phaseUX no longer require IDEA.md (absorbed-brief regression hotfix)
 
 Twenty-sixth staged pre-release on `feat/upgrade-protocol`. Tier-1 hotfix surfaced 2026-05-03 by Ultron canary post alpha.25 install: re-running `aitri run-phase architecture` on an absorbed-brief project failed with `Missing required file: IDEA.md`. Same incident class as alpha.22 (validate.js), but at a different surface — phase input declarations rather than artifact validators.

@@ -99,6 +99,194 @@ describe('cmdApprove() — first approve of phase 1 archives IDEA.md', () => {
   });
 });
 
+// ── alpha.27: pre-flight scan in approve.js (ADR-031 addendum 2) ────────────
+// Producer-side classifier blocks phase 1 first-approve when downstream
+// artifacts reference IDEA.md as content that would break post-archive.
+// Auto-fixes structural refs (manifest array elements) mechanically.
+// Frozen evidence (04_TEST_RESULTS.json, 05_PROOF_OF_COMPLIANCE.json)
+// silently skipped — preserves immutable history.
+
+describe('cmdApprove() — alpha.27 pre-flight scan on first-approve of phase 1', () => {
+  const reqContent = '{"project_name":"T","functional_requirements":[]}';
+  const ideaContent = '# Brief\n';
+
+  it('BLOCKS first-approve when narrative ref exists in 02_SYSTEM_DESIGN.md', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'IDEA.md', ideaContent);
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+      writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', '# Design\n\nThis project reads IDEA.md occasionally.\n');
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+
+      assert.throws(
+        () => captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr })),
+        /Cannot approve Phase 1.*IDEA\.md absorption would break/s,
+      );
+      // IDEA.md must be preserved
+      assert.ok(fs.existsSync(path.join(dir, 'IDEA.md')), 'IDEA.md must NOT be unlinked when narrative blocks');
+      // original_brief NOT populated
+      const updated = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(updated.original_brief, undefined);
+      // Phase 1 NOT approved
+      const c = loadConfig(dir);
+      assert.ok(!(c.approvedPhases || []).includes(1));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('BLOCK message lists narrative refs grouped by file with field paths', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'IDEA.md', ideaContent);
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+      writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', '# Design\n\nIDEA.md mention.\n');
+      writeFile(dir, 'spec/03_TEST_CASES.json', JSON.stringify({
+        test_cases: [{ id: 'TC-001', test_data: { files: ['IDEA.md'] } }]
+      }, null, 2));
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+
+      let caughtMsg = null;
+      try {
+        captureAll(() => cmdApprove({ dir, args: ['requirements'], err: (m) => { caughtMsg = m; throw new Error(m); } }));
+      } catch { /* expected */ }
+
+      assert.ok(caughtMsg, 'expected err() to be invoked');
+      assert.match(caughtMsg, /spec\/02_SYSTEM_DESIGN\.md/);
+      assert.match(caughtMsg, /spec\/03_TEST_CASES\.json/);
+      assert.match(caughtMsg, /test_cases\[0\]\.test_data\.files\[0\]/);
+      assert.match(caughtMsg, /body/);  // markdown body refs labeled 'body'
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('AUTO-FIX drops files_modified[i].path === "IDEA.md" then proceeds with absorb (no narrative)', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'IDEA.md', ideaContent);
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+      writeFile(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json', JSON.stringify({
+        files_modified: [{ path: 'IDEA.md', change: 'rewrote' }, { path: 'src/main.js', change: 'edit' }],
+      }, null, 2));
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+
+      const out = captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+
+      // Auto-fix log line emitted
+      assert.match(out, /Pre-flight auto-fixed/);
+      assert.match(out, /04_IMPLEMENTATION_MANIFEST\.json/);
+
+      // Manifest IDEA entry dropped
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), 'utf8'));
+      assert.equal(m.files_modified.length, 1);
+      assert.equal(m.files_modified[0].path, 'src/main.js');
+
+      // Absorb proceeded (IDEA gone, brief absorbed)
+      assert.ok(!fs.existsSync(path.join(dir, 'IDEA.md')));
+      const r = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(r.original_brief, ideaContent);
+
+      // Phase 1 approved
+      const c = loadConfig(dir);
+      assert.ok(c.approvedPhases.includes(1));
+
+      // Auto-fix event recorded
+      const fixEvent = c.events.find(e => e.event === 'approve_preflight_autofix');
+      assert.ok(fixEvent, 'approve_preflight_autofix event must be recorded');
+      assert.equal(fixEvent.target, 'spec/04_IMPLEMENTATION_MANIFEST.json');
+      assert.ok(fixEvent.before_hash && fixEvent.after_hash);
+      assert.notEqual(fixEvent.before_hash, fixEvent.after_hash);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('AUTO-FIX runs even when narrative blocks absorb (independently committable)', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'IDEA.md', ideaContent);
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+      writeFile(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json', JSON.stringify({
+        files_modified: [{ path: 'IDEA.md', change: 'x' }, { path: 'a.js', change: 'y' }],
+      }, null, 2));
+      writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', '# Design\n\nIDEA.md narrative.\n');  // blocks
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+
+      try {
+        captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+      } catch { /* expected — narrative blocks */ }
+
+      // Auto-fix DID apply (manifest IDEA entry dropped)
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), 'utf8'));
+      assert.equal(m.files_modified.length, 1, 'auto-fix must apply even when block follows');
+      assert.equal(m.files_modified[0].path, 'a.js');
+
+      // IDEA preserved (absorb blocked)
+      assert.ok(fs.existsSync(path.join(dir, 'IDEA.md')));
+
+      // Auto-fix event persisted
+      const c = loadConfig(dir);
+      const fixEvent = (c.events || []).find(e => e.event === 'approve_preflight_autofix');
+      assert.ok(fixEvent, 'auto-fix event must persist even on block');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('FROZEN refs silently skipped (only frozen → absorb proceeds)', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'IDEA.md', ideaContent);
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+      // Frozen evidence with IDEA.md mention — must NOT block
+      writeFile(dir, 'spec/04_TEST_RESULTS.json', JSON.stringify({
+        results: [{ tc_id: 'TC-001', notes: 'IDEA.md was checked' }],
+      }, null, 2));
+      writeFile(dir, 'spec/05_PROOF_OF_COMPLIANCE.json', JSON.stringify({
+        evidence: 'grep IDEA.md returned zero',
+      }, null, 2));
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+
+      captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+
+      // Absorb proceeded — frozen did NOT block
+      assert.ok(!fs.existsSync(path.join(dir, 'IDEA.md')));
+      const r = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(r.original_brief, ideaContent);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('CLEAN project (no refs anywhere) absorbs as before — regression guard', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'IDEA.md', ideaContent);
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+      writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', '# Design\n\nNo path refs here.\n');
+      writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1] }));
+
+      captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+
+      assert.ok(!fs.existsSync(path.join(dir, 'IDEA.md')));
+      const r = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      assert.equal(r.original_brief, ideaContent);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does NOT trigger pre-flight on re-approve (already approved)', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'IDEA.md', ideaContent);  // present + narrative ref present
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', reqContent);
+      writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', '# Design\n\nIDEA.md narrative.\n');
+      writeFile(dir, '.aitri', minimalConfig({
+        approvedPhases:  [1],   // already approved
+        completedPhases: [1],
+        artifactHashes:  { '1': hashArtifact(reqContent) },
+      }));
+
+      // Re-approve must NOT fire pre-flight (no archive happens on re-approve)
+      assert.doesNotThrow(() =>
+        captureAll(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }))
+      );
+      // IDEA.md preserved (re-approve doesn't archive)
+      assert.ok(fs.existsSync(path.join(dir, 'IDEA.md')));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 describe('cmdApprove() — phase 1 approve when IDEA.md is already absent', () => {
   let dir;
   const reqContent = '{"project_name":"T","functional_requirements":[]}';

@@ -851,3 +851,42 @@ ADR-031 codified the **producer side** of the destructive-op contract (the migra
 - Decides: the bidirectional obligation is part of ADR-031's contract.
 - Decides: the post-destructive audit protocol is the operationalization of "consumer-side coverage".
 - Does not decide: whether to add a generic "files Aitri removes" registry that could automate the audit. That's a future enhancement gated on a second destructive op shipping (today only IDEA.md is removed; one data point is insufficient).
+
+### Addendum 2 — 2026-05-03 (alpha.27) — Producer-side at-approve-time pre-flight scan
+
+Addendum 1 codified the consumer-side audit (every callsite that depends on a file's presence must be enumerated when the destructive op ships). Addendum 2 closes the **fourth instance of the same bug class**: `lib/commands/approve.js::archiveIdeaIntoRequirements` (since v0.1.89) unlinks IDEA.md on first approve of Phase 1 without scanning whether downstream artifacts reference the file as a runtime path. Hub paid the cost: TC-015h + TC-018f referenced `IDEA.md` from `tests/integration/hub-web-only.test.js` via `readFileSync`, and `04_IMPLEMENTATION_MANIFEST.json::files_modified[i].path === "IDEA.md"`. After the v0.1.89-shipped approve absorbed and unlinked the file, those refs broke at the next `aitri verify-run` — silently in the spec, loudly in the test runner.
+
+**The four instances of the class** (chronological, all on the IDEA.md producer event):
+1. `validate.js` gating on `fs.existsSync('IDEA.md')` → falsely flagged absorbed-brief projects. Closed alpha.22.
+2. `lib/upgrade/migrations/from-0.1.65.js::diagnoseOrphanIdea` unlinking without pre-flight scan. Closed alpha.24 (regex pre-flight) + alpha.25 (schema-aware classifier).
+3. `lib/phases/{phase2,phaseUX}.js` declaring IDEA.md as required input (dead declaration; gate hard-failed on missing). Closed alpha.26.
+4. `lib/commands/approve.js::archiveIdeaIntoRequirements` running the destructive op without scanning. Closed by this release (alpha.27) — producer-side pre-flight scan added to approve.
+
+**Producer-side principle.** Addendum 1 (consumer-side) operates on already-shipped destructive ops, auditing every callsite. **Addendum 2 (producer-side) operates at the destructive op itself, gating it.**
+
+**Operational rule for any destructive on-disk operation in Aitri:**
+
+> Before executing the destructive op (unlink, rename, move), the producing command MUST classify downstream references using the schema-aware classifier (per ADR-031 §main). Apply auto_fixable transforms mechanically. If narrative refs remain, BLOCK the operation with an actionable error listing each ref by file + JSON-path. Frozen evidence is silently skipped.
+>
+> The destructive op proceeds only when post-classification narrative count is zero.
+
+**Why block instead of warn?** A warning operator can ignore is a future hotfix. The Hub case proved this: the v0.1.89 approve had no scan at all, no warn, no block — pure silent destruction. Addendum 1 retroactively added detection in the migrator (alpha.24/25), but operators who never ran `adopt --upgrade` saw nothing until verify-run failed days later. Hard block at the producer is the only surface that prevents the next case before it ships.
+
+**Auto-fix rules (same as ADR-031 §main):** drop element from documented manifest arrays (`files_created`, `files_modified`, `test_files`); re-stamp `artifactHashes[<phase>]` if the affected phase was approved; emit `approve_preflight_autofix` event with before/after hashes. Auto-fixes apply even when narrative blocks the op — they are independently valid structural cleanup; operator inspects via `git diff` and can revert if intentional.
+
+**No escape hatch for the block.** A `--accept-stale-refs` or `--force-absorb` flag would re-create the silent breakage Addendum 2 is closing. The operator's correct path is: edit refs, then re-run approve. This aligns with the principle established 2026-05-03 by the user: *IDEA.md is transient; refs that depend on its presence must be corrected, not silenced*. The advisory persistence in `diagnoseOrphanIdea`'s "ambiguous case" branch is also kept (no silencer flag). The advisory IS the design.
+
+**Scope of Addendum 2:**
+- Decides: at-approve-time pre-flight scan is the producer-side operationalization of ADR-031.
+- Decides: hard block on narrative; auto-fix structural; silently skip frozen.
+- Decides: no escape flag — the only correct response to the block is to edit refs.
+- Implementation note: only the IDEA.md absorption case exists today (`approve.js::archiveIdeaIntoRequirements`). The pattern reuses `lib/upgrade/idea-ref-classifier.js`. When a second destructive op ships, generalize the classifier and apply the same protocol.
+
+**Net effect of ADR-031 + addenda 1 + 2:**
+| Phase of destructive op | Coverage |
+|---|---|
+| Producer-time (when the op fires) | Addendum 2 — pre-flight scan in the command itself; block if refs would break |
+| Migration-time (retroactive for old projects) | ADR-031 §main + alpha.24/25 — classify, auto-fix, flag |
+| Consumer audit (codepaths assuming file presence) | Addendum 1 — enumerate every callsite, reclassify, structural guard test |
+
+The class is closed for IDEA.md. The pattern generalizes for any future destructive op.

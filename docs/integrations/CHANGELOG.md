@@ -18,6 +18,60 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-alpha.27 (2026-05-03) — `aitri approve 1` pre-flight scan (producer-side IDEA.md absorption gate) — additive
+
+**`aitri approve 1` now scans downstream artifacts for IDEA.md references before executing the absorb + unlink** (additive — new event type `approve_preflight_autofix`, new error message surface; no schema field changed; no existing event-shape modified). Closes the producer-side gap of the alpha.17 → alpha.22 → alpha.24 → alpha.25 → alpha.26 → alpha.27 hotfix arc per [ADR-031 Addendum 2](../Aitri_Design_Notes/DECISIONS.md#addendum-2--2026-05-03-alpha27--producer-side-at-approve-time-pre-flight-scan).
+
+**Behaviour change for subproducts: minimal.** No artifact field changed; no `.aitri` field added or removed; existing `upgrade_migration` event shape unchanged. New event type `approve_preflight_autofix` is additive — old readers ignore unknown event types per the existing reader-guidance contract (SCHEMA.md: "unknown event types MUST be tolerated").
+
+**What changes for operators:**
+
+- `aitri approve 1` (first-time approve only) now classifies downstream IDEA.md references using the alpha.25 schema-aware classifier:
+  - **Auto-fixable** (manifest array elements `files_created[*]`, `files_modified[*]`, `test_files[*]` with value `"IDEA.md"` or `{path: "IDEA.md", ...}`) → mechanically dropped + `artifactHashes[<phase>]` re-stamped + `approve_preflight_autofix` event emitted.
+  - **Narrative** (free-form JSON, project-extension shapes, Markdown bodies) → **BLOCKS the approve** with actionable error listing each reference by file + JSON-path. Operator edits refs and re-runs.
+  - **Frozen** (`04_TEST_RESULTS.json`, `05_PROOF_OF_COMPLIANCE.json`) → silently skipped (immutable historical evidence by design; same rule as alpha.25 migrator).
+- Re-approve of Phase 1 (`wasAlreadyApproved`) does NOT trigger the scan — the absorb has already happened or never will. No change to existing re-approve behavior.
+- No escape flag (`--accept-stale-refs` etc.) — re-creating silent breakage is not allowed. Operator's only correct path on block is to edit refs.
+
+**New event type — `approve_preflight_autofix`:**
+
+```json
+{
+  "at": "2026-05-03T22:14:51.123Z",
+  "event": "approve_preflight_autofix",
+  "phase": null,
+  "target": "spec/04_IMPLEMENTATION_MANIFEST.json",
+  "transform": "drop 1 stale IDEA.md ref(s) from files_modified[0].path",
+  "before_hash": "ae97a0eb...",
+  "after_hash":  "923e43e6..."
+}
+```
+
+| Field | Type | Always present | Description |
+|---|---|---|---|
+| `at` | `string` ISO 8601 | yes | When the auto-fix ran |
+| `event` | `string` | yes | Literal `"approve_preflight_autofix"` |
+| `phase` | `null` | yes | Auto-fix is independent of phase being approved (uses `null` to disambiguate from phase-bound events) |
+| `target` | `string` | yes | Artifact path (relative to project root) where auto-fix applied |
+| `transform` | `string` | yes | Human-readable summary listing the JSON-paths dropped |
+| `before_hash` | `string` SHA-256 | yes | Hash of artifact before auto-fix |
+| `after_hash` | `string` SHA-256 | yes | Hash of artifact after auto-fix |
+
+**Why `— additive`:**
+
+- No artifact schema field changed.
+- No `.aitri` field added, removed, or renamed.
+- New event type follows the existing additive-events contract — old readers tolerate unknown event types.
+- New error surface (the block message) is human-facing CLI text — not a contract surface; subproducts must not parse it.
+- Auto-fix mutations to manifest arrays are content-only (drop array elements); the array fields' shape is unchanged.
+
+**Cross-references:**
+- ADR-031 Addendum 2 — codifies the producer-side principle (this release).
+- alpha.25 release notes — same classifier reused (`lib/upgrade/idea-ref-classifier.js`).
+- alpha.26 release notes — phase 2 + phaseUX inputs hotfix; producer-side scan would have prevented this from being needed for new projects.
+
+---
+
 ## v2.0.0-alpha.26 (2026-05-03) — phase 2 + phaseUX no longer require IDEA.md (absorbed-brief regression hotfix) — additive
 
 **`aitri run-phase architecture` and `aitri run-phase ux` now succeed on projects whose IDEA.md was absorbed into `01_REQUIREMENTS.json#original_brief`** (additive — no schema change, no event-shape change, no `.aitri` field change). Closes the post-archive regression class established by ADR-031 addendum: every code path that previously assumed IDEA.md presence must be audited when the destructive op ships.
