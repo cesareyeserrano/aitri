@@ -5,6 +5,76 @@
 
 ---
 
+## [2.0.0-rc.1] — 2026-05-12 — pre-promotion P1 bundle + maturity signal (end of alpha cycle)
+
+**First release candidate after 27 alpha iterations on `feat/upgrade-protocol`.** Closes both P1s surfaced by the Codex canary on Ultron 2026-05-11 (BACKLOG.md "Pre-promotion findings") AND signals end of alpha cycle. The semver bump from `alpha.27` straight to `rc.1` skips an intermediate `alpha.28` — the technical work is what an alpha.28 would have shipped, but with no further P1s pending it would have been the alpha-to-rc handover anyway. One release, one commit, one tag.
+
+**Why rc.1 and not v2.0.0 stable.** The third-party adopter gate (CLAUDE.md Critical rules) is not yet met. All canary validation is from author-owned projects (Hub, Ultron, Zombite, Cesar, Go-on-RPi). rc.1 communicates "stable in intent, code is clean, semver-frozen until promoted" without making the irreversible commitment that `v2.0.0` would. Stable promotion happens once an external adopter exercises the pipeline end-to-end without surfacing new defect classes — that gate also got reinforced this session (four distinct Core/Hub contract gaps surfaced via the canary work; promoting on author canaries alone would have shipped them silently).
+
+**Local rollback target.** `v0.1.90` tagged locally at `601c26c` 2026-05-12 (last release commit on main pre-v2 work). Not pushed.
+
+Bundled because they compound — upstream P1.A fires after every feature approval on flat-codebase projects; downstream P1.B locks the operator out of resolving once any blocking bug exists. Together they produced a visible deadlock in Ultron's transcript.
+
+### P1.A — `aitri feature approve <name> 4` now advances root `normalizeState.baseRef`
+
+**The bug.** `cmdApprove` is scope-aware: `dir` and `loadConfig(dir)` resolve to the scope's `.aitri/config.json` — for feature scope that is `features/<name>/.aitri/config.json`, not the root. The baseline-advance block at `lib/commands/approve.js:392-402` therefore wrote only to the feature's normalizeState, leaving the root frozen at the pre-feature SHA. On flat-codebase projects (Go monolith, Rust workspace, single-package Python — where feature implementation files live at root like `internal/alerts/engine.go` rather than sandboxed under `features/<name>/`), every feature Phase 4 approval left root reporting `deployable: Not ready — Code changes outside pipeline` against its own legitimately-approved feature artifacts. Ultron Codex canary 2026-05-11 demonstrated: baseline `401678e8` (pre-feature) vs HEAD `8d7ab9b` (post-`network-alerts`), every flagged file a legitimate feature artifact. Same defect class as the 2026-04-27 normalize friction cycle that drove N1 allowlist: false-positive triggers → operator workaround commits → eroded signal credibility.
+
+**The fix.** When approving in feature scope, after writing the feature's baseline, **also** stamp the root project's baseline at the same git HEAD. Conceptual model: root baseline = last point where any pipeline sealed its code state. Approving any Phase 4 means that pipeline's code is reviewed-and-approved; from root drift detection's perspective, that SHA is "all approved-to-date".
+
+**Files touched.**
+- `lib/state.js` — added `findProjectRoot(startDir)` (walks up looking for ancestor `.aitri/`) and `stampNormalizeBaseline(targetDir)` (idempotent helper: reads target config, advances baseline at git HEAD or mtime fallback, saves; no-op on non-aitri dirs via `!config.aitriVersion` guard).
+- `lib/commands/approve.js` — in the `phase === 4` block, after the in-memory current-scope advance, call `stampNormalizeBaseline(featureRoot)` when `featureRoot` is set. Cross-references BACKLOG entry inline.
+
+**Tests added** (`test/commands/approve.test.js` — new describe block `feature approve 4 advances ROOT normalize baseline (P1 2026-05-12)`, +4 tests):
+- Feature approve 4 advances BOTH feature and root normalizeState to same git SHA (the core fix).
+- Root approve 4 (no `featureRoot`) only advances root baseline — regression lock.
+- Feature approve 4 with non-aitri parent dir does not crash — graceful no-op via `aitriVersion` guard.
+- Sequential feature approvals advance root baseline forward each time (forward-only, monotonic).
+
+**Edge cases covered:**
+- Multiple features with WIP in parallel: first to approve advances root baseline past the other's WIP. Acceptable — uncommitted WIP gets reviewed in its own feature's Phase 4 review, not in root drift detection.
+- Feature cascade-invalidation: feature's normalizeState clears (existing behavior), root's stays advanced. New post-cascade changes surface as drift correctly against the latest baseline.
+- Mtime fallback (no git): both writes record timestamp; feature and root use distinct millisecond-instant timestamps — that's fine, both are valid baselines for their scope.
+
+### P1.B — Next-actions ladder suppresses `aitri normalize` when blocking bugs exist (deadlock fix)
+
+**The bug.** `aitri normalize --resolve` refuses to run when `bugs.blocking > 0` (gate at `lib/commands/normalize.js:148-157`). But the next-action ladder in `lib/snapshot.js:727-744` emitted `aitri normalize` as priority-4 regardless of bug state. Operator followed the ladder → ran normalize → got rejected → fixed bugs → re-checked status → ladder still said "run aitri normalize". Visible deadlock between suggestion and command. Compounded with P1.A on Ultron's transcript: feature completion triggered false-positive normalize-pending (P1.A) AND operator had 2 active bugs, blocking `--resolve` (P1.B). No clean forward path.
+
+**The fix.** Wrap both normalize emission branches in `lib/snapshot.js:726-744` with `if (bugs.blocking === 0)`. The blocking-bug action already surfaces above normalize at priority 3 (the operator's actual blocker); normalize re-emerges automatically when bugs close. Pure ladder-display change — `normalizeState` state field unchanged, no schema impact, no subproduct contract change (subproducts read `.aitri.normalizeState` directly, not `nextActions[]` text).
+
+**Decision: suppress, not reword.** Telling the operator "you can't normalize yet" while keeping it in the ladder is theater — the ladder's contract is "next thing to do"; an action the command rejects is not a next thing.
+
+**Files touched.**
+- `lib/snapshot.js` — conditional wrap around priority-4 normalize emission. Comment cross-references BACKLOG entry.
+
+**Tests added** (`test/snapshot.test.js` — new describe block `nextActions — normalize suppression on blocking bugs (P1 2026-05-12)`, +4 tests):
+- Critical/high + open: normalize MUST NOT appear; blocking-bug P3 surfaces instead.
+- Blocking bug closed + normalize still pending: normalize re-emerges as P4.
+- High + in_progress also suppresses (mirrors `--resolve` gate's `open || in_progress` semantics).
+- Low severity + open does NOT suppress — regression lock for the "not-blocking" branch.
+
+### Why these two were bundled
+
+The compound failure mode in Ultron's transcript made testing them independently artificial. The downstream test "blocking bugs + normalize pending → no normalize in ladder" is only meaningful when feature-approval workflows can actually trigger a clean normalize-pending state — which depends on the upstream fix. Shipping P1.A alone would have left the ladder still emitting normalize incorrectly in any project with bugs; shipping P1.B alone would have left flat-codebase projects with permanent false-positive normalize-pending after feature work.
+
+### Pre-promotion status (as of rc.1)
+
+Both P1s from BACKLOG.md "Pre-promotion findings (Codex canary 2026-05-11)" are now closed. Four open items remain in that section (2 P2 + 2 P3), all classified as **post-promotion cleanup, not blockers**:
+- P2 — Template binary classification of changes (`templates/AGENTS.md` "functional vs minor").
+- P2 — `status --json` bugs payload too narrow — Hub cannot derive per-severity counts.
+- P3 — Agent-file refresh mechanism (coupled to template P2).
+- P3 — Validate text output overlaps ~70% with `status`.
+
+The third-party adopter gate (CLAUDE.md Critical rules) is **NOT YET MET**. v0.1.90 was locally tagged at commit `601c26c` 2026-05-12 as the documented rollback target. Promotion decision (override + ADR vs `2.0.0-rc.1`) deferred to a separate conversation now that the technical P1s are clean.
+
+### Other
+
+- Tests: 1153 → 1161 (+8). No existing test regressions.
+- No schema change; no `docs/integrations/CHANGELOG.md` entry needed (P1.A behavioral cadence clarification documented in SCHEMA.md note; P1.B is pure ladder display).
+- Local-only `v0.1.90` tag created pointing at `601c26c` (last release on main pre-v2 work). Not pushed.
+
+---
+
 ## [2.0.0-alpha.27] — 2026-05-03 — `aitri approve 1` pre-flight scan (producer-side at-approve gate)
 
 Twenty-seventh staged pre-release on `feat/upgrade-protocol`. **Closes the producer-side gap of the IDEA.md absorption arc.** alpha.22/24/25/26 closed consumer-side instances (validate.js, upgrade migrator, phase inputs); alpha.27 closes the original producer at the destructive op itself — `lib/commands/approve.js::archiveIdeaIntoRequirements`.

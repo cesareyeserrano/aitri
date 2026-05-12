@@ -1149,3 +1149,96 @@ describe('nextActions — terminal state (F11)', () => {
     } finally { cleanup(dir); }
   });
 });
+
+// ── P1.B (rc.1): suppress P4 normalize when blocking bugs exist ──────────
+// Closes BACKLOG.md "Pre-promotion findings (Codex canary 2026-05-11)" — P1
+// downstream. Before this fix, the ladder emitted `aitri normalize` while the
+// command itself refused to --resolve because of open critical/high bugs,
+// producing a visible deadlock: ladder → run normalize → rejected → fix bugs
+// → ladder still says run normalize. Now normalize is suppressed from
+// nextActions when bugs.blocking > 0; the blocking-bug P3 action stays as the
+// surfaced next step. Normalize re-emerges automatically when bugs close.
+
+describe('nextActions — normalize suppression on blocking bugs (P1 2026-05-12)', () => {
+  // Helper: the ladder check at snapshot.js:727 reads pipelines[].normalizeState
+  // (per-pipeline 'pending'|null derived at snapshot.js:198), NOT snapshot.normalize.state
+  // (which is the detectUncountedChanges output and is null when baseRef is absent).
+  // Asserting on the per-pipeline field is the correct way to verify the ladder's input.
+  const rootNormalizeState = (snap) =>
+    snap.pipelines.find(p => p.scopeType === 'root')?.normalizeState;
+
+  it('suppresses P4 normalize-pending when blocking bug is open', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir, {
+        normalizeState: { status: 'pending' },
+      });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [{ id: 'BG-001', title: 'critical thing', severity: 'critical', status: 'open' }],
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.bugs.blocking, 1,                'blocking bug present');
+      assert.equal(rootNormalizeState(snap), 'pending',  'root normalizeState is pending');
+      const normalizeAction = snap.nextActions.find(a => a.command === 'aitri normalize');
+      assert.equal(normalizeAction, undefined,
+        'normalize must NOT be in nextActions while a blocking bug is open');
+      assert.ok(snap.nextActions.some(a => a.priority === 3),
+        'blocking-bug P3 action must surface instead');
+    } finally { cleanup(dir); }
+  });
+
+  it('re-emits normalize once blocking bug is closed', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir, {
+        normalizeState: { status: 'pending' },
+      });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [{ id: 'BG-001', title: 't', severity: 'critical', status: 'closed' }],
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.bugs.blocking, 0,                'no blocking bugs');
+      assert.equal(rootNormalizeState(snap), 'pending',  'normalize still pending');
+      const normalizeAction = snap.nextActions.find(a => a.command === 'aitri normalize');
+      assert.ok(normalizeAction, 'normalize must re-emerge when no blocking bugs');
+      assert.equal(normalizeAction.priority, 4);
+    } finally { cleanup(dir); }
+  });
+
+  it('high + in_progress bug suppresses normalize (matches normalize --resolve gate)', () => {
+    // normalize.js:148-157 gate counts severity ∈ {critical, high} AND
+    // status ∈ {open, in_progress} as blocking. The ladder must mirror.
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir, {
+        normalizeState: { status: 'pending' },
+      });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [{ id: 'BG-001', title: 't', severity: 'high', status: 'in_progress' }],
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.bugs.blocking, 1,
+        'in_progress + high counts as blocking (matches normalize --resolve gate)');
+      assert.equal(snap.nextActions.find(a => a.command === 'aitri normalize'), undefined,
+        'normalize stays out of ladder while high+in_progress blocking bug exists');
+    } finally { cleanup(dir); }
+  });
+
+  it('low severity + open does NOT suppress normalize (regression lock)', () => {
+    // Low / medium bugs are not blocking — operator can still run normalize.
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir, {
+        normalizeState: { status: 'pending' },
+      });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [{ id: 'BG-001', title: 't', severity: 'low', status: 'open' }],
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.bugs.blocking, 0, 'low severity is not blocking');
+      const action = snap.nextActions.find(a => a.command === 'aitri normalize');
+      assert.ok(action, 'normalize must surface — low bug is not a deadlock cause');
+      assert.equal(action.priority, 4);
+    } finally { cleanup(dir); }
+  });
+});

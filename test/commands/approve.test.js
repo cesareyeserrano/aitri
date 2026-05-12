@@ -849,3 +849,166 @@ describe('cmdApprove() — feature-context PIPELINE INSTRUCTION carries `feature
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
+
+// ── P1.A (rc.1): feature approve 4 advances ROOT normalize baseline ──────
+// Closes BACKLOG.md "Pre-promotion findings (Codex canary 2026-05-11)" — P1
+// upstream. Before this fix, feature-approve-4 advanced only the feature's
+// .aitri normalizeState, leaving root frozen at the pre-feature baseline.
+// On flat-codebase projects (Go monolith, single-package Python, Rust workspace)
+// every feature completion left root in apparent drift against its own
+// legitimately-approved feature-implementation files.
+
+import { execSync } from 'child_process';
+
+function gitInit(d) {
+  execSync('git init -q', { cwd: d });
+  execSync('git config user.email a@b.c', { cwd: d });
+  execSync('git config user.name Test',   { cwd: d });
+  execSync('git config commit.gpgsign false', { cwd: d });
+}
+function gitAddCommit(d, msg) {
+  execSync('git add -A', { cwd: d });
+  execSync(`git commit -q --no-verify -m "${msg}"`, { cwd: d });
+}
+function gitHead(d) {
+  return execSync('git rev-parse HEAD', { cwd: d }).toString().trim();
+}
+
+describe('cmdApprove() — feature approve 4 advances ROOT normalize baseline (P1 2026-05-12)', () => {
+
+  it('feature approve 4 advances BOTH feature and root normalizeState (git method)', () => {
+    const rootDir = tmpDir();
+    try {
+      // Project root: aitri project + git repo
+      writeFile(rootDir, '.aitri', minimalConfig({ aitriVersion: '2.0.0-rc.1' }));
+      const featureDir = path.join(rootDir, 'features', 'foo');
+      writeFile(featureDir, '.aitri', minimalConfig({
+        aitriVersion: '2.0.0-rc.1',
+        approvedPhases: [1, 2, 3],
+        completedPhases: [1, 2, 3, 4],
+      }));
+      writeFile(featureDir, 'spec/04_IMPLEMENTATION_MANIFEST.json',
+        '{"files_created":[{"path":"internal/alerts/engine.go"}]}');
+      gitInit(rootDir);
+      gitAddCommit(rootDir, 'initial');
+
+      const expectedSha = gitHead(rootDir);
+      assert.equal(loadConfig(rootDir).normalizeState, undefined,
+        'root has no baseline yet (fresh project)');
+
+      captureAll(() =>
+        cmdApprove({
+          dir: featureDir, args: ['build'], err: noopErr,
+          featureRoot: rootDir, scopeName: 'foo',
+        })
+      );
+
+      const featureAfter = loadConfig(featureDir).normalizeState;
+      const rootAfter    = loadConfig(rootDir).normalizeState;
+
+      assert.equal(featureAfter.baseRef, expectedSha, 'feature baseline at HEAD');
+      assert.equal(featureAfter.method,  'git');
+      assert.equal(featureAfter.status,  'resolved');
+
+      assert.equal(rootAfter.baseRef, expectedSha,
+        'root baseline at HEAD — this is the P1 fix; before fix, root.baseRef was undefined');
+      assert.equal(rootAfter.method,  'git');
+      assert.equal(rootAfter.status,  'resolved');
+    } finally { fs.rmSync(rootDir, { recursive: true, force: true }); }
+  });
+
+  it('root approve 4 only advances root baseline — regression lock (no cross-write)', () => {
+    const rootDir = tmpDir();
+    try {
+      writeFile(rootDir, '.aitri', minimalConfig({
+        aitriVersion: '2.0.0-rc.1',
+        completedPhases: [4],
+      }));
+      writeFile(rootDir, 'spec/04_IMPLEMENTATION_MANIFEST.json',
+        '{"files_created":[]}');
+
+      captureAll(() => cmdApprove({ dir: rootDir, args: ['build'], err: noopErr }));
+
+      const cfg = loadConfig(rootDir);
+      assert.ok(cfg.normalizeState,           'root baseline written');
+      assert.ok(cfg.normalizeState.baseRef,   'baseRef present');
+      assert.equal(cfg.normalizeState.status, 'resolved');
+    } finally { fs.rmSync(rootDir, { recursive: true, force: true }); }
+  });
+
+  it('feature approve 4 with non-aitri parent dir does not crash (graceful no-op on parent)', () => {
+    const tmpRoot = tmpDir();
+    try {
+      // tmpRoot has NO .aitri config — parent is not an aitri project
+      const featureDir = path.join(tmpRoot, 'features', 'foo');
+      writeFile(featureDir, '.aitri', minimalConfig({
+        aitriVersion: '2.0.0-rc.1',
+        approvedPhases: [1, 2, 3],
+        completedPhases: [1, 2, 3, 4],
+      }));
+      writeFile(featureDir, 'spec/04_IMPLEMENTATION_MANIFEST.json',
+        '{"files_created":[{"path":"x"}]}');
+
+      // Must not throw
+      captureAll(() =>
+        cmdApprove({
+          dir: featureDir, args: ['build'], err: noopErr,
+          featureRoot: tmpRoot, scopeName: 'foo',
+        })
+      );
+
+      // Feature baseline still advanced normally
+      assert.ok(loadConfig(featureDir).normalizeState,
+        'feature baseline advanced even when parent is non-aitri');
+      // Parent stays unmodified — no .aitri config created
+      assert.ok(!fs.existsSync(path.join(tmpRoot, '.aitri')) ||
+                !loadConfig(tmpRoot).aitriVersion,
+        'parent never bootstrapped as aitri project');
+    } finally { fs.rmSync(tmpRoot, { recursive: true, force: true }); }
+  });
+
+  it('sequential feature approvals advance root baseline forward each time', () => {
+    const rootDir = tmpDir();
+    try {
+      writeFile(rootDir, '.aitri', minimalConfig({ aitriVersion: '2.0.0-rc.1' }));
+      const fooDir = path.join(rootDir, 'features', 'foo');
+      const barDir = path.join(rootDir, 'features', 'bar');
+      writeFile(fooDir, '.aitri', minimalConfig({
+        aitriVersion: '2.0.0-rc.1',
+        approvedPhases: [1, 2, 3], completedPhases: [1, 2, 3, 4],
+      }));
+      writeFile(fooDir, 'spec/04_IMPLEMENTATION_MANIFEST.json',
+        '{"files_created":[{"path":"a"}]}');
+      writeFile(barDir, '.aitri', minimalConfig({
+        aitriVersion: '2.0.0-rc.1',
+        approvedPhases: [1, 2, 3], completedPhases: [1, 2, 3, 4],
+      }));
+      writeFile(barDir, 'spec/04_IMPLEMENTATION_MANIFEST.json',
+        '{"files_created":[{"path":"b"}]}');
+      gitInit(rootDir);
+      gitAddCommit(rootDir, 'initial both features');
+
+      const sha1 = gitHead(rootDir);
+
+      captureAll(() => cmdApprove({
+        dir: fooDir, args: ['build'], err: noopErr,
+        featureRoot: rootDir, scopeName: 'foo',
+      }));
+      assert.equal(loadConfig(rootDir).normalizeState.baseRef, sha1,
+        'root advanced to sha1 after approving foo');
+
+      // Simulate another commit (real-world: bar feature work)
+      fs.writeFileSync(path.join(rootDir, 'newfile.txt'), 'x');
+      gitAddCommit(rootDir, 'bar work + foo bookkeeping');
+      const sha2 = gitHead(rootDir);
+      assert.notEqual(sha1, sha2);
+
+      captureAll(() => cmdApprove({
+        dir: barDir, args: ['build'], err: noopErr,
+        featureRoot: rootDir, scopeName: 'bar',
+      }));
+      assert.equal(loadConfig(rootDir).normalizeState.baseRef, sha2,
+        'root advanced to sha2 after approving bar (forward-only)');
+    } finally { fs.rmSync(rootDir, { recursive: true, force: true }); }
+  });
+});

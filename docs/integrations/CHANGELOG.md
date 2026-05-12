@@ -18,6 +18,37 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.1 (2026-05-12) — feature-approve cascades root normalize baseline; ladder coherence with `normalize --resolve` gate — additive
+
+> **Semver step note.** This release jumps past `alpha.28` directly to `rc.1` to signal end of alpha cycle. Stable v2.0.0 promotion is still gated on the third-party adopter rule (CLAUDE.md Critical rules); rc.1 means "stable in intent, awaiting external validation". Subproducts should treat rc.1 as the upgrade target for v2.0.0 readiness work, but stable consumers should keep waiting until v2.0.0 final.
+
+
+**Two P1 fixes bundled from BACKLOG.md "Pre-promotion findings (Codex canary 2026-05-11)".** No schema change, no event-shape change, no new fields. Both changes correct the **behavior** of existing surfaces — the data subproducts receive becomes more accurate, never less.
+
+### `.aitri.normalizeState.baseRef` update cadence (P1.A)
+
+`aitri feature approve <name> 4` now also stamps the **root** project's `normalizeState.baseRef` at current git HEAD, in addition to the feature's own. Before this release, only the feature scope's normalizeState advanced — the root pipeline stayed frozen at the pre-feature SHA. On flat-codebase projects (Go monolith, Rust workspace, single-package Python) this caused root drift detection to flag every legitimately-approved feature-implementation file as "outside pipeline."
+
+**Subproduct impact:** subproducts reading `.aitri.normalizeState` on the root pipeline (Hub dashboard, future readers) will see `status: 'resolved'` with the post-feature SHA after feature approvals, where they previously saw stale `'resolved'` from before the feature began OR `'pending'` after the operator ran `aitri normalize` to investigate the false positive. **No reader code change required** — the field shape is identical; only the value becomes correct sooner. Hub readers that previously suppressed or annotated these false positives will see fewer of them; readers that simply rendered the field value will render accurate state.
+
+**No new events.** `appendEvent` is not called for the cross-scope advance — it is a derived bookkeeping operation, not a state-transition event. Subproducts that subscribe to `events[]` see no new entries.
+
+### `nextActions[]` priority-4 normalize emission gated on `bugs.blocking === 0` (P1.B)
+
+The next-actions ladder (consumed indirectly by subproducts via `aitri status --json` `nextActions[]`) no longer emits `aitri normalize` while any critical/high open or in_progress bug exists. The `aitri normalize --resolve` command has always refused to run under that condition (`lib/commands/normalize.js:148-157` gate); the ladder now respects the same gate so subproducts surfacing "next action" hints do not point operators at a command that will reject.
+
+**Subproduct impact:** subproducts that render `nextActions[]` will see one fewer entry when both conditions hold (`normalize pending` AND `blocking bugs open`) — the blocking-bug action (priority 3) remains and is now correctly the topmost actionable. When bugs close, normalize re-emerges at priority 4 automatically. **No reader code change required.** Subproducts that gate UI on the EXISTENCE of a normalize action see the action absent during the blocked window — which is the correct semantic ("can't run normalize yet").
+
+### What this is NOT
+
+- Not a schema change. `.aitri` field shapes unchanged.
+- Not an event-stream change. No new event types; no existing event shape modified.
+- Not a `status --json` schema change. `bugs: { total, open, blocking }` shape unchanged. (Per-severity expansion for Hub remains an open P2 in BACKLOG — separate work.)
+
+**Readers that ignore both changes continue to work unchanged.** Readers that surfaced false-positive normalize-pending on flat-codebase projects will display fewer false positives.
+
+---
+
 ## v2.0.0-alpha.27 (2026-05-03) — `aitri approve 1` pre-flight scan (producer-side IDEA.md absorption gate) — additive
 
 **`aitri approve 1` now scans downstream artifacts for IDEA.md references before executing the absorb + unlink** (additive — new event type `approve_preflight_autofix`, new error message surface; no schema field changed; no existing event-shape modified). Closes the producer-side gap of the alpha.17 → alpha.22 → alpha.24 → alpha.25 → alpha.26 → alpha.27 hotfix arc per [ADR-031 Addendum 2](../Aitri_Design_Notes/DECISIONS.md#addendum-2--2026-05-03-alpha27--producer-side-at-approve-time-pre-flight-scan).
