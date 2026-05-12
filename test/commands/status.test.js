@@ -364,3 +364,51 @@ describe('cmdStatus --json', () => {
       'fresh projects with no phase progress should not advertise deployable status');
   });
 });
+
+// ── --json bugs payload: bySeverity + openIds (2026-05-12) ───────────────────
+// Closes BACKLOG "Pre-promotion findings" P2: Hub cannot derive per-severity
+// counts or open IDs from documented contract. Schema additive — old readers
+// see total/open/blocking unchanged; new readers opt into bySeverity/openIds.
+
+describe('cmdStatus --json bugs payload', () => {
+  function setupBugs(dir, bugs) {
+    cmdInit({ dir, rootDir: ROOT_DIR, err: (m) => { throw new Error(m); }, VERSION: '0.1.99' });
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'spec/BUGS.json'), JSON.stringify({ bugs }, null, 2));
+  }
+
+  it('emits bySeverity + openIds alongside legacy total/open/blocking', () => {
+    const dir = tmpDir();
+    setupBugs(dir, [
+      { id: 'BG-037', severity: 'low',    status: 'open' },
+      { id: 'BG-039', severity: 'medium', status: 'open' },
+    ]);
+    const result = captureJson(() => cmdStatus({ dir, VERSION: '0.1.99', args: ['--json'] }));
+    // Legacy fields preserved
+    assert.equal(result.bugs.total,    2, 'total unchanged');
+    assert.equal(result.bugs.open,     2, 'open unchanged');
+    assert.equal(result.bugs.blocking, 0, 'blocking unchanged (no critical/high active)');
+    // New additive fields
+    assert.deepEqual(result.bugs.bySeverity, { critical: 0, high: 0, medium: 1, low: 1 });
+    assert.deepEqual(result.bugs.openIds,    ['BG-037', 'BG-039']);
+  });
+
+  it('blocking bugs surface in bySeverity AND in legacy blocking counter', () => {
+    const dir = tmpDir();
+    setupBugs(dir, [
+      { id: 'BG-001', severity: 'critical', status: 'open' },
+      { id: 'BG-002', severity: 'high',     status: 'in_progress' },
+    ]);
+    const result = captureJson(() => cmdStatus({ dir, VERSION: '0.1.99', args: ['--json'] }));
+    assert.equal(result.bugs.blocking, 2);
+    assert.deepEqual(result.bugs.bySeverity, { critical: 1, high: 1, medium: 0, low: 0 });
+  });
+
+  it('empty BUGS.json → bySeverity all zero + openIds empty', () => {
+    const dir = tmpDir();
+    cmdInit({ dir, rootDir: ROOT_DIR, err: (m) => { throw new Error(m); }, VERSION: '0.1.99' });
+    const result = captureJson(() => cmdStatus({ dir, VERSION: '0.1.99', args: ['--json'] }));
+    assert.deepEqual(result.bugs.bySeverity, { critical: 0, high: 0, medium: 0, low: 0 });
+    assert.deepEqual(result.bugs.openIds, []);
+  });
+});

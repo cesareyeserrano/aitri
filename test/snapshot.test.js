@@ -383,6 +383,103 @@ describe('feature sub-pipelines', () => {
   });
 });
 
+// ── Bugs payload (Hub per-severity, 2026-05-12) ──────────────────────────────
+// Closes BACKLOG "Pre-promotion findings" P2: status --json bugs payload too
+// narrow — Hub cannot derive per-severity counts or open IDs from documented
+// contract. aggregateBugs internal shape was rich but status.js:308 filtered
+// to {total, open, blocking}; new bySeverity + openIds fields are additive.
+
+describe('aggregateBugs() — bySeverity + openIds (2026-05-12)', () => {
+  it('counts open + in_progress per severity; excludes fixed/closed', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, { projectName: 'x', artifactsDir: 'spec' });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [
+          { id: 'BG-001', severity: 'critical', status: 'open' },
+          { id: 'BG-002', severity: 'high',     status: 'in_progress' },
+          { id: 'BG-003', severity: 'medium',   status: 'open' },
+          { id: 'BG-004', severity: 'low',      status: 'open' },
+          { id: 'BG-005', severity: 'critical', status: 'fixed' },   // excluded (active-only)
+          { id: 'BG-006', severity: 'high',     status: 'verified' }, // excluded
+          { id: 'BG-007', severity: 'medium',   status: 'closed' },   // excluded
+        ],
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.deepEqual(snap.bugs.bySeverity, { critical: 1, high: 1, medium: 1, low: 1 },
+        'bySeverity counts active-only (open + in_progress); fixed/verified/closed excluded');
+      assert.equal(snap.bugs.blocking, 2, 'blocking still counts critical+high active');
+    } finally { cleanup(dir); }
+  });
+
+  it('openIds lists active bug IDs sorted ascending', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, { projectName: 'x', artifactsDir: 'spec' });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [
+          { id: 'BG-039', severity: 'medium', status: 'open' },
+          { id: 'BG-037', severity: 'low',    status: 'open' },
+          { id: 'BG-100', severity: 'high',   status: 'closed' },  // excluded
+        ],
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.deepEqual(snap.bugs.openIds, ['BG-037', 'BG-039'],
+        'openIds sorted ascending; closed/fixed excluded');
+    } finally { cleanup(dir); }
+  });
+
+  it('empty BUGS.json → bySeverity all zero + openIds empty array', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, { projectName: 'x', artifactsDir: 'spec' });
+      const snap = buildProjectSnapshot(dir);
+      assert.deepEqual(snap.bugs.bySeverity, { critical: 0, high: 0, medium: 0, low: 0 });
+      assert.deepEqual(snap.bugs.openIds, []);
+    } finally { cleanup(dir); }
+  });
+
+  it('unknown severity values do not crash and do not increment any counter', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, { projectName: 'x', artifactsDir: 'spec' });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [
+          { id: 'BG-001', severity: 'trivial', status: 'open' }, // not a documented level
+          { id: 'BG-002', severity: 'high',    status: 'open' },
+        ],
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.deepEqual(snap.bugs.bySeverity, { critical: 0, high: 1, medium: 0, low: 0 },
+        'unknown severities are silently dropped from the breakdown');
+      // Still surfaces in openIds (active by status, even if severity unknown)?
+      // Decision: NO — bySeverity gates the openIds push. If severity is unknown,
+      // the bug is not in the per-severity bucket and not in openIds either.
+      assert.deepEqual(snap.bugs.openIds, ['BG-002']);
+    } finally { cleanup(dir); }
+  });
+
+  it('feature-scoped bugs roll up into project-wide bySeverity + openIds', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, { projectName: 'root', artifactsDir: 'spec' });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [{ id: 'BG-001', severity: 'high', status: 'open' }],
+      });
+      const featDir = path.join(dir, 'features', 'auth');
+      fs.mkdirSync(path.join(featDir, 'spec'), { recursive: true });
+      saveConfig(featDir, { projectName: 'auth', artifactsDir: 'spec' });
+      writeJsonSpec(featDir, 'BUGS.json', {
+        bugs: [{ id: 'BG-002', severity: 'low', status: 'in_progress' }],
+      });
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.bugs.bySeverity.high, 1);
+      assert.equal(snap.bugs.bySeverity.low, 1);
+      assert.deepEqual(snap.bugs.openIds, ['BG-001', 'BG-002']);
+    } finally { cleanup(dir); }
+  });
+});
+
 // ── Audit freshness ──────────────────────────────────────────────────────────
 
 describe('audit freshness', () => {

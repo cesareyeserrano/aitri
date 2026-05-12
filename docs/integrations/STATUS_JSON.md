@@ -1,6 +1,6 @@
 # `aitri status --json` — Machine-Readable Project Snapshot
 
-**Aitri version:** v2.0.0-rc.1+
+**Aitri version:** v2.0.0-rc.2+
 **Stability:** Additive-only. Legacy fields (used by Hub pre-v0.1.77) preserved indefinitely.
 **Scope:** Single-machine CLI consumers. For remote (GitHub-URL) consumers, use `.aitri` + `spec/` directly per [SCHEMA.md](./SCHEMA.md) / [ARTIFACTS.md](./ARTIFACTS.md).
 
@@ -46,7 +46,7 @@ Exit code: `0` on success (even when the project has drift or blocking bugs — 
   // ── Snapshot-derived extensions (v0.1.77+) ───────────────────────────────
   "snapshotVersion": 1,
   "features": [ /* per-feature summaries — see "features" below */ ],
-  "bugs":    { "total": N, "open": N, "blocking": N },
+  "bugs":    { "total": N, "open": N, "blocking": N, "bySeverity": { "critical": N, "high": N, "medium": N, "low": N }, "openIds": ["BG-001", "..."] },
   "backlog": { "open": N },
   "audit":   { "exists": bool, "stalenessDays": N | null },
   "tests":   { /* see "tests" below — v0.1.81+ */ },

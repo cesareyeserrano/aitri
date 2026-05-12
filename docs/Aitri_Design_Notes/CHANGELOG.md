@@ -5,6 +5,73 @@
 
 ---
 
+## [2.0.0-rc.2] — 2026-05-12 — pre-promotion quality polish bundle (closes "Pre-promotion findings" section)
+
+Second release candidate, same day as rc.1. **Closes the four remaining items from BACKLOG "Pre-promotion findings (Codex canary 2026-05-11)"** + reclassifies N2 from P1 → P3 with code-grounded rationale. Bundled because they share theme ("post-rc.1 quality polish without touching contracts") and because the freshness rule we are adding in this release retroactively obligates the template rewrite it documents.
+
+### Template rewrite + freshness rule (closes P2 "Binary 'functional vs minor' classification")
+
+`templates/AGENTS.md` was last touched at v0.1.61 (2026-03-17). One commit. 48 lines. Mentioned 5 commands — `aitri resume`, `status`, `validate`, `feature init`, `run-phase`. Aitri shipped ~21 commands by rc.1; the template was systematically misleading agents in consumer projects ("I don't know `aitri normalize` exists" → "I'll treat every change as a feature" → user's reported friction in the Codex canary).
+
+Rewrite: 48 → 132 lines. Covers:
+- Starting a session + version-mismatch routing to `adopt --upgrade`.
+- Pipeline rules + optional phases (`discovery`, `ux`, `review`) usage guidance.
+- Verify-run / verify-complete distinction; bug lifecycle; `tc mark-manual` for non-automatable cases.
+- Normalize semantics including the rc.1 `--resolve` gate on blocking bugs.
+- Drift handling (re-approve via `aitri approve` vs bookkeeping via `aitri rehash`).
+- Pipeline-complete and idle-project states.
+- **Three-tier change classification (trivial / small / feature)** with concrete examples ("add a form field", "make a header fixed", "rename a button") that directly addresses the user-reported "everything treated as feature" friction. Bias toward "feature" preserved only for **behavioral** ambiguity — not for size.
+- Feature sub-pipelines + grammar (`aitri feature <verb> <name> [<phase>]`) + the rc.1 fix that feature approve 4 advances root baseline.
+- Off-pipeline surfaces (`aitri audit`, `aitri backlog`).
+- "What NOT to do" closing section.
+
+**CLAUDE.md "Critical rules" gains a freshness obligation:** every release that adds or changes a command, phase gate, CLI flag, artifact contract, or operator-visible behavior must audit `templates/AGENTS.md` in the same commit. Existing consumer projects do NOT auto-refresh — operators see `aitri adopt --upgrade` prompts on version mismatch and can manually re-pull by deleting their local agent file (the upgrade path regenerates absent files). Producer-side freshness; consumer-side refresh stays intentionally manual until a third-party adopter asks for an automated `--refresh-agents` flag. Closes the loop on the user's request for "instrucción para que los archivos de agentes se mantengan actualizados y alineados con cada version".
+
+### `aitri status --json` bugs payload (closes P2 "bugs payload too narrow")
+
+`lib/snapshot.js::aggregateBugs` and `lib/commands/status.js` JSON emitter gain two additive fields:
+
+- `bugs.bySeverity: { critical, high, medium, low }` — active-only counts (open + in_progress).
+- `bugs.openIds: string[]` — IDs of bugs in `bySeverity`, sorted ascending for deterministic output.
+
+Active-only semantics mirror the existing `blocking` counter. `fixed`, `verified`, `closed` are excluded. Unknown severity values are silently dropped from the breakdown (no crash, no false-positive bucket).
+
+**Hub impact:** closes the contract gap surfaced 2026-05-11 where Hub's `bugsSummary` showed `medium: 0, low: 0, openIds: []` for a project with one medium + one low bug. Hub can now render per-severity warnings + clickable bug-id links from the snapshot without re-parsing `spec/BUGS.json` directly. STATUS_JSON.md schema updated; integrations CHANGELOG `— additive`.
+
+### `aitri validate` text trim (closes P3 "validate text overlap with status ~70%")
+
+`lib/commands/validate.js::emitText` restructured. Default text now ~12-18 lines (was ~25-40). Operational deploy info moved behind `--explain`:
+- Deploy candidates block (`Dockerfile`, `docker-compose.yml`, `DEPLOYMENT.md`, `.env.example` listing).
+- Setup commands block (from `04_IMPLEMENTATION_MANIFEST.json::setup_commands`).
+- DEPLOYMENT.md path hint.
+
+Features section in default text: shows only when at least one feature has rank-0 (failed verify) or rank-1 (incomplete). When all features are all-green, the section is hidden — it adds zero signal beyond the deploy-gate verdict line. `--explain` always shows the full features table + Σ.
+
+`emitOperationalDeploy()` factored out as a new function. `emitText` calls it conditionally on `explain`.
+
+**JSON shape (`emitJson`, lines 227-314) UNTOUCHED.** Hub contract preserved. Regression-locked by new test in `test/commands/validate.test.js` asserting `allValid / artifacts[] / deployFiles / setupCommands / deployable / deployableReasons[] / openBugs / blockingBugs` all present in `--json` regardless of text-mode trim.
+
+### P3 "Agent-file refresh mechanism" — decided not implementing
+
+The producer-side freshness obligation (above) + the existing `aitri adopt --upgrade` version-mismatch prompt + the non-destructive regeneration of absent files together cover the use case without new CLI surface. Operators with stale agent files in existing projects: `rm CLAUDE.md && aitri adopt --upgrade` regenerates from the current template. Re-open if a real adopter asks for an automated `--refresh-agents` flag with diff preview.
+
+### N2 reclassified P1 → P3 (BACKLOG hygiene)
+
+Normalize briefing proportional-to-scope optimization. Code-verified 2026-05-12: full-spec embedding still at `lib/commands/normalize.js:303-306`; ~70KB briefing on Ultron-sized projects remains accurate. But post-N1 (allowlist, alpha.4) normalize fires only on real behavioral drift — zero "briefing too big" reports in ≈ 6 weeks of canary use. Re-promotion criterion documented: any canary that measures briefing >50KB on a legitimate (post-N1, post-rc.1) drift case AND reports friction.
+
+### Pre-promotion status (as of rc.2)
+
+All four open items from "Pre-promotion findings (Codex canary 2026-05-11)" closed. Section empirically done. The technical case for v2.0.0-stable is clean of regressions surfaced in this session. Promotion gate remains: third-party adopter validating end-to-end (CLAUDE.md Critical rules). No author-canary further work indicated; awaiting external signal.
+
+### Other
+
+- Tests: 1161 → 1175 (+14). No existing test regressions.
+- No schema change. `.aitri` shape untouched.
+- integrations CHANGELOG entry `— additive` for the new bugs JSON fields.
+- `v0.1.90` local tag (rc.1 release) pushed to origin 2026-05-12 as documented rollback target.
+
+---
+
 ## [2.0.0-rc.1] — 2026-05-12 — pre-promotion P1 bundle + maturity signal (end of alpha cycle)
 
 **First release candidate after 27 alpha iterations on `feat/upgrade-protocol`.** Closes both P1s surfaced by the Codex canary on Ultron 2026-05-11 (BACKLOG.md "Pre-promotion findings") AND signals end of alpha cycle. The semver bump from `alpha.27` straight to `rc.1` skips an intermediate `alpha.28` — the technical work is what an alpha.28 would have shipped, but with no further P1s pending it would have been the alpha-to-rc handover anyway. One release, one commit, one tag.

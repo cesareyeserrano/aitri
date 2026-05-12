@@ -206,40 +206,142 @@ describe('cmdValidate() — feature at 5/5 with verify failed blocks deploy', ()
 
 describe('cmdValidate() — deploy files are informational, not required (A5)', () => {
   let dir;
-  let output;
+  let defaultOutput;
+  let explainOutput;
 
   before(() => {
     dir = tmpDir();
     seedDeployableRoot(dir);
     // No Dockerfile, no docker-compose.yml — project targets e.g. systemd/Pi/lambda.
-    output = captureLog(() => cmdValidate({ dir, args: [] }));
+    defaultOutput = captureLog(() => cmdValidate({ dir, args: [] }));
+    explainOutput = captureLog(() => cmdValidate({ dir, args: ['--explain'] }));
   });
 
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  it('does NOT warn about missing Dockerfile / docker-compose.yml', () => {
-    assert.doesNotMatch(output, /Dockerfile.*not found/);
-    assert.doesNotMatch(output, /docker-compose\.yml.*not found/);
-    assert.doesNotMatch(output, /check Phase 5 output/);
+  it('does NOT warn about missing Dockerfile / docker-compose.yml (default or explain)', () => {
+    for (const out of [defaultOutput, explainOutput]) {
+      assert.doesNotMatch(out, /Dockerfile.*not found/);
+      assert.doesNotMatch(out, /docker-compose\.yml.*not found/);
+      assert.doesNotMatch(out, /check Phase 5 output/);
+    }
   });
 
-  it('prints the non-containerized hint when no deploy files exist', () => {
-    assert.match(output, /No standard deployment files detected/);
-    assert.match(output, /systemd, lambda, Pi/);
+  it('default text does NOT include the non-containerized hint (rc.2: moved behind --explain)', () => {
+    assert.doesNotMatch(defaultOutput, /No standard deployment files detected/,
+      'default text must not include the operational deploy info — it duplicates manifest/status');
+  });
+
+  it('--explain surfaces the non-containerized hint', () => {
+    assert.match(explainOutput, /No standard deployment files detected/);
+    assert.match(explainOutput, /systemd, lambda, Pi/);
   });
 });
 
-describe('cmdValidate() — deploy files listing when present', () => {
-  it('lists existing deploy files with ✅', () => {
+describe('cmdValidate() — deploy files listing when present (rc.2: behind --explain)', () => {
+  it('default text does NOT list deploy files; --explain DOES', () => {
     const dir = tmpDir();
     try {
       seedDeployableRoot(dir);
       writeFile(dir, 'Dockerfile', 'FROM node:20\n');
       writeFile(dir, 'DEPLOYMENT.md', '# deploy\n');
+      const defaultOut = captureLog(() => cmdValidate({ dir, args: [] }));
+      const explainOut = captureLog(() => cmdValidate({ dir, args: ['--explain'] }));
+      // Default: no deploy candidates block
+      assert.doesNotMatch(defaultOut, /Deployment files detected/,
+        'default text must not list deploy files');
+      // --explain: full block
+      assert.match(explainOut, /Deployment files detected/);
+      assert.match(explainOut, /✅ Dockerfile/);
+      assert.match(explainOut, /✅ DEPLOYMENT\.md/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+// ── rc.2 P3 (2026-05-12): validate text trim — features hide-when-all-green ─
+// Closes BACKLOG "Pre-promotion findings" P3 (validate overlap with status):
+// default text shows features section only when blockers present; --explain
+// always shows it. JSON shape UNCHANGED (regression-locked separately).
+
+describe('cmdValidate() — features section conditional on blockers (rc.2)', () => {
+  it('default text shows Features section when a feature has failed verify', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir);
+      seedFeature(dir, 'alpha', {
+        approvedPhases:  [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+        verifyPassed:    false,
+        verifySummary:   { passed: 0, failed: 5, skipped: 0, total: 5 },
+      });
       const out = captureLog(() => cmdValidate({ dir, args: [] }));
-      assert.match(out, /Deployment files detected/);
-      assert.match(out, /✅ Dockerfile/);
-      assert.match(out, /✅ DEPLOYMENT\.md/);
+      assert.match(out, /Features:/);
+      assert.match(out, /alpha.*verify ❌/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('default text shows Features section when a feature is incomplete', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir);
+      seedFeature(dir, 'alpha', { approvedPhases: [1] });  // incomplete
+      const out = captureLog(() => cmdValidate({ dir, args: [] }));
+      assert.match(out, /Features:/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('default text HIDES Features section when all features are all-green', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir);
+      seedFeature(dir, 'alpha', {
+        approvedPhases:  [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+        verifyPassed:    true,
+        verifySummary:   { passed: 10, failed: 0, skipped: 0, total: 10 },
+      });
+      const out = captureLog(() => cmdValidate({ dir, args: [] }));
+      assert.doesNotMatch(out, /Features:/,
+        'all-green features add no signal — keep default text lean');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('--explain ALWAYS shows Features section (even when all-green)', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir);
+      seedFeature(dir, 'alpha', {
+        approvedPhases:  [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+        verifyPassed:    true,
+        verifySummary:   { passed: 10, failed: 0, skipped: 0, total: 10 },
+      });
+      const out = captureLog(() => cmdValidate({ dir, args: ['--explain'] }));
+      assert.match(out, /Features:/, '--explain surfaces full audit even when all-green');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('cmdValidate() — JSON shape unchanged by rc.2 text trim (regression lock)', () => {
+  // The text refactor must NOT touch --json output. Hub consumes the JSON shape
+  // documented in docs/integrations/STATUS_JSON.md. Schema contract.
+  it('--json keeps allValid, artifacts[], deployFiles, setupCommands, deployable, deployableReasons', () => {
+    const dir = tmpDir();
+    try {
+      seedDeployableRoot(dir);
+      writeFile(dir, 'Dockerfile', 'FROM node:20\n');
+      const raw = captureStdout(() => cmdValidate({ dir, args: ['--json'] }));
+      const j = JSON.parse(raw);
+      assert.equal(typeof j.allValid, 'boolean');
+      assert.ok(Array.isArray(j.artifacts));
+      assert.ok(typeof j.deployFiles === 'object');
+      assert.ok(Array.isArray(j.setupCommands));
+      assert.equal(typeof j.deployable, 'boolean');
+      assert.ok(Array.isArray(j.deployableReasons));
+      assert.equal(typeof j.openBugs, 'number');
+      assert.equal(typeof j.blockingBugs, 'number');
+      // Deploy candidates still in JSON
+      assert.equal(j.deployFiles.Dockerfile, true);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

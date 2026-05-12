@@ -47,7 +47,7 @@ Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-recon
 
 **Promotion to stable v2.0.0 gated on:** a third-project canary (external adopter) runs cleanly, OR evidence motivates catalog expansion. The internal canaries above are necessary but not sufficient — alpha.6 was a regression that internal tests did not catch. Promotion before an external real-project signal repeats that risk. See ADR-029 for the test-discipline counter, but ADR-029 itself is preventive — does not substitute for an external canary.
 
-**Pre-promotion quality findings (2026-05-11 → 2026-05-12 close-out):** six findings surfaced during Codex canary on Ultron pre-promotion review. **Both P1s SHIPPED in rc.1** (feature approve 4 cross-scope baseline advance + ladder/normalize coherence). Four open items remain post-rc.1, all post-promotion cleanup: two P2s (template binary classification; `status --json` bugs payload too narrow for Hub per-severity), two P3s (agent-file refresh coupled to template P2; validate text overlap with status). The 2026-05-11 session surfaced **four distinct Core/Hub contract gaps** via author-owned canaries (Ultron transcript + Hub dashboard payload), each invisible until the canary exercised the specific code path — strengthening the case for keeping the third-party adopter gate intact for the v2.0.0-stable promotion. With both P1s now shipped, the technical case for promotion is clean of regressions surfaced in this session, but the third-party gate remains unmet; promotion decision (override + ADR vs `2.0.0-rc.1`) deferred pending separate discussion.
+**Pre-promotion quality findings (2026-05-11 → 2026-05-12 close-out):** six findings surfaced during Codex canary on Ultron pre-promotion review. **ALL CLOSED across rc.1 + rc.2.** rc.1 shipped both P1s (feature approve 4 cross-scope baseline advance + ladder/normalize coherence). rc.2 shipped two P2s + one P3 (template rewrite + freshness rule + bugs payload + validate trim); the remaining P3 (agent-file refresh) decided not-implementing. The 2026-05-11 session surfaced four distinct Core/Hub contract gaps via author-owned canaries — each closed without breaking schema. With all six findings closed, the technical case for v2.0.0-stable is clean; the third-party adopter gate remains the only open gate. Promotion decision (override + ADR vs further rc cycles awaiting external validation) deferred to a separate discussion.
 
 #### What shipped in alpha.1
 
@@ -146,6 +146,22 @@ Three changes from the Cesar canary 2026-05-02 PM (alpha.4 → alpha.15 deepenin
 #### Shipped in alpha.23 (2026-05-02)
 
 - [x] **`aitri tc mark-manual <TC-ID>` CLI helper** (`lib/commands/tc.js::tcMarkManual`). Closes the P3 helper open since alpha.14 L1a. Reads `spec/03_TEST_CASES.json`, sets `automation: "manual"` on the matched TC, writes back. Idempotent (already-manual is a no-op + message). Re-stamps `artifactHashes['3']` in the same step when stored — `mark-manual` IS the operator authorization for this scoped field-level edit (different from `aitri rehash` which gates over arbitrary content drift); forcing a separate rehash step would defeat the alpha.14 friction-reduction design intent. Bulk mode (`--all-of-type e2e`) and reverse direction (`mark-auto`) deferred — single-TC covers the documented friction (Go-on-RPi 26 e2e TCs would need 26 hand edits today; now 26 commands). Feature scope not threaded — mirrors existing `aitri tc verify` (no `tc` case in `feature.js:77`). Tests +9 in `test/commands/tc.test.js`. 1110 → 1119. No integrations CHANGELOG entry — operator-only CLI, no surface visible to subproducts (mirrors alpha.19/.20 decision). Headers still bumped per release-sync rule.
+
+#### Shipped in rc.2 (2026-05-12)
+
+- [x] **Closes the entire "Pre-promotion findings (Codex canary 2026-05-11)" section.** Four items shipped in one release; all share the theme of "post-rc.1 quality polish without touching contracts."
+
+  - **P2 — `templates/AGENTS.md` rewrite + tier matrix** (closes "Binary functional vs minor classification"). Template grew 48 → 132 lines. Now covers: `adopt --upgrade` on version mismatch, `bug add` flow, normalize + `--resolve` gate semantics, drift handling (re-approve vs rehash), audit + backlog off-pipeline, feature sub-pipelines + grammar, optional phases, `tc mark-manual`, and a three-tier change classification (trivial / small / feature) with concrete examples ("add a form field", "make a header fixed", "rename a button") that explicitly addresses the "everything treated as feature" friction the Codex canary surfaced. Original template (last touched v0.1.61) had only 5 commands documented out of ~21; agents in consumer projects were operating on stale guidance.
+
+  - **Agent-files freshness rule in CLAUDE.md.** New "Critical rules" line obliges every release touching commands/gates/flags/artifact contracts to audit `templates/AGENTS.md` for staleness in the same commit. Existing consumer projects do NOT auto-refresh — operators see `aitri adopt --upgrade` prompts on version mismatch and can manually re-pull the template by deleting the local agent file (`CLAUDE.md` / `GEMINI.md` / `.codex/instructions.md` / `AGENTS.md`) and re-running `--upgrade`. Producer-side obligation; refresh path for existing projects is intentionally manual until a real consumer asks for an automated `--refresh-agents` flag.
+
+  - **P2 — `aitri status --json` bugs payload Hub per-severity** (`lib/snapshot.js::aggregateBugs` + `lib/commands/status.js`). `bugs` field now includes `bySeverity: { critical, high, medium, low }` and `openIds: string[]` alongside the existing `total / open / blocking`. Active-only semantics (open + in_progress); `fixed` excluded to mirror `blocking`'s gate. `openIds` sorted ascending. Schema strictly additive — old readers see the same three fields with identical values; new readers (Hub) opt into the breakdown. Closes the Core/Hub contract gap surfaced 2026-05-11 (Hub's `bugsSummary` showed `medium: 0, low: 0, openIds: []` even when BUGS.json had 1 medium + 1 low — the snapshot internally had `list[]` with full per-bug detail but `status.js:308` filtered to total/open/blocking). Tests +8 across `test/snapshot.test.js` + `test/commands/status.test.js`. STATUS_JSON.md updated; integrations CHANGELOG `— additive`.
+
+  - **P3 — Validate text trim** (`lib/commands/validate.js::emitText` + new `emitOperationalDeploy`). Default text now ~12-18 lines vs ~25-40 pre-trim. Operational deploy info (deploy candidates listing, setup commands from manifest, DEPLOYMENT.md hint) moved behind `--explain`. Features section in default text hides when all features are all-green (rank 2) and shows when any has blockers (rank 0 = failed verify, rank 1 = incomplete). JSON shape (`emitJson`, lines 227-314) UNTOUCHED — Hub contract preserved (regression-locked by new test asserting allValid/artifacts/deployFiles/setupCommands/deployable/deployableReasons all present in JSON regardless of text trim). Closes the architectural redundancy surfaced 2026-05-11 (~70% overlap between `status` and `validate` default text — both emit `deployable: Ready/Not ready` row, `Σ all pipelines`, features section, etc.). Tests +6 in `test/commands/validate.test.js` (default-vs-explain symmetry, JSON regression lock).
+
+  - **N2 reclassified P1 → P3** (BACKLOG hygiene). Normalize briefing proportional-to-scope optimization. Verified in code 2026-05-12: full-spec embedding still at `lib/commands/normalize.js:303-306` (~70KB on Ultron-sized projects). But post-N1 (allowlist, alpha.4) the FREQUENCY of normalize firing dropped from "every documentation update" to "real behavioral drift only" — and when it legitimately fires, the agent needs the full spec context. Zero new "briefing too big" reports since N1 shipped (≈ 6 weeks). Re-promotion criterion: future canary measures briefing >50KB on a legitimate post-N1 drift case AND reports friction.
+
+  Tests: 1161 → 1175 (+14). integrations CHANGELOG `— additive` (new bugs fields). No schema change.
 
 #### Shipped in rc.1 (2026-05-12)
 
@@ -338,7 +354,17 @@ Originally three independent issues surfaced by the Ultron canary that validated
   - `npm run test:all` passes with new tests covering allowlist, mixed changes, and silent baseline advance.
   - `docs/integrations/CHANGELOG.md` carries an entry tagged `— additive` (consumer-visible: drift detection now ignores allowlisted patterns).
 
-  **N2 — Briefing proportional to change scope (polish, ship after N1 if still needed)**
+  **N2 — Briefing proportional to change scope — RECLASSIFIED P1 → P3 (2026-05-12).**
+
+  Code-grounded re-evaluation 2026-05-12: `lib/commands/normalize.js:303-306` still embeds full content of `01_REQUIREMENTS.json` + `03_TEST_CASES.json` + `04_IMPLEMENTATION_MANIFEST.json` into the briefing (template at `templates/phases/normalize.md:27-40`). The 70KB measurement from Ultron 2026-04-27 still applies for similarly-sized projects.
+
+  **Why downgrade.** Post-N1 (allowlist, alpha.4) the FREQUENCY of normalize firing dropped from "every documentation update" to "real behavioral drift only". When normalize legitimately fires today, the agent IS classifying actual behavior changes that may legitimately touch multiple FRs/TCs — having the full spec context is reasonable, not wasteful. Zero new reports of "briefing too big" since N1 shipped (≈ 6 weeks of canary use). The cost-benefit shifted: N2 was P1 when the friction cycle was endemic; it is polish now that the cycle is gone.
+
+  **What still has value if implemented later.** Cross-ref by exact path match in `04_IMPLEMENTATION_MANIFEST.json::files_created[].path` would still produce ~80% reduction for single-file legitimate diffs. Diff-per-file embedding would give the agent line-level context without re-reading the entire spec. The optimization remains valid; it just is not urgent.
+
+  **Re-promotion criterion:** if a canary measures a normalize briefing >50KB on a real legitimate (post-N1, post-rc.1) drift case AND reports it as friction, re-promote to P2. Until then, P3.
+
+  **Original plan preserved below for when re-promoted:**
 
   Files:
   - `lib/commands/normalize.js` — replace full-spec embedding with: file list + `git diff baseRef -- <file>` per file + only the FRs/TCs whose `files_created` mentions a changed file.
@@ -359,7 +385,7 @@ Originally three independent issues surfaced by the Ultron canary that validated
 
 ### Core — Pre-promotion findings (Codex canary 2026-05-11)
 
-Conversation 2026-05-11 with the user (Codex testing canary on Ultron, pre-promotion review of v2.0.0). Findings split by code verification into six actionable items. **Both P1s SHIPPED in rc.1** (2026-05-12) — feature approve 4 cross-scope baseline advance + ladder/normalize coherence with `--resolve` gate. Four open items remain: two P2s (template binary classification; `status --json` bugs payload too narrow for Hub per-severity), one P3 (agent-file refresh, coupled to template P2), one P3 (validate text overlap with status — re-classified from PARKED to P3 after architectural investigation in the same session). Promotion to stable v2.0.0 is gated on the third-party adopter rule (see top of v2.0.0 section); these items are independent quality work for alpha cycles, not gates on promotion itself. P2/P3 are post-promotion cleanup.
+Conversation 2026-05-11 → 2026-05-12 with the user (Codex testing canary on Ultron, pre-promotion review of v2.0.0). Findings split by code verification into six actionable items. **ALL CLOSED**: two P1s SHIPPED in rc.1 (feature approve 4 cross-scope baseline advance + ladder/normalize coherence with `--resolve` gate); two P2s + one P3 SHIPPED in rc.2 (template rewrite with three-tier classification + freshness rule in CLAUDE.md; `status --json` bugs payload Hub per-severity; validate text trim with operational deploy info behind `--explain`); one P3 (agent-file refresh) DECIDED not-implementing (manual delete-and-re-upgrade is sufficient; producer-side freshness obligation in CLAUDE.md covers the gap). Promotion to stable v2.0.0 remains gated on the third-party adopter rule (see top of v2.0.0 section); none of the six findings blocks promotion mechanically — they were quality work for the alpha→rc transition.
 
 User-reported friction (verbatim): (a) "funcionalidades pequeñas se tragan todo el pipeline eterno" — small features (add a form field, make a header fixed) trigger the full feature pipeline; (b) "demasiadas aprobaciones manuales" — too many manual approvals during pipeline closure; (c) "el comando validate es el más invasivo"; (d) "cuando corro bugs, también pide normalize". Plus a real iteration transcript from Ultron's Codex agent showing `aitri status` reporting `deployable: Not ready — 1 blocker` with "Code changes outside pipeline" after the `network-alerts` feature pipeline completed cleanly — surfaced the upstream P1 below. Code verification reframed each observation — see findings.
 
@@ -431,7 +457,11 @@ User-reported friction (verbatim): (a) "funcionalidades pequeñas se tragan todo
   - No `docs/integrations/CHANGELOG.md` entry (CLI text only, no schema impact — subproducts read `.aitri.normalizeState` directly, not `nextActions[]` text).
   - Severity HIGH for v2.0.0 promotion: a visible deadlock in a P4 ladder action contradicts the "stable" promise. Ship in the alpha that precedes promotion, regardless of whether promotion happens immediately after.
 
-- [ ] **P2 — Binary "functional vs minor" classification in `templates/AGENTS.md` forces small UI tweaks into the full pipeline.**
+- [x] **P2 — SHIPPED rc.2 (2026-05-12)** — `templates/AGENTS.md` rewrite includes three-tier "trivial/small/feature" classification with concrete examples. See "Shipped in rc.2" above.
+
+<!-- ORIGINAL ENTRY (shipped, preserved temporarily) -->
+
+- [ ] _PARKED_ **P2 — Binary "functional vs minor" classification in `templates/AGENTS.md` forces small UI tweaks into the full pipeline.**
 
   Problem: `templates/AGENTS.md:40-48` defines two tiers — "functional change → `aitri feature init`" or "minor change (typo, style tweak, config value) → direct implementation". The line "When in doubt, treat it as functional" biases the agent toward the full pipeline. Real-world changes that are neither — "add a form field with no new validation", "make a header fixed", "rename a button label", "swap a single-component layout property" — are mechanically functional (modify behavior) but operationally don't warrant 5 phases + 5 approvals + the full artifact chain. User reported this across Codex canary work 2026-05-11: any new behavior is treated as feature; pipeline cost disproportionate to change size. The agent is NOT misbehaving — it is following the template literally. The template's binary rule is the gap.
 
@@ -454,7 +484,11 @@ User-reported friction (verbatim): (a) "funcionalidades pequeñas se tragan todo
   - Canary in Codex on a real small-feature scenario ("add a form field") — agent self-classifies as minor and implements directly without `feature init`. Document outcome in this entry before closing.
   - Coupled with P3: ship Dir 1 template + P3 refresh mechanism together, OR ship Dir 1 with explicit "existing projects must delete agent file and re-run `adopt --upgrade`" note in the alpha release.
 
-- [ ] **P2 — `aitri status --json` bugs payload too narrow — Hub cannot derive per-severity counts or open IDs from the documented contract.**
+- [x] **P2 — SHIPPED rc.2 (2026-05-12)** — `aggregateBugs` now exposes `bySeverity` + `openIds`; `status --json` emits them; STATUS_JSON.md documents the additive shape. See "Shipped in rc.2" above.
+
+<!-- ORIGINAL ENTRY (shipped, preserved temporarily) -->
+
+- [ ] _PARKED_ **P2 — `aitri status --json` bugs payload too narrow — Hub cannot derive per-severity counts or open IDs from the documented contract.**
 
   Problem: Hub's `~/.aitri-hub/dashboard.json` for a project with one medium + one low open bug shows `bugsSummary: { open: 2, critical: 0, high: 0, medium: 0, low: 0, openIds: [] }`. The grand-total count (`open: 2`) is correct; the per-severity breakdown and the open IDs are silently empty. User initially diagnosed as a Hub bug ("Hub debería derivar medium/low/openIds desde bugs.list"). Code verification 2026-05-11 reversed the diagnosis: the bug is on Aitri Core, not Hub.
 
@@ -495,7 +529,11 @@ User-reported friction (verbatim): (a) "funcionalidades pequeñas se tragan todo
 
   Evidence / source: Ultron Hub dashboard 2026-05-11 — `bugsSummary` shows zeros across severity. User pasted the dashboard payload and BUGS.json contents (BG-037 low, BG-039 medium). User's initial diagnosis ("bug en Hub") reversed after code verification in the same session ([snapshot.js:357-386](lib/snapshot.js#L357-L386) + [status.js:308](lib/commands/status.js#L308) + [STATUS_JSON.md:49](docs/integrations/STATUS_JSON.md#L49)). Cross-references the contract-gap pattern that motivated the third-party adopter gate (see top of v2.0.0 section).
 
-- [ ] **P3 — Agent-file refresh mechanism for existing projects.**
+- [x] **P3 — DECIDED 2026-05-12: not implementing.** Manual delete-and-re-upgrade path is sufficient given `aitri adopt --upgrade` already warns on version mismatch. Existing operators see the version-mismatch P1 next-action when CLI version bumps; deleting the local agent file and re-running `--upgrade` regenerates from template. Documented in CLAUDE.md "Agent-instructions freshness" rule (rc.2). Re-open criterion: real adopter asks for an automated `--refresh-agents` flag with diff preview. Until then, the producer-side freshness obligation (audit template on every bump) is enough.
+
+<!-- ORIGINAL ENTRY (parked) -->
+
+- [ ] _PARKED_ **P3 — Agent-file refresh mechanism for existing projects.**
 
   Problem: `lib/agent-files.js::writeAgentFiles` is non-destructive by design (line 39: `if (fs.existsSync(dest)) continue`). Called from `init`, `adopt apply`, and `adopt --upgrade` (`lib/upgrade/index.js:92` — comment explicitly says "regenerate *missing* agent instruction files"). When `templates/AGENTS.md` evolves substantively, existing projects' `CLAUDE.md` / `GEMINI.md` / `.codex/instructions.md` / `AGENTS.md` stay frozen at the moment of project init. **Current state of the template:** 1 commit total (v0.1.61 `d053ed6`, 2026-03-17), 48 lines — has not drifted in practice. But the framework allows future drift to go silent. Surfaced 2026-05-11 during conversation about Codex canary; the user assumed CLAUDE.md was getting updates (it wasn't — the CLAUDE.md they read is the dev-repo's hand-written `/Users/cesareyeserrano/Documents/PROJECTS/AITRI/CLAUDE.md`, not the Aitri-generated one in consumer projects).
 
@@ -521,7 +559,11 @@ User-reported friction (verbatim): (a) "funcionalidades pequeñas se tragan todo
   - Manual on a synthetic project: hand-edit `CLAUDE.md`, run `--upgrade --refresh-agents --dry-run` → diff shows. Run without `--dry-run` → prompt fires; `y` → overwritten; `n` → preserved.
   - `docs/integrations/CHANGELOG.md` updated; no schema change in `.aitri` or artifacts.
 
-- [ ] **P3 — Validate text output overlaps ~70% with `status`; trim default, move operational reporting behind `--explain`.**
+- [x] **P3 — SHIPPED rc.2 (2026-05-12)** — `emitText` trimmed: deploy candidates + setup commands + DEPLOYMENT.md hint now behind `--explain`; features section hides in default when all-green, shows when any blocker. JSON shape UNTOUCHED (regression-locked). See "Shipped in rc.2" above.
+
+<!-- ORIGINAL ENTRY (shipped, preserved temporarily) -->
+
+- [ ] _PARKED_ **P3 — Validate text output overlaps ~70% with `status`; trim default, move operational reporting behind `--explain`.**
 
   Problem: User reported "el comando validate es el más invasivo" 2026-05-11. Initially parked as preference (user couldn't pinpoint a recent corrida). Deeper investigation 2026-05-11 surfaced an architectural cause that re-classifies this from preference to **verified structural redundancy**.
 

@@ -18,6 +18,49 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.2 (2026-05-12) — `bugs.bySeverity` + `bugs.openIds` in status JSON; validate text trim; templates/AGENTS.md rewrite — additive
+
+**Three additive surfaces shipped together.** No schema field removed. No event-shape changed. Old readers see identical values where the contract previously promised them.
+
+### `aitri status --json` bugs payload: per-severity breakdown + open IDs
+
+The `bugs` object gains two new fields alongside the existing `total / open / blocking`:
+
+```jsonc
+"bugs": {
+  "total":    N,                                                  // unchanged
+  "open":     N,                                                  // unchanged
+  "blocking": N,                                                  // unchanged
+  "bySeverity": { "critical": N, "high": N, "medium": N, "low": N },  // new
+  "openIds":    ["BG-001", "BG-003", ...]                              // new — sorted ascending
+}
+```
+
+**Semantics:**
+- `bySeverity` counts bugs in `open` OR `in_progress` status. `fixed`, `verified`, `closed` are excluded (mirrors the active-only semantics of `blocking`). Unknown severity values (anything outside `{critical, high, medium, low}`) are silently dropped from the breakdown.
+- `openIds` lists the IDs of bugs counted in `bySeverity`. Sorted ascending for deterministic snapshot output (same project → same byte sequence on repeated runs, useful for cache hits).
+- Bugs from feature sub-pipelines roll up into the project-wide breakdown (`bySeverity` and `openIds` are sums across root + all features). Per-pipeline counts remain in `byPipeline` (internal-only, not in `--json`).
+
+**Hub impact:** closes the contract gap surfaced 2026-05-11 where Hub's `bugsSummary` showed `medium: 0, low: 0, openIds: []` for projects with mixed-severity bugs. Hub can now render per-severity warnings + clickable BG-ID links without re-parsing `spec/BUGS.json`. Old readers that don't reference `bySeverity` or `openIds` continue to read the same `total / open / blocking` values they always have.
+
+### `aitri validate` text mode: operational deploy info behind `--explain`
+
+Validate's default text mode trimmed from ~25-40 lines to ~12-18 lines:
+- Deploy candidates listing (`Dockerfile`, `docker-compose.yml`, `DEPLOYMENT.md`, `.env.example`) — **moved behind `--explain`**.
+- Setup commands listing (from `04_IMPLEMENTATION_MANIFEST.json::setup_commands`) — **moved behind `--explain`**.
+- DEPLOYMENT.md path hint — **moved behind `--explain`**.
+- Features section in default text — **hides when all features are all-green**; shows when any has rank-0 (failed verify) or rank-1 (incomplete). `--explain` always shows it.
+
+**JSON shape UNTOUCHED.** `aitri validate --json` returns `{ allValid, artifacts[], deployFiles, setupCommands, deployable, deployableReasons[], openBugs, blockingBugs }` exactly as before. Hub readers consuming `--json` see no change. Regression-locked by new test asserting all eight fields present + correct types regardless of text-mode trim.
+
+### `templates/AGENTS.md` rewrite
+
+The template Aitri copies to every consumer project as `CLAUDE.md` / `GEMINI.md` / `.codex/instructions.md` / `AGENTS.md` was last touched at v0.1.61 (March 2026). It mentioned 5 commands out of ~21 currently in Aitri. Rewrite covers the rc.1+ command surface (`normalize`, `audit`, `rehash`, `bug`, `backlog`, `tc mark-manual`, optional phases, drift handling, version-mismatch flow) plus a three-tier change classification (trivial / small / feature) replacing the previous binary "minor vs functional" rule. Existing consumer projects keep their old agent file (the regeneration path in `lib/agent-files.js` is non-destructive); operators manually pull the rewrite by deleting their local file and re-running `aitri adopt --upgrade`. Producer-side freshness obligation now codified in CLAUDE.md "Critical rules".
+
+**No artifact schema change. No event-stream change.** Readers that ignore the new bug fields continue to work unchanged. Readers that opt in to `bySeverity` + `openIds` gain the breakdown without any other reader-side adjustment.
+
+---
+
 ## v2.0.0-rc.1 (2026-05-12) — feature-approve cascades root normalize baseline; ladder coherence with `normalize --resolve` gate — additive
 
 > **Semver step note.** This release jumps past `alpha.28` directly to `rc.1` to signal end of alpha cycle. Stable v2.0.0 promotion is still gated on the third-party adopter rule (CLAUDE.md Critical rules); rc.1 means "stable in intent, awaiting external validation". Subproducts should treat rc.1 as the upgrade target for v2.0.0 readiness work, but stable consumers should keep waiting until v2.0.0 final.
