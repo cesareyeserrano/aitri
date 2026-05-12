@@ -277,24 +277,24 @@ The morning canary did NOT exercise the load-bearing paths (`adopt --upgrade` re
 
 #### Deferred out of alpha.1 / alpha.2 / alpha.3 (by decision)
 
-- [ ] **A2 — Cascading root → features upgrade — DECIDED 2026-05-02 via ADR-030: deferred indefinitely.** Three reconfirmations across canaries (Zombite + Cesar shallow + Cesar deep) confirmed the asymmetry exists but produces no consumer harm — Aitri's gates are field-presence based, so feature `.aitri` at stale `aitriVersion` continues to satisfy gates. Re-open criteria in ADR-030: (1) third-party adopter explicitly requests cascading for a concrete workflow, OR (2) a future migration becomes load-bearing for feature-scope state. Without either, the entry stays as a pointer to the ADR — not a pending work item.
-- [ ] **CLI flags** `--yes`, `--only <categories>`, `--verbose` — not implemented. No adopter asked; re-open when one does. (`--dry-run` landed in alpha.2.)
-- [ ] **Corte E — CAPABILITY-NEW + STRUCTURE** — open: `files_modified` advisory, bug audit trail advisory, case-mismatch detection. **Already shipped:** agent-files regen (inherited from Corte A); `original_brief` archival (shipped alpha.17 as `diagnoseOrphanIdea` — closes the IDEA.md residue case for projects approved before v0.1.89). Remaining items are preventive with no canary signal — re-open when a concrete case surfaces.
-- [ ] **`test/upgrade-coverage.test.js` gate** — explicitly NOT written. Rationale in ADR-027 addendum §5.
-- [ ] **Smoke test E2E in `test/smoke.js`** — optional, unit tests + three real canaries cover current shape. Re-open if a non-trivial upgrade path lacks coverage.
+- [x] **A2 — Cascading root → features upgrade — DECIDED 2026-05-02 via ADR-030: deferred indefinitely.** Three reconfirmations across canaries (Zombite + Cesar shallow + Cesar deep) confirmed the asymmetry exists but produces no consumer harm — Aitri's gates are field-presence based, so feature `.aitri` at stale `aitriVersion` continues to satisfy gates. Re-open criteria in ADR-030: (1) third-party adopter explicitly requests cascading for a concrete workflow, OR (2) a future migration becomes load-bearing for feature-scope state. Without either, the entry stays as a pointer to the ADR — not a pending work item.
+- [x] **CLI flags** `--yes`, `--only <categories>`, `--verbose` — not implemented. No adopter asked; re-open when one does. (`--dry-run` landed in alpha.2.)
+- [x] **Corte E — CAPABILITY-NEW + STRUCTURE** — open: `files_modified` advisory, bug audit trail advisory, case-mismatch detection. **Already shipped:** agent-files regen (inherited from Corte A); `original_brief` archival (shipped alpha.17 as `diagnoseOrphanIdea` — closes the IDEA.md residue case for projects approved before v0.1.89). Remaining items are preventive with no canary signal — re-open when a concrete case surfaces.
+- [x] **`test/upgrade-coverage.test.js` gate** — explicitly NOT written. Rationale in ADR-027 addendum §5.
+- [x] **Smoke test E2E in `test/smoke.js`** — optional, unit tests + three real canaries cover current shape. Re-open if a non-trivial upgrade path lacks coverage.
 - [ ] **`.aitri/local.json` split** — tracked in ADR-028 as open question. One real signal (Hub) is insufficient; need a second before taking the breaking-change hit.
 
 #### Dropped from v2.0.0 breaking batch (by decision)
 
-- [ ] **`IDEA.md` → `spec/` move** — dropped 2026-04-23. Was opportunistic colado in the breaking-version window without its own evidence. **Not closed by alpha.17** (orphan IDEA.md absorption): alpha.17 removes IDEA.md post-approval by absorbing content into `01_REQUIREMENTS.json::original_brief`, while this proposal targets the pre-approval file location (root vs `spec/IDEA.md`). Re-open with its own evidence — a real consumer asking for the relocation, or a concrete defect.
-- [ ] **Phase 3 canonical TC id regex** — dropped 2026-04-23. Still waiting for the second evidence case that was the original gate; forcing it through the v2 batch inverted the evidence-before-breakage logic.
-- [ ] **Command-surface audit outcomes** — remains a Design Study below. No trigger.
+- [x] **`IDEA.md` → `spec/` move** — dropped 2026-04-23. Was opportunistic colado in the breaking-version window without its own evidence. **Not closed by alpha.17** (orphan IDEA.md absorption): alpha.17 removes IDEA.md post-approval by absorbing content into `01_REQUIREMENTS.json::original_brief`, while this proposal targets the pre-approval file location (root vs `spec/IDEA.md`). Re-open with its own evidence — a real consumer asking for the relocation, or a concrete defect.
+- [x] **Phase 3 canonical TC id regex** — dropped 2026-04-23. Still waiting for the second evidence case that was the original gate; forcing it through the v2 batch inverted the evidence-before-breakage logic.
+- [x] **Command-surface audit outcomes** — remains a Design Study below. No trigger.
 
 ### Core — alpha.7 canary findings (Ultron 2026-04-28) — open items
 
 Canary on v2.0.0-alpha.7 validated the grammar fix end-to-end (6/6 emissions copy-paste literal, no regression of alpha.6's inverted-order bug). Five secondary findings surfaced. The Go runner parser shipped in alpha.8; manifest schema drift and feature verify-run cwd shipped in alpha.9; the `--cmd` flag wiring/USAGE was confirmed and documented in alpha.15 (see closed entry below + CHANGELOG). One remains open — not a blocker.
 
-- [ ] **P3 — Upgrade banner cached-briefings warning — DECIDED 2026-05-02: not implementing (trigger window expired).** Originally proposed for the alpha.6→alpha.7 grammar boundary: warn the operator that terminal-cached briefings emitted by alpha.6 used different command grammar. Trigger condition was `before.semver < 2.0.0-alpha.7 && after.semver >= 2.0.0-alpha.7`. As of alpha.18 (2026-05-02) we are 11+ alphas past the boundary — any project upgrading from alpha.6 today is so far behind that the warning would fire for essentially nobody. Re-open only if a future grammar change creates a new boundary that warrants the same protection.
+- [x] **P3 — Upgrade banner cached-briefings warning — DECIDED 2026-05-02: not implementing (trigger window expired).** Originally proposed for the alpha.6→alpha.7 grammar boundary: warn the operator that terminal-cached briefings emitted by alpha.6 used different command grammar. Trigger condition was `before.semver < 2.0.0-alpha.7 && after.semver >= 2.0.0-alpha.7`. As of alpha.18 (2026-05-02) we are 11+ alphas past the boundary — any project upgrading from alpha.6 today is so far behind that the warning would fire for essentially nobody. Re-open only if a future grammar change creates a new boundary that warrants the same protection.
 
 - [x] **P3 — `aitri feature verify-run --cmd` flag wired and documented (alpha.15).** Verified: `lib/commands/feature.js:38` lists `aitri feature verify-run <name> [--cmd "..."]` in USAGE; `featureFlagValue('--cmd')` (alpha.7+) routes the value into `cmdVerifyRun`. The "unverified" note was closed by the alpha.15 USAGE addition.
 
@@ -306,7 +306,7 @@ Originally three independent issues surfaced by the Ultron canary that validated
 
 ### Core — `aitri normalize` proportionality (Ultron canary 2026-04-27)
 
-- [ ] **P1 — Normalize fires on non-behavioral file changes (root cause of friction cycle).** Three separable bugs surfaced by Ultron canary on alpha.3.
+- [~] **P1 — Normalize fires on non-behavioral file changes (root cause of friction cycle).** Three separable bugs surfaced by Ultron canary on alpha.3.
 
   Evidence (verified, not paraphrased):
   - **Cycle is real and recurring.** Ultron git history contains three previous workaround commits with the same shape: `9b68709 chore: advance aitri normalize baseline to current HEAD`, `0e6786a chore: advance aitri normalize baseline past CSS regeneration commit`, `35a9a95 chore: advance aitri normalize baseline past PR #1`. Each was the user manually compensating for the same broken contract.
@@ -391,236 +391,22 @@ User-reported friction (verbatim): (a) "funcionalidades pequeñas se tragan todo
 
 - [x] **P1 — SHIPPED rc.1 (2026-05-12)** — feature approve 4 advances root normalizeState. See "Shipped in rc.1" above + design-notes CHANGELOG entry for detail.
 
-<!-- ORIGINAL ENTRY (shipped, preserved temporarily for traceability of decisions during the rc.1 implementation cycle; remove on next BACKLOG cleanup pass) -->
-
-  Problem: When `aitri approve 4` runs on the root pipeline, [lib/commands/approve.js:392-402](lib/commands/approve.js#L392-L402) advances `config.normalizeState.baseRef` to current git HEAD. But `cmdApprove` is scope-aware: [approve.js:268](lib/commands/approve.js#L268) receives `dir` as the scope dir, and [approve.js:276](lib/commands/approve.js#L276) loads `<dir>/.aitri/config.json` — for feature scope that is `features/<name>/.aitri/config.json`, NOT the root `.aitri/config.json`. The baseline advance at line 401 therefore writes to the **feature's** normalizeState, leaving root's baseline frozen at whatever git SHA was current before the feature work began.
-
-  Resulting failure mode: in any project with a flat codebase (Go monolith, single-package Python, Rust workspace) — i.e., where feature implementation files live at root (`internal/alerts/engine.go`, `web/templates/...`, etc.) rather than sandboxed under `features/<name>/` — every feature Phase 4 approval leaves root pipeline in apparent drift. Root `aitri status` reports `deployable: Not ready — Code changes outside pipeline` and emits `aitri normalize` as P4 next-action. The "drift" files are precisely the implementation files the feature pipeline just approved through its own Phase 4 review. Verified by Ultron Codex canary 2026-05-11 transcript: after `network-alerts` feature pipeline closed, root reported drift against baseline `401678e8` (pre-feature) vs HEAD `8d7ab9b` (post-feature) — every file in the diff was a legitimately-approved feature artifact.
-
-  **Compounds with the second P1 below** (normalize+bugs deadlock). Ultron's transcript shows both firing simultaneously: feature completed → root normalize-pending (this P1) + 2 active bugs open → `aitri normalize --resolve` refused by [normalize.js:148-157](lib/commands/normalize.js#L148-L157) → deadlock. Operator cannot move forward through any clean path. The downstream P1 (ladder still suggests normalize) is the visible symptom; this P1 is the upstream cause that fires far more often (after **every** feature approval in flat-codebase projects, regardless of bug state).
-
-  Same defect class as the original Ultron 2026-04-27 normalize friction cycle that drove N1 allowlist: false-positive normalize triggers → operator workaround commits ("chore: advance baseline") → degraded git history + eroded signal credibility. Ultron already has 3 such commits in history from the pre-N1 era; this P1 will keep generating more for as long as it ships.
-
-  Files:
-  - `lib/commands/approve.js:392-402` — when `featureRoot` is set (i.e. we are approving in feature scope) AND `phase === 4`, **additionally** advance the root project's `normalizeState.baseRef` to the same git SHA. Today the block only writes to the in-memory `config` that gets saved back to the scope dir.
-  - `lib/state.js` — expose a helper `advanceNormalizeBaseline(rootConfigDir, baseRef, method)` that loads the root config, sets `normalizeState = { baseRef, method, status: 'resolved', lastRun: ISO }`, and saves. Single source of truth for the advance logic; reused by root path (no-op behavior change there — same write target as today) and feature path (new write target).
-  - `lib/scope.js` or `lib/state.js` — helper `findRootDir(featureRoot)` to walk up from a feature dir to the project root. Likely already exists somewhere — `findAncestorProjectRoot()` is referenced in `lib/commands/feature.js:172` per BACKLOG history; reuse if compatible.
-  - `test/commands/approve.test.js` — new coverage: (a) `aitri feature approve <name> 4` in a flat-codebase synthetic project advances BOTH the feature's and the root's `normalizeState.baseRef` to the same SHA; (b) root baseline advances even if root pipeline has not been re-approved since project init; (c) multiple features approving sequentially → root baseline advances each time to the latest SHA; (d) feature cascade invalidation (re-running run-phase 1 in feature scope) does NOT roll back root baseline — git SHAs are monotonic; new drift detection on root will surface correctly via post-invalidation changes; (e) mtime fallback path (no git) writes timestamp to both configs.
-  - `docs/integrations/SCHEMA.md` and/or `docs/integrations/CHANGELOG.md` — entry tagged `— additive` clarifying that root `normalizeState.baseRef` now advances on any pipeline Phase 4 approval (root or feature), not just root. Subproducts reading `.aitri.normalizeState` see no schema change, only that the field updates more often.
-
-  Behavior:
-  - `aitri feature approve <name> 4` writes to TWO `.aitri/config.json` files: the feature's (as today) and the root's (new). Both get the same `baseRef`/`method`/`lastRun`. Status `'resolved'` on both.
-  - `aitri approve 4` (root scope) writes only to root's config (as today).
-  - Subsequent `aitri status` on root after a feature Phase 4 approval shows `normalizeState !== 'pending'`, no P4 next-action, no false-positive drift on feature implementation files.
-  - `aitri feature run-phase 1` (cascade invalidates feature Phase 4 downstream): feature's `normalizeState` cleared (existing behavior). Root's NOT cleared — root baseline is forward-only.
-
-  Decisions:
-  - **Root baseline advances on any Phase 4 approval (root or feature).** Conceptual model: root baseline = "last point where any pipeline sealed its code state". Approving any Phase 4 means code state for that pipeline is reviewed-and-approved; from root's drift-detection perspective, that SHA is "all known-approved work to date".
-  - **No rollback on feature cascade.** Once root baseline advanced past a SHA, it stays advanced. If a feature cascade-invalidates later, new changes will surface as drift correctly against the post-advance baseline — no signal lost.
-  - **Edge case: multiple features with WIP in parallel.** When feature A approves while feature B's WIP is uncommitted, root baseline advances past feature B's WIP files. Acceptable: feature B's changes get reviewed in feature B's own Phase 4 review, not in root drift detection. The alternative (filtering feature-owned files out of root drift) requires reading every feature manifest to know which files belong where — far more complex than baseline-advance and prone to silent failures when manifests are stale.
-  - **No new field in `.aitri` schema.** The fix is a write-site change, not a state-shape change. Subproducts (Hub) see the same fields with the same semantics; only the WHEN of the update changes.
-  - **Severity P1: ship before v2.0.0 promotion.** Same tier-1 evidence as N1 (2026-04-27): false-positive normalize triggers in canary projects degrade produced software via meta-commit pollution and signal-credibility erosion. This defect class is exactly what the third-party adopter gate is designed to catch before stable promotion; the fact that the author's own canary (Ultron 2026-05-11) just surfaced it 11+ alphas into the v2.0.0 series strengthens the case that promotion to stable on author canaries alone is premature.
-
-  Acceptance:
-  - New tests pass; no existing test regressions.
-  - Manual on Ultron clone: at HEAD `8d7ab9b` (post `network-alerts` feature approval), `aitri status` reports `deployable: Not ready — 0 blockers` (or whatever non-normalize blockers remain — bugs, version mismatch, etc.). The normalize-pending blocker is gone.
-  - Synthetic flat-codebase test fixture: project with one root pipeline approved, then one feature pipeline run end-to-end (init → run-phase 1-4 → approve 1-4). After feature approve 4, root status shows no normalize drift. Run feature again with one more file changed in `internal/...`, approve again → root baseline advances again, still no drift on freshly-approved files.
-  - `docs/integrations/CHANGELOG.md` entry tagged `— additive` (no schema/event change; behavioral clarification of an existing field's update cadence). Subproduct impact: zero (Hub reads `normalizeState` as today).
-  - Smoke test on a feature-dense Aitri project (Hub if applicable, or synthetic) — no regression in feature pipeline behavior.
-
-  Evidence / source: Ultron Codex canary 2026-05-11 — user pasted transcript of the agent diagnosing the symptom and naming the baseline mismatch (`401678e8` vs `8d7ab9b`). Code verification 2026-05-11 confirmed root cause at [approve.js:392-402](lib/commands/approve.js#L392-L402) + [approve.js:276](lib/commands/approve.js#L276). Cross-references this BACKLOG entry on N1 (`### Core — aitri normalize proportionality (Ultron canary 2026-04-27)`) — same defect class, different mechanism.
-
 - [x] **P1 — SHIPPED rc.1 (2026-05-12)** — ladder suppresses `aitri normalize` when `bugs.blocking > 0`. See "Shipped in rc.1" above + design-notes CHANGELOG entry for detail.
-
-<!-- ORIGINAL ENTRY (shipped, preserved temporarily for traceability of decisions during the rc.1 implementation cycle; remove on next BACKLOG cleanup pass) -->
-
-  Problem: `aitri normalize --resolve` refuses to run when `bugs.blocking > 0` (gate at `lib/commands/normalize.js:148-157`). But the next-action ladder in `lib/snapshot.js:727-744` emits `aitri normalize` as priority 4 regardless of bug state. Operator follows the ladder → runs normalize → gets rejected ("Cannot resolve — open critical/high bug(s)") → fixes bug → re-runs `status`/`resume` → ladder still says "run aitri normalize". Visible contradiction between the ladder's suggestion and the command's gate. Surfaced by user report 2026-05-11 ("cuando corro bugs también pide normalize"). `lib/commands/bug.js` itself is silent on normalize (verified by grep) — the noise comes entirely from `buildNextActions()` consumers (`status`, `resume`, `verify-complete --next-action` alpha.19 path).
-
-  Files:
-  - `lib/snapshot.js:726-744` — `buildNextActions()` normalize emission block. Add precondition: skip both `normalize_pending` and `uncountedFiles > 0` branches when `bugs.blocking > 0`. The blocking-bug P1 action already surfaces above normalize in the ladder; normalize re-emerges automatically when bugs close.
-  - `test/snapshot.test.js` — coverage for: (a) blocking bug + normalize pending → only blocking-bug action surfaces, no normalize; (b) blocking bug closed + normalize still pending → normalize re-emerges; (c) normalize pending + no blocking bugs → normalize surfaces as today; (d) `uncountedFiles > 0` + blocking bugs → no normalize line.
-
-  Behavior:
-  - Snapshot's `nextActions[]` array does NOT include any `aitri normalize` entry when `bugs.blocking > 0`.
-  - All consumers (`aitri status`, `aitri resume`, `cmdVerifyComplete` next-action) no longer pester operator about normalize during bug-fix work.
-  - `aitri normalize` itself remains available — the change is suggestion ordering only, not command availability. Operator can still run normalize manually if they want the diagnostic briefing (it will continue to refuse `--resolve` per existing gate; the briefing still emits).
-  - `.aitri.normalizeState.status` stays `'pending'` (state untouched — suppression is at next-action emission, not at state).
-
-  Decisions:
-  - **Suppress, not reword.** Telling the operator "you can't normalize yet" while keeping it in the ladder is theater — the ladder's purpose is "next thing to do", and an action that the command rejects is not a next thing.
-  - **No new snapshot field.** Suppression is purely in `buildNextActions()`; subproducts that read `.aitri.normalizeState` directly see no change.
-  - **Feature scope unaffected.** Feature pipelines have no normalize today; revisit only if feature-scope normalize lands.
-
-  Acceptance:
-  - New tests pass.
-  - Manual: synthetic project with one critical bug `status='open'` + `normalizeState='pending'` → `aitri status` shows P1 "fix blocking bugs" but no normalize line. After `aitri bug fix` + `verify-run` + `verify-complete`, normalize re-surfaces.
-  - No `docs/integrations/CHANGELOG.md` entry (CLI text only, no schema impact — subproducts read `.aitri.normalizeState` directly, not `nextActions[]` text).
-  - Severity HIGH for v2.0.0 promotion: a visible deadlock in a P4 ladder action contradicts the "stable" promise. Ship in the alpha that precedes promotion, regardless of whether promotion happens immediately after.
 
 - [x] **P2 — SHIPPED rc.2 (2026-05-12)** — `templates/AGENTS.md` rewrite includes three-tier "trivial/small/feature" classification with concrete examples. See "Shipped in rc.2" above.
 
-<!-- ORIGINAL ENTRY (shipped, preserved temporarily) -->
-
-- [ ] _PARKED_ **P2 — Binary "functional vs minor" classification in `templates/AGENTS.md` forces small UI tweaks into the full pipeline.**
-
-  Problem: `templates/AGENTS.md:40-48` defines two tiers — "functional change → `aitri feature init`" or "minor change (typo, style tweak, config value) → direct implementation". The line "When in doubt, treat it as functional" biases the agent toward the full pipeline. Real-world changes that are neither — "add a form field with no new validation", "make a header fixed", "rename a button label", "swap a single-component layout property" — are mechanically functional (modify behavior) but operationally don't warrant 5 phases + 5 approvals + the full artifact chain. User reported this across Codex canary work 2026-05-11: any new behavior is treated as feature; pipeline cost disproportionate to change size. The agent is NOT misbehaving — it is following the template literally. The template's binary rule is the gap.
-
-  Files:
-  - `templates/AGENTS.md` — expand the "minor change" examples list. Add: single-field UI additions with no new validation logic, layout/CSS-only changes that touch one component, label/copy changes that don't alter user-facing behavior contract, additive optional config fields. Soften "when in doubt treat as functional" to a two-axis rule: when in doubt about *behavior change* lean functional; when in doubt about *size* prefer smaller scope first.
-  - **Blocking dependency:** existing consumer projects (Hub, Ultron, Zombite, Cesar, Go-on-RPi) have `templates/AGENTS.md` content frozen at the moment of their `aitri init` / `aitri adopt apply`. `lib/agent-files.js::writeAgentFiles` is strictly non-destructive (line 39: `if (fs.existsSync(dest)) continue`); `lib/upgrade/index.js:91-94` only regenerates *missing* files. A template change here does NOT propagate to existing projects without P3 below or operator manual intervention (delete file → re-upgrade).
-
-  Behavior:
-  - New projects (via `aitri init` or `adopt apply`) get the expanded template across all four agent file destinations (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.codex/instructions.md`).
-  - Existing projects: until P3 ships, manual override required. Document in alpha release notes.
-
-  Decisions:
-  - **No new lifecycle tier (no `aitri patch init`, no `--light`).** Decision matrix run 2026-05-11 — value 6-7, severity moderate. Sufficient to fix at the template level first; only if Dir 1 (template) fails to resolve the friction in canaries do we justify Dir 2 (new tier or command). Premature to add command surface without that evidence.
-  - **Examples are illustrative, not exhaustive.** The principle is *size, not novelty*: a small behavioral change is still small.
-  - **Couples with P3** — see "Acceptance" below.
-
-  Acceptance:
-  - Updated `templates/AGENTS.md` reviewed by user before alpha bump.
-  - Test in `test/agent-files.test.js` (or equivalent) asserts the four destination files are byte-identical to `templates/AGENTS.md` after `init` / `adopt apply` (already implicit; explicit assertion locks the contract).
-  - Canary in Codex on a real small-feature scenario ("add a form field") — agent self-classifies as minor and implements directly without `feature init`. Document outcome in this entry before closing.
-  - Coupled with P3: ship Dir 1 template + P3 refresh mechanism together, OR ship Dir 1 with explicit "existing projects must delete agent file and re-run `adopt --upgrade`" note in the alpha release.
-
 - [x] **P2 — SHIPPED rc.2 (2026-05-12)** — `aggregateBugs` now exposes `bySeverity` + `openIds`; `status --json` emits them; STATUS_JSON.md documents the additive shape. See "Shipped in rc.2" above.
-
-<!-- ORIGINAL ENTRY (shipped, preserved temporarily) -->
-
-- [ ] _PARKED_ **P2 — `aitri status --json` bugs payload too narrow — Hub cannot derive per-severity counts or open IDs from the documented contract.**
-
-  Problem: Hub's `~/.aitri-hub/dashboard.json` for a project with one medium + one low open bug shows `bugsSummary: { open: 2, critical: 0, high: 0, medium: 0, low: 0, openIds: [] }`. The grand-total count (`open: 2`) is correct; the per-severity breakdown and the open IDs are silently empty. User initially diagnosed as a Hub bug ("Hub debería derivar medium/low/openIds desde bugs.list"). Code verification 2026-05-11 reversed the diagnosis: the bug is on Aitri Core, not Hub.
-
-  Code-verified root cause:
-  - `aggregateBugs()` in [snapshot.js:357-386](lib/snapshot.js#L357-L386) builds the full internal shape: `{ total, open, blocking, byPipeline, list[] }`. The `list[]` entries carry `{ id, title, severity, status, fr, phase_detected, scope }` per bug.
-  - But `status --json` in [status.js:308](lib/commands/status.js#L308) narrows the output explicitly: `bugs: { total: bugs.total, open: bugs.open, blocking: bugs.blocking }`. The `list[]` and `byPipeline` are filtered out before crossing the JSON boundary that Hub consumes.
-  - Documented contract in [docs/integrations/STATUS_JSON.md:49](docs/integrations/STATUS_JSON.md#L49): `"bugs": { "total": N, "open": N, "blocking": N }`. Hub is reading the contract correctly — the contract simply doesn't promise the fields Hub needs to render per-severity warnings.
-  - Hub's "derive from `bugs.list`" code path is dead code in the current state: `list` is `undefined` in Hub's read, defaults fall through to zero.
-
-  This is the **fourth piece of evidence in the 2026-05-11 session** of contract gaps between Core and its consumers surfacing only via author-owned canaries — same defect class as the Hub-Aitri contract debt that motivated the third-party adopter gate. Hub passed its tests; Aitri Core passed its tests; the contract between them had this gap dormant for the entire v2.0.0 alpha series.
-
-  Files:
-  - `lib/snapshot.js::aggregateBugs` (lines 357-386) — extend return to include `bySeverity: { critical, high, medium, low }` (counts of `severity ∈ {critical, high, medium, low}` filtered to `status ∈ {open, in_progress}`) and `openIds: string[]` (ids of bugs with `status ∈ {open, in_progress}`, sorted ascending for deterministic output). Reuse the existing loop — no second pass needed. Keep `list[]` and `byPipeline` as today for internal consumers.
-  - `lib/commands/status.js:308` — expand the JSON bug emission: `bugs: { total: bugs.total, open: bugs.open, blocking: bugs.blocking, bySeverity: bugs.bySeverity, openIds: bugs.openIds }`. Strictly additive — old readers see the same `total`/`open`/`blocking`.
-  - `lib/commands/validate.js::emitJson` (lines 227-314) — same `bugs` shape if it emits one; check `validate --json` output for the bugs/blockingBugs field and align. Currently emits `openBugs` and `blockingBugs` as flat numbers ([validate.js:311-312](lib/commands/validate.js#L311-L312)) — those are a separate, validate-specific surface; consider whether to also expose `bySeverity` here for consistency or leave validate's flat shape alone (decision below).
-  - `docs/integrations/STATUS_JSON.md` — update the `bugs` schema block (line 49 area) to document the two new additive fields with examples.
-  - `docs/integrations/CHANGELOG.md` — entry tagged `— additive` describing the two new fields. Subproducts that ignore them keep working; subproducts that opt in (Hub) gain the per-severity breakdown.
-  - `test/snapshot.test.js` and/or `test/commands/status.test.js` — coverage: (a) snapshot with mixed-severity bugs returns correct `bySeverity` counts; (b) bugs with `status: closed` / `verified` / `fixed` are excluded from `bySeverity` and `openIds`; (c) `--json` output contains the new fields; (d) `--json` output is **backward-compatible** with the legacy `{ total, open, blocking }` shape (regression lock for existing Hub readers); (e) `openIds` sorted ascending and deterministic across runs.
-
-  Behavior:
-  - `aitri status --json` `bugs` field includes two new fields: `bySeverity` (object with four numeric counters) and `openIds` (string array). All other fields unchanged. Schema strictly additive.
-  - `bySeverity` counts open + in_progress (active work). Does NOT include `fixed` (intentionally — `fixed` means dev claims it's resolved, awaiting verification; Hub will surface that separately if it wants).
-  - `openIds` lists bug IDs in open/in_progress state, sorted ascending. Bounded payload (one short string per active bug — even a 100-bug project is ~800 bytes).
-  - Hub on next dashboard refresh sees populated `bySeverity` and `openIds`. No Hub code change required if Hub was already attempting to read those fields (which the user reports is the case — the read code exists, the data finally arrives).
-
-  Decisions:
-  - **Pre-aggregated breakdown, not full `list[]` exposure.** Cost-benefit: Hub needs counts + IDs to render warnings + open clickable links. Hub does NOT need title/fr/phase_detected per bug in the dashboard summary. If a future consumer requests the full list (e.g. for a detail view), add a separate field — don't bloat the summary payload to anticipate it.
-  - **`fixed` status excluded from `bySeverity` and `openIds`.** Aligns with the existing semantics: `open` counter at [snapshot.js:372](lib/snapshot.js#L372) counts `open`/`in_progress`/`fixed` (the "active" set); `blocking` at [snapshot.js:373](lib/snapshot.js#L373) counts only `open`/`in_progress` (the "actually blocking" set). `bySeverity` should mirror `blocking`'s active-only semantics — `fixed` bugs are not currently degrading the project.
-  - **Validate's `openBugs` / `blockingBugs` flat numbers stay as today.** Validate is a deploy-gate snapshot, not a UI surface. Hub does not consume validate's JSON for its dashboard. Leaving validate's flat shape avoids contract churn on a surface that has no consumer pressure.
-  - **Severity P2, ship POST-promotion.** Not blocking — Hub works, the grand-total reaches the dashboard, the operator sees that bugs exist. The per-severity granularity loss is UI polish, not a deadlock or false positive. Ship in a post-promotion alpha as additive cleanup. Re-classify to P1 only if a real consumer is blocked by the missing fields (Hub's current code path defaults to zero gracefully, so Hub is not blocked — just suboptimal).
-  - **Evidence for keeping third-party gate (recorded in v2.0.0 promotion section):** this is the fourth contract gap surfaced in the 2026-05-11 session via author canaries. Promotion on author canaries alone would ship this gap; the gate exists exactly to catch this class.
-
-  Acceptance:
-  - New tests pass; existing tests adjusted (the regression-lock test on the legacy `{total, open, blocking}` shape is the explicit acceptance of additive-only).
-  - Manual: synthetic project with 1 medium bug + 1 low bug, `aitri status --json | jq .bugs` shows `{ total: 2, open: 2, blocking: 0, bySeverity: {critical:0, high:0, medium:1, low:1}, openIds: ["BG-???", "BG-???"] }` with the actual IDs.
-  - `docs/integrations/STATUS_JSON.md` updated; `docs/integrations/CHANGELOG.md` entry present.
-  - Hub canary: refresh `~/.aitri-hub/dashboard.json` for a project with mixed-severity bugs, confirm `bugsSummary` is fully populated. **This is the acceptance criterion that closes the entry** — without Hub canary confirmation, the fix is theoretical.
-
-  Evidence / source: Ultron Hub dashboard 2026-05-11 — `bugsSummary` shows zeros across severity. User pasted the dashboard payload and BUGS.json contents (BG-037 low, BG-039 medium). User's initial diagnosis ("bug en Hub") reversed after code verification in the same session ([snapshot.js:357-386](lib/snapshot.js#L357-L386) + [status.js:308](lib/commands/status.js#L308) + [STATUS_JSON.md:49](docs/integrations/STATUS_JSON.md#L49)). Cross-references the contract-gap pattern that motivated the third-party adopter gate (see top of v2.0.0 section).
 
 - [x] **P3 — DECIDED 2026-05-12: not implementing.** Manual delete-and-re-upgrade path is sufficient given `aitri adopt --upgrade` already warns on version mismatch. Existing operators see the version-mismatch P1 next-action when CLI version bumps; deleting the local agent file and re-running `--upgrade` regenerates from template. Documented in CLAUDE.md "Agent-instructions freshness" rule (rc.2). Re-open criterion: real adopter asks for an automated `--refresh-agents` flag with diff preview. Until then, the producer-side freshness obligation (audit template on every bump) is enough.
 
-<!-- ORIGINAL ENTRY (parked) -->
-
-- [ ] _PARKED_ **P3 — Agent-file refresh mechanism for existing projects.**
-
-  Problem: `lib/agent-files.js::writeAgentFiles` is non-destructive by design (line 39: `if (fs.existsSync(dest)) continue`). Called from `init`, `adopt apply`, and `adopt --upgrade` (`lib/upgrade/index.js:92` — comment explicitly says "regenerate *missing* agent instruction files"). When `templates/AGENTS.md` evolves substantively, existing projects' `CLAUDE.md` / `GEMINI.md` / `.codex/instructions.md` / `AGENTS.md` stay frozen at the moment of project init. **Current state of the template:** 1 commit total (v0.1.61 `d053ed6`, 2026-03-17), 48 lines — has not drifted in practice. But the framework allows future drift to go silent. Surfaced 2026-05-11 during conversation about Codex canary; the user assumed CLAUDE.md was getting updates (it wasn't — the CLAUDE.md they read is the dev-repo's hand-written `/Users/cesareyeserrano/Documents/PROJECTS/AITRI/CLAUDE.md`, not the Aitri-generated one in consumer projects).
-
-  Files:
-  - `lib/upgrade/index.js` — add opt-in flag `--refresh-agents` to `adopt --upgrade`. When passed: for each `AGENT_FILES[]` destination that exists, compute hash of current vs template, diff, prompt operator (TTY-gated) y/N per file. Default behavior unchanged (non-destructive).
-  - `lib/agent-files.js` — export `diffAgentFiles(dir, rootDir)` helper returning `[{ path, currentHash, templateHash, divergent }]` for use by upgrade dry-run and refresh paths.
-  - `test/upgrade.test.js` and `test/agent-files.test.js` — coverage: diff detection on divergent files, no-op when content matches, TTY gate on actual write, dry-run preview output.
-  - `docs/integrations/CHANGELOG.md` — `— additive` entry (new CLI flag, no schema/event change).
-
-  Behavior:
-  - `aitri adopt --upgrade --refresh-agents`: for each agent file that exists and differs from template, prints diff and prompts y/N. Without `--refresh-agents`, current behavior preserved.
-  - `aitri adopt --upgrade --dry-run --refresh-agents`: prints diff preview without writing.
-  - Operators with hand-customized agent files are protected by per-file prompt — accidental overwrite is impossible.
-
-  Decisions:
-  - **Opt-in flag, not default.** Some operators hand-edit `CLAUDE.md` to add project-specific context. Silent overwrite on every upgrade would destroy that work. Diff + prompt preserves agency.
-  - **TTY-gate mandatory on write path.** Agent-files refresh cannot run in CI. Same invariant family as `approve` / `reject`.
-  - **Per-file prompt, not batch.** Operator may want to refresh `.codex/instructions.md` but keep their customized `CLAUDE.md`. Granularity matters.
-  - **Trigger criterion for prioritizing implementation:** scheduled, not eager. P3 today; promote to P1 the first time `templates/AGENTS.md` gets a substantive content update (i.e. the moment its git log goes to 2 commits). Right now there's no concrete victim — only future risk. Coupled with P2: shipping P2 (template expansion) is exactly that triggering event.
-
-  Acceptance:
-  - New tests pass.
-  - Manual on a synthetic project: hand-edit `CLAUDE.md`, run `--upgrade --refresh-agents --dry-run` → diff shows. Run without `--dry-run` → prompt fires; `y` → overwritten; `n` → preserved.
-  - `docs/integrations/CHANGELOG.md` updated; no schema change in `.aitri` or artifacts.
-
 - [x] **P3 — SHIPPED rc.2 (2026-05-12)** — `emitText` trimmed: deploy candidates + setup commands + DEPLOYMENT.md hint now behind `--explain`; features section hides in default when all-green, shows when any blocker. JSON shape UNTOUCHED (regression-locked). See "Shipped in rc.2" above.
 
-<!-- ORIGINAL ENTRY (shipped, preserved temporarily) -->
-
-- [ ] _PARKED_ **P3 — Validate text output overlaps ~70% with `status`; trim default, move operational reporting behind `--explain`.**
-
-  Problem: User reported "el comando validate es el más invasivo" 2026-05-11. Initially parked as preference (user couldn't pinpoint a recent corrida). Deeper investigation 2026-05-11 surfaced an architectural cause that re-classifies this from preference to **verified structural redundancy**.
-
-  Code-verified duplication between `aitri status` and `aitri validate`:
-
-  | Section | status emits | validate emits | Unique to validate? |
-  |---|:-:|:-:|---|
-  | Per-phase table | ✓ ([status.js:30+](lib/commands/status.js#L30)) | ✓ ([validate.js:84-107](lib/commands/validate.js#L84-L107)) | no |
-  | `deployable: Ready / Not ready — N blockers` row | ✓ ([status.js:75-82](lib/commands/status.js#L75-L82)) | ✓ ([validate.js:167-172](lib/commands/validate.js#L167-L172)) | **no** |
-  | `Σ all pipelines` aggregated counts | ✓ ([status.js:62](lib/commands/status.js#L62)) | ✓ ([validate.js:202](lib/commands/validate.js#L202)) | **no** |
-  | Features section + per-feature verify | ✓ ([status.js:113-125](lib/commands/status.js#L113-L125)) | ✓ ([validate.js:177-204](lib/commands/validate.js#L177-L204)) | **no** |
-  | Open bugs warning | ✓ | ✓ | no |
-  | **IDEA.md gate** (file-on-disk OR absorbed brief) | ✗ | ✓ ([validate.js:77-81](lib/commands/validate.js#L77-L81)) | **yes** |
-  | Deploy candidates listing (Dockerfile/compose/etc.) | ✗ | ✓ ([validate.js:138-147](lib/commands/validate.js#L138-L147)) | yes (informational) |
-  | Setup commands listing (from manifest) | ✗ | ✓ ([validate.js:150-160](lib/commands/validate.js#L150-L160)) | yes (informational) |
-  | DEPLOYMENT.md path note | ✗ | ✓ ([validate.js:162-164](lib/commands/validate.js#L162-L164)) | yes (informational) |
-  | `--explain` gate-reasons enumeration | ✗ | ✓ ([validate.js:207-223](lib/commands/validate.js#L207-L223)) | yes |
-  | `--json` schema | (status has its own) | ✓ ([validate.js:227-314](lib/commands/validate.js#L227-L314)) | yes (Hub contract) |
-
-  **Root cause:** `aitri status` absorbed the deploy-gate display (`deployable:` row + `Σ all pipelines` + features section) in an earlier alpha to surface deploy readiness inline. Validate **kept all its original content**. Result: when an operator closes the pipeline by running `status` repeatedly then `validate`, ~70% of validate's text is verbatim what status just showed. That is the "invasive" feeling, with a structural explanation.
-
-  Unique value of validate's text mode today (the ~30% that justifies the command's existence):
-  1. **IDEA.md gate** — the only artifact validate checks that status does not (file-on-disk OR absorbed-into-`original_brief` per alpha.22).
-  2. **`--explain` gate-reasons enumeration** — unique to validate.
-  3. **Operational deploy info** (deploy candidates / setup commands / DEPLOYMENT.md path) — not validation, but operational guidance for the operator at deploy time.
-
-  Files:
-  - `lib/commands/validate.js::emitText` (lines 66-205) — restructure default output. Keep IDEA gate + per-phase status + verify + bug warning + deploy-gate verdict line. Move deploy candidates block (138-147), setup commands block (150-160), DEPLOYMENT.md note (162-164), and full features+Σ table (177-204) to `--explain` only. Show features section in default text **only when there are feature-level blockers** (sort-rank 0 features — `allCoreApproved && verify.ran && !verify.passed`), because feature failures can block root deploy and the operator must know.
-  - `lib/commands/validate.js::emitJson` (lines 227-314) — **UNTOUCHED**. JSON shape is documented contract with Hub via `docs/integrations/STATUS_JSON.md` and `docs/integrations/CHANGELOG.md`. All fields (`allValid`, `artifacts[]`, `deployFiles`, `setupCommands`, `deployable`, `deployableReasons[]`, `openBugs`, `blockingBugs`) stay.
-  - `test/commands/validate.test.js` — adjust existing tests asserting current default output contains deploy candidates / setup commands; add new tests: (a) default text does NOT contain `📦 Deployment files detected` block, (b) default text does NOT contain `🚀 Setup commands` block, (c) `--explain` text contains all four moved blocks, (d) default text DOES contain features section when any feature has failed verify, (e) default text does NOT contain features section when all features green, (f) `--json` output is byte-identical to current shape (regression lock for Hub contract).
-
-  Behavior:
-  - **Default text** (~12-18 lines): IDEA gate, phase table, verify line, open bug warning, deploy-gate verdict, features section **only if blockers present**. Net reduction ~10-15 lines from current ~25-40.
-  - **`--explain` text** (current default + gate-reasons enumeration): keeps everything currently shown plus the deploy candidates / setup commands / DEPLOYMENT.md / always-on features+Σ table. Today `--explain` adds gate-reasons on top of default; post-change it adds *everything previously in default* on top of the trimmed default.
-  - **`--json`** unchanged. Subproducts see no diff.
-
-  Decisions:
-  - **Trim default, not remove sections.** Operational deploy info (candidates / setup commands / DEPLOYMENT.md hint) is genuinely useful at deploy time — but that is when the operator runs `aitri validate --explain` as the final pre-deploy checklist. Default text is for the more common case ("am I done? / what's blocking?"), where the answer is one line.
-  - **JSON contract intocado.** Per `docs/integrations/STATUS_JSON.md` and v2.0.0 schema-evolution rule. Hub consumers see no change.
-  - **Features section in default conditional on blockers.** A clean feature row in validate's default text is the same info as a clean feature row in status — redundant. A failing feature row is signal — must surface.
-  - **Re-classification from PARKED to P3 justified by architectural finding (2026-05-11).** Original parking was based on weak signal ("can't pinpoint specific corrida"). Code investigation revealed verifiable duplication independent of user impression. Per CLAUDE.md Feedback evaluation §2, the root cause IS now verifiable from the code — duplication between `status.js:62-82,113-125` and `validate.js:167-172,177-204` is grep-able fact, not preference.
-  - **NOT shipping before v2.0.0 promotion.** Pure cleanup; no contract impact; not blocking anything. Adding cosmetic changes to the alpha that precedes promotion introduces noise. Ship in a post-promotion alpha or as part of v2.1.0.
-
-  Acceptance:
-  - New tests pass; existing tests adjusted to new default shape.
-  - Manual: on a deployable project (all green), `aitri validate` emits ~12-18 lines, no deploy candidates / setup commands blocks, no features table. `aitri validate --explain` emits previous default content + gate-reasons. `aitri validate --json` byte-identical to pre-change output for the same fixture (regression lock).
-  - `docs/integrations/CHANGELOG.md` entry tagged as `— no schema change` (text-only CLI change, JSON contract preserved). Brief entry noting that text default tightened; subproducts unaffected.
-  - Update `docs/integrations/STATUS_JSON.md` if it describes validate's text output anywhere (verify before edit; STATUS_JSON.md is JSON-focused so likely no edit needed).
-  - Severity Low: not blocking promotion, not blocking adopters, not degrading produced software. Pure cleanup of accumulated scope creep. Ship when convenient.
-
-  Evidence / source: Codex canary conversation 2026-05-11 — original report + investigation + re-classification documented in the same session.
 
 ### Core — Post-promotion housekeeping
 
-- [ ] **Rename `from-0.1.65.js` or adjust ADR — DECIDED 2026-05-02: ADR-027 amended (per-version-boundary is heuristic, not contract).** The module's actual contract is field-presence gating, not the file name. Splitting into `from-0.1.80.js` etc. would be cosmetic — the gating logic carries no version meaning. Re-open if a second brownfield baseline produces a natural split (e.g. a v0.2+ schema change cluster), not before. See ADR-027 amendment for the naming-convention clarification.
+- [x] **Rename `from-0.1.65.js` or adjust ADR — DECIDED 2026-05-02: ADR-027 amended (per-version-boundary is heuristic, not contract).** The module's actual contract is field-presence gating, not the file name. Splitting into `from-0.1.80.js` etc. would be cosmetic — the gating logic carries no version meaning. Re-open if a second brownfield baseline produces a natural split (e.g. a v0.2+ schema change cluster), not before. See ADR-027 amendment for the naming-convention clarification.
 
-- [ ] **P3 — Strengthen `release-sync.test.js` to detect missing integrations CHANGELOG entries — DECIDED 2026-05-02: not implementing.** Both opt-out designs (strict + lax) shift the failure mode without preventing it — neither replaces the human judgment "does this bump affect subproduct readers?" The single occurrence (alpha.14) was caught by manual audit and closed retroactively; alpha.15 was an intentional skip (no schema change), not a miss. Score: 1 actual miss in 18 alphas. Per CLAUDE.md "prevention with no current victim → backlog, not commit". Re-open criterion: a second **unintentional** miss in the alpha.18+ sequence. The reminder value of a guard does not justify the noise-vs-friction trade-off until the failure recurs.
+- [x] **P3 — Strengthen `release-sync.test.js` to detect missing integrations CHANGELOG entries — DECIDED 2026-05-02: not implementing.** Both opt-out designs (strict + lax) shift the failure mode without preventing it — neither replaces the human judgment "does this bump affect subproduct readers?" The single occurrence (alpha.14) was caught by manual audit and closed retroactively; alpha.15 was an intentional skip (no schema change), not a miss. Score: 1 actual miss in 18 alphas. Per CLAUDE.md "prevention with no current victim → backlog, not commit". Re-open criterion: a second **unintentional** miss in the alpha.18+ sequence. The reminder value of a guard does not justify the noise-vs-friction trade-off until the failure recurs.
 
 ### Core — Consumer project backlog richness
 
