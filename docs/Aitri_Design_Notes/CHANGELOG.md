@@ -5,6 +5,87 @@
 
 ---
 
+## [2.0.0-rc.3] — 2026-05-12 — F11 refinement + Hub canary 2026-05-13 follow-ups (E2E TC parser + feature-aware normalize)
+
+**Hub canary 2026-05-12 surfaced a stable terminal loop.** Hub (rc.2, deployable, 9 features) repeatedly entered `status → Next: aitri validate → run validate → status → Next: aitri validate` — the recommended action never resolved the condition that triggered it.
+
+### Root cause (verified in code, not hypothesized)
+
+`lib/snapshot.js` F11 (alpha.2) gated terminal idle on three conditions: `health.deployable && audit.exists && !health.staleAudit && health.staleVerify.length === 0`. When *any* pipeline (root or feature) had `verifyRanAt` older than 14 days, `stableTerminal` flipped false and P7 emitted `aitri validate`. But `aitri validate` is a read-only readiness checkpoint — it does not write `verifyRanAt`. So the staleness condition persisted and the loop was deterministic. Any multi-feature project with a stable feature untouched for 2+ weeks reproduces this — Hub is the first canary to hit the combination at maturity, but it's a general property of rc.2 logic, not Hub-specific data.
+
+### Fix
+
+When `health.deployable === true && auditFresh === true && staleVerify.length > 0`, emit **one P7 entry per stale pipeline** with the command that actually resolves the staleness:
+
+- Root stale → `aitri verify-run`.
+- Feature `<name>` stale → `aitri feature verify-run <name>`.
+
+`aitri validate` is no longer emitted in this case — running it would not progress the state.
+
+When `auditFresh === false` (audit missing or stale), P7 keeps emitting `aitri validate` as before. P9 (audit) continues to fire independently. Stale verify in that case is surfaced via the status display warning rather than via duplicated ladder entries; the operator addresses validate/audit first, then verify-run re-emerges when audit gates close.
+
+When `deployable && auditFresh && verifyFresh`, no P7 is emitted (terminal idle — same as rc.2).
+
+### Status display addition
+
+`status` gains a `verify: stale on N pipeline(s) (oldest D days) — run: aitri verify-run` line, analogous to the existing `audit: stale (X days) — run: aitri audit` line. Closes the "operator sees `Next: aitri validate` with no explanation" half of the Hub finding.
+
+### Tests
+
+`test/snapshot.test.js`: the existing F11 test `'still emits P7 validate when verify is stale'` is updated to assert the new shape (`'emits P7 verify-run (not validate) when audit fresh and verify is stale'`). Two new tests cover per-feature scope and multiple stale pipelines. `test/commands/status.test.js` gains three tests for the display: line presence, line absence when fresh, and `Next:` coherence (verify-run, not validate). +5 tests (1175 → 1180, all green).
+
+### Promotion impact
+
+This is a Tier-1 fix per CLAUDE.md "Purpose over process" — a deterministic loop in a deployable multi-feature project degrades the agent flow in any consumer project. Bundled into rc.3 before promotion candidacy. Does not by itself unblock or block third-party adopter validation; closes one of the foreseeable first-contact friction points.
+
+---
+
+### Also in rc.3 — `extractTCId` accepts alphanumeric namespace segments (Hub canary 2026-05-13)
+
+Surfaced by Hub canary 2026-05-13. Feature `hub-bug-summary-snapshot` had two E2E test cases (`TC-E2E-001h`, `TC-E2E-005h`) whose passing lines were present in the runner's raw output. `aitri feature verify-run` still wrote both as `status: "skip"` in `04_TEST_RESULTS.json`, forcing manual reconciliation before `verify-complete` would pass.
+
+#### Root cause (verified in code)
+
+[lib/commands/verify.js:33](../../lib/commands/verify.js#L33) — `extractTCId`'s namespace pattern was `(?:[-_][A-Za-z]+)*`. The letters-only segment shape rejected `E2E` (and any other alphanumeric segment: `V1`, `S3`, `IPv4`, …). The defect was shared by all five test-runner parsers that call `extractTCId` — not Playwright-specific. Existing tests covered `TC-001`, `TC-020b`, `TC-FE-001h`, `TC-API-USER-010f` — none included a digit inside a namespace segment, so the gap survived every alpha and rc.1/rc.2.
+
+#### Fix
+
+Namespace segment shape becomes `[A-Za-z][A-Za-z0-9]*` — first char must be a letter (disambiguates namespace from the final numeric block), digits permitted thereafter. Backtracking still resolves single-segment (`TC-001`), suffix-only (`TC-020b`), letter-only multi-segment (`TC-FE-001h`, `TC-API-USER-010f`), and the new alphanumeric case (`TC-E2E-001h`). All seven existing `extractTCId` tests still green.
+
+#### Tests
+
+`test/commands/verify.test.js` — new `extractTCId()` case `'handles namespace segments with digits (E2E, V1, S3)'` covering `TC-E2E-001h`, `TC-E2E-005h`, `TC-V1-010h`, `TC-S3-BUCKET-042e`.
+
+---
+
+### Also in rc.3 — `aitri normalize` excludes feature pipeline artifacts (Hub canary 2026-05-13)
+
+Surfaced by Hub canary 2026-05-13. After feature `hub-bug-summary-snapshot` shipped (5/5 approved, verify-complete passed), parent `aitri resume` reported 9 files changed outside the parent pipeline and `aitri normalize` listed `features/hub-bug-summary-snapshot/spec/01_REQUIREMENTS.json`, `…/04_TEST_RESULTS.json`, `…/05_PROOF_OF_COMPLIANCE.json`, and other feature-scoped artifacts as off-pipeline changes against the parent build baseline.
+
+#### Root cause (verified in code)
+
+[lib/commands/normalize.js:55-68](../../lib/commands/normalize.js#L55-L68) `gitChangedFiles` and [normalize.js:70-90](../../lib/commands/normalize.js#L70-L90) `mtimeChangedFiles` excluded only root `spec/`, root `.aitri`, and `node_modules/`. They had no symmetric exclusion for `features/<name>/spec/` or `features/<name>/.aitri`. The result was conceptually wrong — feature pipeline artifacts are governed by the feature's own gate (its own `04_TEST_RESULTS.json`, `05_PROOF_OF_COMPLIANCE.json`, `verifyPassed`), not by the parent's build baseline. Listing them in parent normalize forced the operator into reclassifying already-approved feature output as outside-pipeline drift.
+
+#### Fix
+
+New helper `isFeaturePipelineArtifact(relPath)` matches `^features/[^/]+/(spec/|\.aitri(\/|$))`. Both detection paths (git and mtime) now filter it symmetrically with the root exclusions.
+
+Shared product code that a feature contributes outside `features/<name>/` (e.g. `lib/collector/snapshot-reader.js`, `tests/e2e/<file>.test.js` at the repo root) **stays in scope**. That's a legitimate parent baseline change and the operator confirms it via the existing `aitri normalize --resolve` TTY gate. The fix narrows the false-positive set, not the legitimate review surface.
+
+#### Scope explicitly NOT covered
+
+The user's Hub finding also raised a deeper question: should `aitri feature verify-complete` propagate baseline advancement to the parent automatically, so shared code contributed by a shipped feature does not need a separate `--resolve` confirmation? Answer: no, not in rc.3. That change would touch parent/feature baseline coupling (what happens with parallel features, what happens when a feature contributes to a file another feature also touched) and the evidence base is one canary. Current behavior (operator runs `--resolve` after feature ship) remains correct by design — it's the TTY gate that confirms "yes, the feature's code drop is what changed in shared dirs."
+
+#### Tests
+
+`test/commands/normalize.test.js` — new case `'does not include features/<name>/spec/ or .aitri in the change list (mtime path)'` covering both the exclusion (feature spec/, feature .aitri) and the legitimate inclusion (shared `lib/` code).
+
+#### Contract & promotion impact
+
+Tier-1 per CLAUDE.md — a deployable multi-feature project (Hub at maturity) was reporting false off-pipeline drift after a clean feature ship. Real consumer blocked on noise. integrations CHANGELOG documents the `.aitri#normalizeState.status` shift (some pending → resolved) as additive. No schema field changed.
+
+---
+
 ## [2.0.0-rc.2] — 2026-05-12 — pre-promotion quality polish bundle (closes "Pre-promotion findings" section)
 
 Second release candidate, same day as rc.1. **Closes the four remaining items from BACKLOG "Pre-promotion findings (Codex canary 2026-05-11)"** + reclassifies N2 from P1 → P3 with code-grounded rationale. Bundled because they share theme ("post-rc.1 quality polish without touching contracts") and because the freshness rule we are adding in this release retroactively obligates the template rewrite it documents.

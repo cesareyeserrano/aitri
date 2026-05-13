@@ -189,6 +189,37 @@ describe('cmdNormalize() — changes detected (mtime)', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  // rc.3 — Hub canary 2026-05-13: after a feature sub-pipeline ships, parent
+  // normalize was listing features/<name>/spec/* and features/<name>/.aitri as
+  // outside-pipeline changes against the parent build baseline. They are
+  // governed by the feature's own gate, not by the parent — exclude them
+  // symmetrically with root spec/ + .aitri. Shared code the feature contributes
+  // (lib/, tests/ outside features/) stays in scope and still goes through the
+  // operator's --resolve TTY gate.
+  it('does not include features/<name>/spec/ or .aitri in the change list (mtime path)', () => {
+    const dir = tmpDir();
+    try {
+      const pastRef = new Date(Date.now() - 60_000).toISOString();
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion:   '0.1.70',
+        artifactsDir:   'spec',
+        normalizeState: { baseRef: pastRef, method: 'mtime', status: 'resolved' },
+      }));
+      writeFile(dir, 'lib/collector/snapshot-reader.js', '// shared product code');
+      writeFile(dir, 'features/hub-bug-summary-snapshot/spec/01_REQUIREMENTS.json', '{}');
+      writeFile(dir, 'features/hub-bug-summary-snapshot/spec/04_TEST_RESULTS.json', '{}');
+      writeFile(dir, 'features/hub-bug-summary-snapshot/.aitri', '{"artifactsDir":"spec"}');
+
+      const out = captureStdout(() => cmdNormalize({ dir, err: noopErr }));
+      assert.ok(out.includes('lib/collector/snapshot-reader.js'),
+        'shared product code under lib/ must appear (parent baseline change)');
+      assert.ok(!out.includes('features/hub-bug-summary-snapshot/spec/'),
+        'feature spec/ artifacts must NOT appear (governed by feature pipeline)');
+      assert.ok(!out.includes('features/hub-bug-summary-snapshot/.aitri'),
+        'feature .aitri state must NOT appear (governed by feature pipeline)');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it('treats all-allowlist diff as no-op (no pending state) — Ultron canary regression', () => {
     // mtime can detect a .min.js bump (extension is in SOURCE_EXTS) but the
     // allowlist excludes it. Result: status stays 'resolved', no briefing.

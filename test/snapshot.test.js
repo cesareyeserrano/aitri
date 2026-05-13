@@ -1230,7 +1230,11 @@ describe('nextActions — terminal state (F11)', () => {
     } finally { cleanup(dir); }
   });
 
-  it('still emits P7 validate when verify is stale', () => {
+  it('emits P7 verify-run (not validate) when audit fresh and verify is stale', () => {
+    // F11 refinement (rc.3): stale verify on the root pipeline must trigger
+    // the action that resolves it (verify-run), not the legacy reflexive
+    // validate — validate does not refresh verifyRanAt, which produced a
+    // stable status→validate→status loop (Hub canary 2026-05-12).
     const dir = tmpDir();
     try {
       const stale = new Date(Date.now() - 40 * MS_PER_DAY).toISOString();
@@ -1239,9 +1243,85 @@ describe('nextActions — terminal state (F11)', () => {
       writeSpec(dir, 'AUDIT_REPORT.md', '# Audit');
       const snap = buildProjectSnapshot(dir);
       assert.ok(snap.health.staleVerify.length > 0);
-      assert.ok(
-        snap.nextActions.some(a => a.command === 'aitri validate'),
-        'P7 must still fire when verify is stale',
+      const p7 = snap.nextActions.filter(a => a.priority === 7);
+      assert.equal(p7.length, 1);
+      assert.equal(p7[0].command, 'aitri verify-run');
+      assert.equal(p7[0].scope, 'root');
+      assert.equal(
+        snap.nextActions.filter(a => a.command === 'aitri validate').length,
+        0,
+        'validate must not be suggested when audit is fresh — verify-run resolves the staleness',
+      );
+    } finally { cleanup(dir); }
+  });
+
+  it('emits per-feature verify-run when a stale feature pipeline blocks idle', () => {
+    const dir = tmpDir();
+    try {
+      const now   = new Date().toISOString();
+      const stale = new Date(Date.now() - 30 * MS_PER_DAY).toISOString();
+      seedDeployableRoot(dir, { verifyRanAt: now, auditLastAt: now });
+      writeSpec(dir, 'AUDIT_REPORT.md', '# Audit');
+
+      const featDir = path.join(dir, 'features', 'stale-feat');
+      fs.mkdirSync(path.join(featDir, 'spec'), { recursive: true });
+      saveConfig(featDir, {
+        projectName:     'stale-feat',
+        artifactsDir:    'spec',
+        approvedPhases:  [1, 2, 3, 4, 5],
+        completedPhases: [1, 2, 3, 4, 5],
+        verifyPassed:    true,
+        verifySummary:   { passed: 4, failed: 0, total: 4 },
+        verifyRanAt:     stale,
+      });
+
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.health.deployable, true);
+      assert.equal(snap.health.staleVerify.length, 1);
+      assert.equal(snap.health.staleVerify[0].scope, 'feature:stale-feat');
+
+      const p7 = snap.nextActions.filter(a => a.priority === 7);
+      assert.equal(p7.length, 1);
+      assert.equal(p7[0].command, 'aitri feature verify-run stale-feat');
+      assert.equal(p7[0].scope, 'feature:stale-feat');
+    } finally { cleanup(dir); }
+  });
+
+  it('emits one verify-run action per stale pipeline when multiple are stale', () => {
+    const dir = tmpDir();
+    try {
+      const now   = new Date().toISOString();
+      const stale = new Date(Date.now() - 30 * MS_PER_DAY).toISOString();
+      seedDeployableRoot(dir, { verifyRanAt: stale, auditLastAt: now });
+      writeSpec(dir, 'AUDIT_REPORT.md', '# Audit');
+
+      for (const name of ['a', 'b']) {
+        const featDir = path.join(dir, 'features', name);
+        fs.mkdirSync(path.join(featDir, 'spec'), { recursive: true });
+        saveConfig(featDir, {
+          projectName:     name,
+          artifactsDir:    'spec',
+          approvedPhases:  [1, 2, 3, 4, 5],
+          completedPhases: [1, 2, 3, 4, 5],
+          verifyPassed:    true,
+          verifySummary:   { passed: 2, failed: 0, total: 2 },
+          verifyRanAt:     stale,
+        });
+      }
+
+      const snap = buildProjectSnapshot(dir);
+      assert.equal(snap.health.staleVerify.length, 3); // root + 2 features
+      const p7 = snap.nextActions.filter(a => a.priority === 7);
+      assert.equal(p7.length, 3);
+      const cmds = p7.map(a => a.command).sort();
+      assert.deepEqual(cmds, [
+        'aitri feature verify-run a',
+        'aitri feature verify-run b',
+        'aitri verify-run',
+      ]);
+      assert.equal(
+        snap.nextActions.filter(a => a.command === 'aitri validate').length,
+        0,
       );
     } finally { cleanup(dir); }
   });

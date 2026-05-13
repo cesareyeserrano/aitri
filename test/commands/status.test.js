@@ -412,3 +412,83 @@ describe('cmdStatus --json bugs payload', () => {
     assert.deepEqual(result.bugs.openIds, []);
   });
 });
+
+// ── Stale verify display (rc.3) ───────────────────────────────────────────
+//
+// Closes the Hub canary observation (2026-05-12): when a deployable project
+// has one or more pipelines with verifyRanAt > 14 days, the next-action
+// ladder used to emit `aitri validate` (which does not refresh verifyRanAt)
+// and the status display had no equivalent of the staleAudit line — the
+// operator saw "Next: aitri validate" with no explanation. Display must now
+// surface the staleness count + oldest age + the resolving command.
+
+describe('cmdStatus — stale verify display', () => {
+  const MS_PER_DAY = 86_400_000;
+
+  function captureStdout(fn) {
+    let out = '';
+    const orig = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk) => { out += chunk; return true; };
+    try { fn(); } finally { process.stdout.write = orig; }
+    return out;
+  }
+
+  function seedDeployable(dir, overrides = {}) {
+    saveConfig(dir, {
+      projectName:     'demo',
+      aitriVersion:    '2.0.0-rc.3',
+      artifactsDir:    'spec',
+      approvedPhases:  [1, 2, 3, 4, 5],
+      completedPhases: [1, 2, 3, 4, 5],
+      verifyPassed:    true,
+      verifySummary:   { passed: 1, failed: 0, total: 1 },
+      ...overrides,
+    });
+    const spec = path.join(dir, 'spec');
+    fs.mkdirSync(spec, { recursive: true });
+    fs.writeFileSync(path.join(spec, '01_REQUIREMENTS.json'), JSON.stringify({
+      project_name: 'demo',
+      functional_requirements: [{ id: 'FR-001', priority: 'MUST', type: 'logic', title: 'Do', acceptance_criteria: ['AC1'] }],
+      non_functional_requirements: [],
+      user_stories: [],
+    }));
+    fs.writeFileSync(path.join(spec, '02_SYSTEM_DESIGN.md'), '# Design\n');
+    fs.writeFileSync(path.join(spec, '03_TEST_CASES.json'), '{"test_cases":[]}');
+    fs.writeFileSync(path.join(spec, '04_IMPLEMENTATION_MANIFEST.json'), '{"modules":[],"files_created":[],"setup_commands":[],"technical_debt":[]}');
+    fs.writeFileSync(path.join(spec, '04_TEST_RESULTS.json'), JSON.stringify({
+      summary: { passed: 1, failed: 0, skipped: 0, total: 1 },
+      fr_coverage: [{ fr_id: 'FR-001', status: 'covered', tests_passing: 1, tests_failing: 0 }],
+    }));
+    fs.writeFileSync(path.join(spec, '05_PROOF_OF_COMPLIANCE.json'), '{"requirement_compliance":[]}');
+    fs.writeFileSync(path.join(spec, 'AUDIT_REPORT.md'), '# Audit\n');
+  }
+
+  it('prints a "verify: stale" line when one or more pipelines have stale verifyRanAt', () => {
+    const dir = tmpDir();
+    const now   = new Date().toISOString();
+    const stale = new Date(Date.now() - 25 * MS_PER_DAY).toISOString();
+    seedDeployable(dir, { verifyRanAt: stale, auditLastAt: now });
+    const out = captureStdout(() => cmdStatus({ dir, VERSION: '2.0.0-rc.3', args: [] }));
+    assert.match(out, /verify:\s+stale on 1 pipeline \(oldest 25 days\) — run: aitri verify-run/);
+  });
+
+  it('does not print the line when no pipeline is stale', () => {
+    const dir = tmpDir();
+    const now = new Date().toISOString();
+    seedDeployable(dir, { verifyRanAt: now, auditLastAt: now });
+    const out = captureStdout(() => cmdStatus({ dir, VERSION: '2.0.0-rc.3', args: [] }));
+    assert.equal(/verify:\s+stale/.test(out), false);
+  });
+
+  it('shows "Next: aitri verify-run" (not validate) when audit fresh and verify stale', () => {
+    // Coherence check between display warning and recommended next action:
+    // the suggested command must resolve the staleness it just announced.
+    const dir = tmpDir();
+    const now   = new Date().toISOString();
+    const stale = new Date(Date.now() - 30 * MS_PER_DAY).toISOString();
+    seedDeployable(dir, { verifyRanAt: stale, auditLastAt: now });
+    const out = captureStdout(() => cmdStatus({ dir, VERSION: '2.0.0-rc.3', args: [] }));
+    assert.match(out, /→ Next: aitri verify-run/);
+    assert.equal(/Next: aitri validate/.test(out), false);
+  });
+});

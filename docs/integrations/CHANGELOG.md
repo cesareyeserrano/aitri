@@ -18,6 +18,65 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.3 (2026-05-12) — F11 refinement: stale-verify emits `verify-run` per pipeline (not `validate`) — additive
+
+**Behavioral change in the `nextActions` ladder when a project is `deployable` and at least one pipeline has `verifyRanAt` older than 14 days.** No schema field changed. No field removed. Only the **command string** emitted for the P7 entry changes shape under one specific condition. Old readers continue to render whatever string is in `nextActions[*].command` — there is no parsing contract to break.
+
+### What changed in the JSON contract
+
+Before rc.3, when `health.deployable === true` and `health.staleVerify.length > 0`, the snapshot emitted exactly one P7 entry:
+
+```jsonc
+{ "priority": 7, "scope": "root", "command": "aitri validate", "reason": "All artifacts approved, verify passed — confirm deployment readiness", "severity": "info" }
+```
+
+From rc.3 onward, the same condition emits **one P7 entry per stale pipeline**, each carrying the command that actually resolves the staleness — `aitri verify-run` for the root pipeline, `aitri feature verify-run <name>` for each stale feature:
+
+```jsonc
+{ "priority": 7, "scope": "root",               "command": "aitri verify-run",                     "reason": "verify on root last ran 24 days ago — refresh before declaring idle", "severity": "info" },
+{ "priority": 7, "scope": "feature:abc",        "command": "aitri feature verify-run abc",         "reason": "verify on feature:abc last ran 21 days ago — refresh before declaring idle", "severity": "info" }
+```
+
+When `auditFresh === false` (audit missing or stale), P7 keeps its legacy shape and emits a single `aitri validate` entry — that case is still the legitimate readiness checkpoint. The split is conditional on audit being fresh.
+
+When `deployable === true && auditFresh === true && staleVerify.length === 0`, no P7 entry is emitted (terminal idle — same as rc.2).
+
+### Why
+
+Surfaced by Hub canary 2026-05-12. A deployable multi-feature project with feature `verifyRanAt` older than 14 days entered a stable loop: `aitri status` recommended `aitri validate`, the operator ran it, validate did not refresh `verifyRanAt`, and the next `status` re-emitted the same suggestion. The action recommended by the ladder did not resolve the condition that triggered it. The refinement closes the loop by emitting the command that does resolve it.
+
+### Hub impact
+
+Hub renders `nextActions[*].command` directly. The new shape is forward-compatible — Hub will simply render `verify-run` cards instead of a single `validate` card in the affected case. No code change required in Hub to render correctly. If Hub wants to differentiate "stale verify per pipeline" UX from "validate readiness checkpoint" UX, it can branch on the `command` value or on `reason.includes('refresh before declaring idle')`.
+
+### Status display
+
+`aitri status` (human text) also gains a new line, analogous to the existing `audit: stale (X days)` line:
+
+```
+verify:  stale on N pipeline(s) (oldest D days) — run: aitri verify-run
+```
+
+Not visible to subproducts (CLI stdout only).
+
+### Also in rc.3 — `extractTCId` accepts alphanumeric namespace segments — additive
+
+Surfaced by Hub canary 2026-05-13. The test-runner parser (`extractTCId`, shared by `parseRunnerOutput` / `parseVitestOutput` / `parsePytestOutput` / `parsePlaywrightOutput` / `parseGoOutput`) silently ignored TC IDs whose namespace contained digits — `TC-E2E-001h`, `TC-V1-010h`, `TC-S3-BUCKET-042e`. Affected TCs were written as `status: "skip"` in `04_TEST_RESULTS.json` even when the runner printed a passing line.
+
+**Contract impact:** for projects using namespaces with embedded digits, `04_TEST_RESULTS.json#results[].status` will flip from `skip` to `pass` / `fail` after the rc.3 upgrade. `04_TEST_RESULTS.json#summary.{passed,failed,skipped}` shifts accordingly. `fr_coverage` may reclassify FRs from `uncovered` / `tests_failing` to `tests_passing`. No schema field changed.
+
+**Hub impact:** none structural — Hub reads `04_TEST_RESULTS.json` shape unchanged. Counts may move on the affected projects.
+
+### Also in rc.3 — `aitri normalize` excludes feature pipeline artifacts — additive
+
+Surfaced by Hub canary 2026-05-13. `aitri normalize` was listing `features/<name>/spec/*` and `features/<name>/.aitri` as off-pipeline changes against the parent build baseline. Those paths are governed by the feature's own pipeline gate (not the parent's), and should be excluded symmetrically with root `spec/` + `.aitri`. Shared product code that a feature contributes outside its own directory (`lib/`, root `tests/`, etc.) stays in scope and still goes through the operator's `--resolve` TTY gate.
+
+**Contract impact:** `.aitri#normalizeState.status` may flip from `pending` to `resolved` on the next `aitri normalize` for projects whose only off-pipeline delta was feature-scoped artifacts. The CLI briefing's file list shrinks accordingly. Otherwise unchanged.
+
+**Hub impact:** none structural — `normalizeState` schema unchanged.
+
+---
+
 ## v2.0.0-rc.2 (2026-05-12) — `bugs.bySeverity` + `bugs.openIds` in status JSON; validate text trim; templates/AGENTS.md rewrite — additive
 
 **Three additive surfaces shipped together.** No schema field removed. No event-shape changed. Old readers see identical values where the contract previously promised them.

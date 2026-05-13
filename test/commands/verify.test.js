@@ -727,6 +727,17 @@ describe('extractTCId()', () => {
     assert.equal(extractTCId('xTC-001h passes'), null);
   });
 
+  // rc.3 — Hub canary 2026-05-13: TC-E2E-001h was returning null because
+  // the namespace pattern only accepted letters (`[A-Za-z]+`). Real-world
+  // namespaces include alphanumeric segments (E2E, V1, S3, …); the fix
+  // requires the first char to be a letter and permits digits after it.
+  it('handles namespace segments with digits (E2E, V1, S3)', () => {
+    assert.equal(extractTCId('✔ TC-E2E-001h Collector-facing snapshot'), 'TC-E2E-001h');
+    assert.equal(extractTCId('✔ TC-E2E-005h Legacy fallback'), 'TC-E2E-005h');
+    assert.equal(extractTCId('  ✓  1 [chromium] › file.spec.js:5:1 › TC-V1-010h: desc (123ms)'), 'TC-V1-010h');
+    assert.equal(extractTCId('test_TC_S3_BUCKET_042e_description'), 'TC-S3-BUCKET-042e');
+  });
+
 });
 
 describe('cmdVerifyRun() — A2 schema precondition', () => {
