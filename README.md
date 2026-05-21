@@ -100,7 +100,7 @@ aitri approve 5
 | `aitri init` | Initialize a new project. Creates `IDEA.md`, `AGENTS.md`, `spec/`, `idea/`. |
 | `aitri init <path>` | Initialize at the specified path instead of the current directory. |
 | `aitri wizard` | Guided interview that writes `IDEA.md` from your answers. |
-| `aitri wizard --depth quick\|standard\|deep` | Control interview depth. Default: `standard`. |
+| `aitri wizard --depth quick\|standard\|deep` | Control interview depth. Default: `quick`. |
 
 ### Core loop
 
