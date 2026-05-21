@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-rc.3+
+**Aitri version:** v2.0.0-rc.4+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -61,6 +61,8 @@ Written by Phase 1 (PM persona). Flat structure — no epics or nested feature h
   ],
   "constraints": ["string"],
   "technology_preferences": ["string"],
+  "idea_provenance": "object (optional, v2.0.0-rc.4+) — provenance of the five Tier-A seed inputs. Keys: problem, users, baseline, success_metric, no_go_zone. Each value is \"confirmed\" (the human stated/approved it) or \"assumed\" (the agent inferred it). Required by the gate on a fresh seed; historical once Phase 1 is approved.",
+  "idea_gaps": "string[] (optional, v2.0.0-rc.4+) — tracked gaps for assumed Tier-A inputs. Each entry references the assumed field by key, e.g. \"baseline: no current metric — confirm with owner\". Also accepted nested as project_summary.idea_gaps.",
   "original_brief": "string (optional, v0.1.89+) — full content of IDEA.md absorbed at first approve of Phase 1; the file is removed from disk after archive. Historical reference only — never read by Aitri or downstream phases for behavioral decisions."
 }
 ```
@@ -75,6 +77,7 @@ Written by Phase 1 (PM persona). Flat structure — no epics or nested feature h
 - Any pair of FRs (regardless of priority) with ≥3 acceptance_criteria each and ≥90% Jaccard similarity on their AC sets will fail validation — copy-paste of ACs is an anti-pattern (v0.1.82+)
 - `user_personas` missing → non-fatal warning (not blocked)
 - `original_brief` (v0.1.89+) is additive — not validated, present only after first approve of Phase 1; safe to ignore for old readers
+- **Seed-input provenance gate (v2.0.0-rc.4+)** — on a *fresh seed* (Phase 1 not yet in `approvedPhases[]`), `idea_provenance` is required: all five Tier-A keys present, each `"confirmed"` or `"assumed"`, and every `"assumed"` field carried in `idea_gaps`. Once Phase 1 is approved the seed is sealed and the gate is skipped on re-runs — existing approved projects do not break on upgrade. `idea_provenance` / `idea_gaps` are additive and safe to ignore for old readers.
 
 **Phase 1 input handling (v0.1.89+):**
 - **First run** (no `01_REQUIREMENTS.json` yet): the agent reads `IDEA.md` from project root as seed input.

@@ -2,6 +2,11 @@
 
 > Fill in each section below. The more specific you are, the fewer assumptions the AI will make.
 > Sections left blank will be flagged as [ASSUMPTION] by the PM agent — review them before approving.
+>
+> AGENT: if you are filling this on the user's behalf, do NOT silently infer the
+> ground-truth fields (Problem, Target Users, Current Pain / Baseline, Success
+> Criteria, Out of Scope). Confirm each with the user; mark anything you inferred
+> as "[ASSUMPTION] …". Phase 1 turns these into a tracked provenance record.
 
 ---
 

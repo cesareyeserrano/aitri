@@ -890,3 +890,37 @@ Addendum 1 codified the consumer-side audit (every callsite that depends on a fi
 | Consumer audit (codepaths assuming file presence) | Addendum 1 — enumerate every callsite, reclassify, structural guard test |
 
 The class is closed for IDEA.md. The pattern generalizes for any future destructive op.
+
+---
+
+## ADR-032 — 2026-05-21 — Seed-input elicitation: provenance contract over honor-system inference
+
+**Context.** Investigation (2026-05-20/21) of a reported regression — "the wizard is nonexistent" — found that in agent mode (the only real operating mode, stdin not a TTY) human input is structurally required at **zero** points:
+- The wizard's agent briefing ([wizard.js:165-179]) instructed the agent to *"infer as many fields as possible / only ask follow-ups for fields that genuinely could NOT be inferred"* (introduced v0.1.38). A strong model infers everything and asks nothing — the interview collapses to zero. Verified by code + canaries: every feature seed (Cesar, AITRI-HUB, Zombite) uses the blank `FEATURE_IDEA.md` template filled by the agent; Ultron's discovery is brownfield-derived with self-certified `Confidence: high`.
+- Both human surfaces in `approve.js` (`printApprovalSummary`, `askChecklist`) early-return on `!isTTY` — they no-op when an agent runs `approve`.
+- The "5-criterion pre-flight" and "Human Review checklists" are template text with **no** mechanical enforcement; the discovery confidence gate is honor-system (agent declares its own confidence).
+
+The seed is the garbage-in/garbage-out point of the whole artifact chain. "Input is the most valuable thing for Aitri to produce good results" (user, 2026-05-20).
+
+**Architectural ceiling (states the boundary honestly).** Aitri only ever talks to the agent, never to the human. It **cannot verify** that a human typed any free text. Therefore no design can *guarantee* human input. The maximum achievable is: (1) make the agent's path of least resistance "ask & confirm"; (2) make assumptions structured, blockable, and propagating; (3) make unconfirmed critical inputs auditable. A false `"confirmed"` is the agent lying — outside Aitri's enforcement boundary.
+
+**Tier model.** Inputs split by *(can the agent infer it reliably?) × (blast radius if wrong?)*:
+- **Tier A — must ask** (ground-truth only, high blast radius): `problem, users, baseline, success_metric, no_go_zone` — exactly the five existing IDEA.md Pre-flight criteria.
+- **Tier B — infer-then-confirm**: business rules, FR decomposition, North Star/JTBD, stack choice.
+- **Tier C — infer silently**: test data, edge cases, code structure, API shape — existing gates suffice.
+
+**Decision (D1 + D2; D3 deferred).**
+- **D1 (prompt):** rewrite the seed-creation surfaces (`wizard.js` agent briefing, `templates/IDEA.md`, `templates/FEATURE_IDEA.md`, Phase 1 `requirements.md`) to remove the explicit permission to collapse — present a draft, then confirm each Tier-A field with the user; mark anything inferred as an assumption. Soft (honor-system), necessary but insufficient alone.
+- **D2 (gate, the teeth):** optional additive fields `idea_provenance` (per Tier-A field → `confirmed | assumed`) + `idea_gaps` on `01_REQUIREMENTS.json`. `phase1.validate()` blocks on a **fresh seed** (Phase 1 not approved) when provenance is missing/invalid or an `"assumed"` field is not carried in `idea_gaps`. Runs **last** in `validate()`, fires only when a config is supplied (bare `validate(content)` skips → no test churn) and only on fresh seeds (re-runs of approved projects skip → no upgrade migration, existing projects never break). Generalizes the existing discovery-confidence pattern to the seed, which most projects reach without discovery.
+- **D3 (deferred):** just-in-time constraint confirmation before Phase 2 (compliance, data residency, deployment target — which Technical Risk Flags is blind to) and brand identity before UX. The efficiency layer; ship after D1+D2 prove out.
+
+**Decision matrix (D2):** Impact High · Value-to-produced-software 8 (seed is the chain's garbage-in point) · Severity Moderate (silent degradation — already the status quo) · Trade-off: provenance of free text is unverifiable (nudge + audit trail, not guarantee); +2 optional contract fields to maintain.
+
+**Anti-theater check.** Not "field present" validation. It changes the default (agent must classify provenance) and makes omitted ground truth a blocking, propagating gap — preventing a verifiable present defect (silent garbage-in seed), not a hypothetical one.
+
+**Objection on record (CLAUDE.md "evidence base").** The collapse is verified today (code + canaries) — that justifies D2 as prevention of a present, code-grounded defect. But whether the provenance contract *improves the software consumer projects produce* depends on real operator behavior that author canaries can only partially validate (they can confirm the gate fires and briefings don't collapse; they cannot confirm a third-party operator answers honestly). Treat tier-1 value as **provisional** until a non-author consumer validates. This does not gate the rc.4 ship (additive, non-breaking, reverts cleanly) but it does gate any future hardening (e.g. making provenance required on re-runs, or adding a status/resume surface) — seek external signal first.
+
+**Scope.**
+- Decides: Tier-A vocabulary = the five Pre-flight criteria; provenance is `confirmed|assumed`; gate is fresh-seed-only and additive.
+- Decides: no escape flag — the correct response to the block is to confirm with the user or record the gap (same posture as ADR-031 Addendum 2).
+- Does not decide: D3 timing/mechanism; whether to surface provenance in `status`/`resume` (deferred, needs a consumer asking); whether to harden `approve`'s TTY-gated checklist (separate finding).

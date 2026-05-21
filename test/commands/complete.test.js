@@ -53,6 +53,7 @@ const VALID_REQUIREMENTS = JSON.stringify({
   ],
   constraints: [],
   technology_preferences: ['Node.js'],
+  idea_provenance: { problem: 'confirmed', users: 'confirmed', baseline: 'confirmed', success_metric: 'confirmed', no_go_zone: 'confirmed' },
 }, null, 2);
 
 const minimalConfig = (overrides = {}) => JSON.stringify({

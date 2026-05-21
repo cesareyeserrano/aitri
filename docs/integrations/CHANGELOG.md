@@ -18,6 +18,17 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.4 (2026-05-21) — seed-input provenance fields on `01_REQUIREMENTS.json` — additive
+
+Two optional fields added to `01_REQUIREMENTS.json` to make the highest-value human input (the Tier-A seed inputs) auditable instead of silently inferred:
+
+- `idea_provenance` — object keyed by `problem`, `users`, `baseline`, `success_metric`, `no_go_zone`; each value `"confirmed"` or `"assumed"`.
+- `idea_gaps` — `string[]` of tracked gaps for assumed fields (also accepted nested as `project_summary.idea_gaps`).
+
+**Contract impact for subproducts:** none required. Both fields are additive and optional — old readers ignore them safely. No existing field changed shape; no field removed.
+
+**Producer-side gate (does not affect readers).** `aitri complete 1` now blocks on a *fresh seed* (Phase 1 not yet in `approvedPhases[]`) when `idea_provenance` is missing/invalid or an `"assumed"` field is not carried in `idea_gaps`. Once Phase 1 is approved the seed is sealed and the gate is skipped — existing approved projects never break on upgrade, and no migration is required. Subproducts that want to surface seed-input confidence MAY read `idea_provenance` and render confirmed/assumed counts; this is an opt-in.
+
 ## v2.0.0-rc.3 (2026-05-12) — F11 refinement: stale-verify emits `verify-run` per pipeline (not `validate`) — additive
 
 **Behavioral change in the `nextActions` ladder when a project is `deployable` and at least one pipeline has `verifyRanAt` older than 14 days.** No schema field changed. No field removed. Only the **command string** emitted for the P7 entry changes shape under one specific condition. Old readers continue to render whatever string is in `nextActions[*].command` — there is no parsing contract to break.

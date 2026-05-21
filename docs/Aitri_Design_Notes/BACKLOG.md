@@ -49,6 +49,22 @@ Governed by [ADR-027](DECISIONS.md#adr-027--2026-04-23--adopt---upgrade-as-recon
 
 **Pre-promotion quality findings (2026-05-11 → 2026-05-12 close-out):** six findings surfaced during Codex canary on Ultron pre-promotion review. **ALL CLOSED across rc.1 + rc.2.** rc.1 shipped both P1s (feature approve 4 cross-scope baseline advance + ladder/normalize coherence). rc.2 shipped two P2s + one P3 (template rewrite + freshness rule + bugs payload + validate trim); the remaining P3 (agent-file refresh) decided not-implementing. The 2026-05-11 session surfaced four distinct Core/Hub contract gaps via author-owned canaries — each closed without breaking schema. With all six findings closed, the technical case for v2.0.0-stable is clean; the third-party adopter gate remains the only open gate. Promotion decision (override + ADR vs further rc cycles awaiting external validation) deferred to a separate discussion.
 
+### Core — seed-input elicitation D3 (deferred; D1+D2 shipped rc.4)
+
+- [ ] P2 — **Just-in-time constraint confirmation before Phase 2 and UX.** D1+D2 (seed-input provenance) shipped in rc.4 per [ADR-032](DECISIONS.md#adr-032--2026-05-21--seed-input-elicitation-provenance-contract-over-honor-system-inference). D3 is the deferred efficiency layer.
+  Problem: Tier-A inputs that bite *later* — hard constraints (compliance, data residency, deadline, mandated stack), deployment target, brand identity — are not elicited at the moment they matter. `phase2.js` Technical Risk Flags analysis is blind to constraints it was never given; UX invents brand tokens with no identity input. Asking all of these at seed time is premature bloat.
+  Files: `templates/phases/architecture.md`, `templates/phases/phaseUX.md`; optionally `lib/phases/phase2.js` / `lib/phases/phaseUX.js` if backed by a gate.
+  Behavior: each phase briefing opens with a short "inputs to confirm with the user before this phase" block scoped to that phase's Tier-A-late set. Soft (D1-style) unless paired with a provenance check on those phases (D2-style).
+  Decisions: ship only after D1+D2 prove out on a real canary; per ADR-032 the tier-1 value is provisional until a non-author consumer validates that operators answer honestly. Do NOT add per-phase gates speculatively.
+  Acceptance: architecture briefing on a constraint-bearing project surfaces the confirmation block; if gated, `complete 2` blocks on an unconfirmed compliance-relevant constraint.
+
+- [ ] P3 — **`approve` human-review checklist no-ops in agent mode (separate finding from ADR-032).** `lib/commands/approve.js::printApprovalSummary` + `askChecklist` early-return on `!process.stdin.isTTY`, so when an agent runs `approve` there is no summary and no checklist — the content-judgment surface collapses exactly like the seed interview did.
+  Problem: the human-judgment gate (is the design good? are the FRs right?) is structurally absent in the only real operating mode. Distinct from D2 (which gates the seed mechanically) — this is about content review on every phase.
+  Files: `lib/commands/approve.js`.
+  Behavior: TBD — options include surfacing the summary to stdout unconditionally (agent relays to user) and/or recording an explicit human-acknowledgement event. Subject to the same architectural ceiling (Aitri talks to the agent, not the human).
+  Decisions: needs design before implementation; do not silently weaken the isTTY-gate invariant on the destructive op itself.
+  Acceptance: TBD per chosen design.
+
 #### What shipped in alpha.1
 
 - [x] **Module `lib/upgrade/`** — `runUpgrade` + `diagnose.js` composer + `migrations/from-0.1.65.js`.
@@ -403,6 +419,13 @@ User-reported friction (verbatim): (a) "funcionalidades pequeñas se tragan todo
 
 
 ### Core — Post-promotion housekeeping
+
+- [ ] P3 — **README root: `aitri wizard` default depth is documented as `standard` but the code defaults to `quick`.** Pre-existing doc inaccuracy, unrelated to rc.4 (surfaced 2026-05-21 during the seed-elicitation doc audit).
+  Problem: a user reading the CLI reference expects `standard` depth (8 questions) by default but gets `quick` (6). Minor, but the reference table is wrong.
+  Files: `README.md` line ~103 (`aitri wizard --depth …` row).
+  Behavior: change "Default: `standard`." → "Default: `quick`." OR change `lib/commands/wizard.js:205` default to `'standard'` — pick which is intended. Code is the current truth (`|| 'quick'`).
+  Decisions: doc-only fix does not bump version (per user 2026-05-21). If the *code* default is changed instead, that IS a behavior bump.
+  Acceptance: README row matches `wizard.js` default; no test needed for the doc path.
 
 - [x] **Rename `from-0.1.65.js` or adjust ADR — DECIDED 2026-05-02: ADR-027 amended (per-version-boundary is heuristic, not contract).** The module's actual contract is field-presence gating, not the file name. Splitting into `from-0.1.80.js` etc. would be cosmetic — the gating logic carries no version meaning. Re-open if a second brownfield baseline produces a natural split (e.g. a v0.2+ schema change cluster), not before. See ADR-027 amendment for the naming-convention clarification.
 

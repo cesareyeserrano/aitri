@@ -410,3 +410,77 @@ describe('Phase 1 — buildBriefing() re-run mode (01_REQUIREMENTS.json exists)'
     }
   });
 });
+
+// ── D2: Tier-A seed-input provenance gate ───────────────────────────────────
+// Fires only on a fresh seed (Phase 1 not yet approved) AND only when a config
+// is supplied. Bare validate(content) and re-runs of approved projects skip it.
+
+describe('Phase 1 — Tier-A provenance gate (D2)', () => {
+  const FRESH  = { config: {} };                       // fresh seed — Phase 1 not approved
+  const SEALED = { config: { approvedPhases: [1] } };  // seed sealed after approval
+
+  const allConfirmed = {
+    problem: 'confirmed', users: 'confirmed', baseline: 'confirmed',
+    success_metric: 'confirmed', no_go_zone: 'confirmed',
+  };
+
+  const withProv = (prov, extra = {}) => {
+    const d = JSON.parse(validP1());
+    if (prov) d.idea_provenance = prov;
+    Object.assign(d, extra);
+    return JSON.stringify(d);
+  };
+
+  it('bare validate(content) without ctx skips the gate (back-compat)', () => {
+    assert.doesNotThrow(() => PHASE_DEFS[1].validate(validP1()));
+  });
+
+  it('fresh seed without idea_provenance throws', () => {
+    assert.throws(() => PHASE_DEFS[1].validate(validP1(), FRESH),
+      /Missing required field: idea_provenance/);
+  });
+
+  it('fresh seed with all-confirmed provenance passes', () => {
+    assert.doesNotThrow(() => PHASE_DEFS[1].validate(withProv(allConfirmed), FRESH));
+  });
+
+  it('fresh seed with an invalid provenance value throws', () => {
+    assert.throws(() => PHASE_DEFS[1].validate(withProv({ ...allConfirmed, users: 'maybe' }), FRESH),
+      /missing or invalid entries: users/);
+  });
+
+  it('fresh seed with a missing provenance key throws', () => {
+    const prov = { ...allConfirmed }; delete prov.baseline;
+    assert.throws(() => PHASE_DEFS[1].validate(withProv(prov), FRESH),
+      /missing or invalid entries: baseline/);
+  });
+
+  it('fresh seed with an assumed field NOT carried in idea_gaps throws', () => {
+    assert.throws(() => PHASE_DEFS[1].validate(withProv({ ...allConfirmed, baseline: 'assumed' }), FRESH),
+      /not carried in idea_gaps: baseline/);
+  });
+
+  it('fresh seed with an assumed field carried in top-level idea_gaps passes', () => {
+    const content = withProv({ ...allConfirmed, baseline: 'assumed' },
+      { idea_gaps: ['baseline: no current metric in IDEA.md — confirm with owner'] });
+    assert.doesNotThrow(() => PHASE_DEFS[1].validate(content, FRESH));
+  });
+
+  it('fresh seed accepts idea_gaps nested under a project_summary object', () => {
+    const d = JSON.parse(validP1());
+    d.idea_provenance = { ...allConfirmed, no_go_zone: 'assumed' };
+    d.project_summary = { idea_gaps: ['no_go_zone: inferred from product type — confirm'] };
+    assert.doesNotThrow(() => PHASE_DEFS[1].validate(JSON.stringify(d), FRESH));
+  });
+
+  it('sealed seed (Phase 1 approved) skips the gate even without provenance', () => {
+    assert.doesNotThrow(() => PHASE_DEFS[1].validate(validP1(), SEALED));
+  });
+
+  it('gate runs last — an earlier schema error still surfaces with a config present', () => {
+    const d = JSON.parse(validP1());
+    d.functional_requirements = d.functional_requirements.slice(0, 3); // < 5 FRs
+    assert.throws(() => PHASE_DEFS[1].validate(JSON.stringify(d), FRESH),
+      /Min 5 functional_requirements/);
+  });
+});

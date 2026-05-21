@@ -1,3 +1,9 @@
+<!-- AGENT: if you fill this for the user, confirm the ground-truth fields
+     (Problem / Why, Target Users, Success Criteria, Out of Scope) with them —
+     do not silently infer. Mark anything you inferred as "[ASSUMPTION] …".
+     Phase 1 records these as a provenance contract and blocks unconfirmed,
+     untracked guesses on the highest-value inputs. -->
+
 ## Feature
 <!-- What feature are you adding? One sentence. -->
 

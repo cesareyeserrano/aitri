@@ -61,7 +61,25 @@ Instead, report which criteria failed, why each matters, and instruct the user: 
    - PASS: any explicit exclusion with a reason ("no authentication — local access only in v1")
 
 **Blocking rule:** 2+ criteria FAIL → stop, report gaps, do not write artifact.
-With exactly 1 FAIL → proceed but document the gap in `project_summary.idea_gaps`.
+With exactly 1 FAIL → proceed but document the gap in `idea_gaps`.
+
+## Seed-Input Elicitation — Confirm, do NOT silently infer (D1)
+
+The five criteria above are the **Tier-A ground-truth inputs**: the things only the
+human knows and that, if wrong, poison every downstream artifact. You cannot reliably
+infer them from the codebase or from your own judgement — getting them from the human
+is the single highest-value action in the whole pipeline.
+
+For each Tier-A field — **problem, users, baseline, success_metric, no_go_zone** — do this:
+1. If IDEA.md (or the user) states it concretely → it is **confirmed**.
+2. If it is blank, vague, or you are filling it from inference → **do NOT silently write it.**
+   Ask the user a direct, specific question to confirm or correct it. One field at a time.
+3. If the user is unavailable or declines, you may proceed by marking it **assumed** — but
+   then it MUST be recorded as a tracked gap (see provenance contract below). An assumed
+   ground-truth input is a visible risk, never a silent guess.
+
+Do not collapse this into zero questions. Inferring everything and asking nothing is the
+failure mode this protocol exists to prevent.
 {{/IF_IDEA_MD}}
 
 ---
@@ -81,7 +99,22 @@ Schema: { project_name, project_summary,
   }],
   non_functional_requirements: [{id:"NFR-001", category:"Performance|Security|Reliability|Scalability|Usability", requirement, acceptance_criteria}],
   no_go_zone: ["item — what is explicitly out of scope and why"],
-  constraints:[], technology_preferences:[] }
+  constraints:[], technology_preferences:[],
+  idea_provenance: { problem:"confirmed|assumed", users:"confirmed|assumed", baseline:"confirmed|assumed", success_metric:"confirmed|assumed", no_go_zone:"confirmed|assumed" },
+  idea_gaps: ["<field>: why it was assumed and what to confirm with the owner"] }
+
+## Seed-Input Provenance Contract (D2 — enforced on a fresh Phase 1)
+
+`idea_provenance` is **required on a fresh seed** (the first Phase 1, before approval).
+Declare each Tier-A field as `"confirmed"` (the user stated or approved it) or `"assumed"`
+(you inferred it). Rules the gate enforces — `aitri complete 1` blocks otherwise:
+  - All five keys (problem, users, baseline, success_metric, no_go_zone) must be present and valid.
+  - Every `"assumed"` field MUST have a matching `idea_gaps` entry whose text starts with the
+    field key, e.g. `"baseline: no current metric in IDEA.md — confirm with owner"`.
+  - Never label a field `"confirmed"` that the user did not actually confirm. The gate cannot
+    detect a false "confirmed" — that is on your integrity, and it defeats the entire purpose.
+On a re-run after Phase 1 is approved, the seed is sealed: the gate is skipped and you refine
+FRs as usual (idea_provenance is historical at that point).
 
 ## Requirement Depth Protocol
 Before writing any FR, work through this decomposition for the product in IDEA.md:
@@ -156,17 +189,19 @@ reuse IDs from the list below.
 {{/IF_PARENT_REQUIREMENTS}}
 
 ## Instructions
-1. Declare no_go_zone (≥3 items) before writing any FR
-2. Identify North Star KPI + JTBD + guardrail metric
-3. Work through the Requirement Depth Protocol — enumerate screens, actions, states, auth, async, edge cases
-4. Generate complete 01_REQUIREMENTS.json
-5. Before saving — run this completeness self-check:
+1. Confirm the five Tier-A inputs with the user (Seed-Input Elicitation above) and set `idea_provenance` honestly — ask before assuming; record every assumption in `idea_gaps`
+2. Declare no_go_zone (≥3 items) before writing any FR
+3. Identify North Star KPI + JTBD + guardrail metric
+4. Work through the Requirement Depth Protocol — enumerate screens, actions, states, auth, async, edge cases
+5. Generate complete 01_REQUIREMENTS.json
+6. Before saving — run this completeness self-check:
    - Every screen identified has ≥1 FR or is in no_go_zone
    - Every MUST FR has ≥1 linked user story
    - MUST FRs of type security/persistence/logic/reporting each have ≥2 ACs
-6. Save to: {{ARTIFACTS_BASE}}/01_REQUIREMENTS.json
-7. Present the Delivery Summary below to the user
-8. Run: aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} 1
+   - idea_provenance has all five Tier-A keys; every "assumed" is carried in idea_gaps
+7. Save to: {{ARTIFACTS_BASE}}/01_REQUIREMENTS.json
+8. Present the Delivery Summary below to the user
+9. Run: aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} 1
 
 ## Delivery Summary
 After saving 01_REQUIREMENTS.json, present this report to the user:
@@ -179,6 +214,11 @@ User stories:             [N] ([N] MUST FRs covered)
 North Star KPI:           [value]
 JTBD:                     [statement]
 
+Seed-input provenance:    [N] confirmed · [N] assumed
+  Assumed (confirm before approving):
+    - [field]: [why assumed — what to ask the owner]
+  (omit this block if all five are confirmed)
+
 No-go zone ([N] items):
   - [item 1]
   - [item 2]
@@ -190,6 +230,8 @@ Next: aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} 1   →   aitri {{SCOPE_VERB}}ap
 ```
 
 ## Human Review — Before approving phase 1
+  [ ] idea_provenance reflects reality — every "confirmed" field was actually confirmed by you, not the agent's guess
+  [ ] Every "assumed" Tier-A field is one you accept proceeding on (or correct it and re-run)
   [ ] no_go_zone has ≥3 explicit, specific items (not generic filler)
   [ ] Every MUST FR has type AND at least one acceptance_criteria with a concrete metric
   [ ] acceptance_criteria for UX/visual/audio FRs contain real measurements (px, ms, %, fps)

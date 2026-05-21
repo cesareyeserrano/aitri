@@ -205,6 +205,15 @@ describe('cmdWizard()', () => {
       assert.ok(text.includes('Agent Mode'), 'should mention Agent Mode');
       assert.ok(text.includes('REQUIRED FIELDS'), 'should list questions');
       assert.ok(text.includes('IDEA.md FORMAT:'), 'should include template');
+      // D1: the collapse language must be gone, and confirm-per-field must be present.
+      assert.ok(!/infer as many of the required fields/i.test(text),
+        'must NOT instruct the agent to infer as many fields as possible (collapse)');
+      assert.ok(!/only ask follow-up questions for fields that genuinely could NOT be inferred/i.test(text),
+        'must NOT grant permission to skip questions when fields can be inferred');
+      assert.ok(/CONFIRM each with the user/i.test(text),
+        'must instruct the agent to confirm each field with the user');
+      assert.ok(/\[ASSUMPTION\]/.test(text),
+        'must instruct marking unconfirmed values as [ASSUMPTION]');
     } finally {
       process.stdin.isTTY = origIsTTY;
       console.log = origLog;

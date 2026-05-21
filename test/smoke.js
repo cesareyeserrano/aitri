@@ -34,6 +34,7 @@ const VALID_REQUIREMENTS = JSON.stringify({
   ],
   constraints: [],
   technology_preferences: ['Node.js', 'PostgreSQL'],
+  idea_provenance: { problem: 'confirmed', users: 'confirmed', baseline: 'confirmed', success_metric: 'confirmed', no_go_zone: 'confirmed' },
 }, null, 2);
 
 const INVALID_REQUIREMENTS_FEW_FRS = JSON.stringify({
@@ -887,6 +888,7 @@ describe('Aitri CLI — review smoke', () => {
     ],
     constraints: [],
     technology_preferences: ['Node.js'],
+    idea_provenance: { problem: 'confirmed', users: 'confirmed', baseline: 'confirmed', success_metric: 'confirmed', no_go_zone: 'confirmed' },
   }, null, 2);
 
   before(() => {

@@ -5,6 +5,18 @@
 
 ---
 
+## [2.0.0-rc.4] — 2026-05-21 — seed-input elicitation: provenance contract (D1 + D2)
+
+**Closes the input-collapse class** diagnosed 2026-05-20/21 (see [ADR-032](DECISIONS.md#adr-032--2026-05-21--seed-input-elicitation-provenance-contract-over-honor-system-inference)). In agent mode (the only real operating mode) human input was structurally required at zero points: the wizard's agent briefing told the agent to *infer everything and ask nothing* (v0.1.38 collapse language); `approve`'s summary + checklist no-op on `!isTTY`; pre-flight criteria and Human-Review checklists are template text with no enforcement. The seed — the highest-value input in the pipeline — was a blank template the agent filled or reverse-engineered from code, verified across 6 canaries.
+
+**D1 (prompt) — un-collapse the seed surfaces.** `lib/commands/wizard.js::printAgentBriefing` rewritten: present a draft, then **confirm each Tier-A field with the user**, mark inferred values `[ASSUMPTION]`. Same posture added to `templates/IDEA.md`, `templates/FEATURE_IDEA.md`, and the Phase 1 briefing `templates/phases/requirements.md` (new Seed-Input Elicitation section + provenance contract + delivery-summary/Human-Review surfacing).
+
+**D2 (gate) — the teeth.** Optional additive fields `idea_provenance` (`problem, users, baseline, success_metric, no_go_zone` → `confirmed | assumed`) + `idea_gaps` on `01_REQUIREMENTS.json`. `phase1.validate()` blocks on a **fresh seed** (Phase 1 not approved) when provenance is missing/invalid or an `"assumed"` Tier-A field is not carried in `idea_gaps`. Tier-A vocabulary = the five existing Pre-flight criteria; constant in `lib/phases/phase1-checks.js` (SSoT, same pattern as the vagueness regexes). Gate runs **last** in `validate()`, fires only with a config present (bare `validate(content)` skips) and only on fresh seeds (approved projects skip → no migration, existing projects never break on upgrade).
+
+**Deferred:** D3 (just-in-time constraint confirmation before Phase 2/UX) — the efficiency layer; ship after D1+D2 prove out. Hardening (provenance required on re-runs, status/resume surface) gated on a non-author consumer per ADR-032.
+
+Tests +12 (phase1 provenance gate ×11 + wizard briefing language ×1). Integration docs: ARTIFACTS.md (new fields + gate rule), CHANGELOG `— additive`. No `.aitri` schema change.
+
 ## [2.0.0-rc.3] — 2026-05-12 — F11 refinement + Hub canary 2026-05-13 follow-ups (E2E TC parser + feature-aware normalize)
 
 **Hub canary 2026-05-12 surfaced a stable terminal loop.** Hub (rc.2, deployable, 9 features) repeatedly entered `status → Next: aitri validate → run validate → status → Next: aitri validate` — the recommended action never resolved the condition that triggered it.

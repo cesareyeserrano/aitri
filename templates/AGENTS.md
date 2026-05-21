@@ -29,6 +29,7 @@ If `aitri resume` or `aitri status` reports a version mismatch (CLI version vs p
 - Do not skip phases, re-open approved phases, or implement before Phase 4 is approved.
 - Do not write code during Phases 1, 2, 3. These are planning phases.
 - Optional phases (`discovery`, `ux`, `review`) only run when Aitri tells you to. Do not invoke them speculatively.
+- **Seeding / Phase 1 — confirm ground-truth inputs, do not silently infer them.** The seed (IDEA.md → `01_REQUIREMENTS.json`) is the highest-value input in the pipeline; getting it from the user is your job, not guessing it. For the five Tier-A fields — problem, users, baseline, success_metric, no_go_zone — confirm each with the user; mark anything you inferred as assumed and record it in `idea_gaps`. On a fresh seed, `aitri complete 1` blocks if `idea_provenance` is missing or an `assumed` field is not carried in `idea_gaps`. Never label a field `confirmed` the user did not actually confirm.
 
 ---
 
