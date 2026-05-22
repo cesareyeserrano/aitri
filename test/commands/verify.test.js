@@ -1089,6 +1089,26 @@ describe('cmdVerifyRun() — runner ENOENT does not persist degraded results', (
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  it('rc.5: ENOENT pytest hint leads with portable bare pytest and warns absolute is not CI-portable', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-enoent-hint-'));
+    try {
+      seed(dir, '.venv/bin/pytest tests/ -v');
+      const errs = [];
+      silent(() => {
+        try { cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { errs.push(m); throw new Error(m); } }); }
+        catch { /* err() throws */ }
+      });
+      const msg = errs.find(m => /Command not found/.test(m)) || '';
+      assert.match(msg, /bare/);
+      assert.match(msg, /auto-detect/i);
+      const barePos = msg.search(/bare\s+"?pytest/);
+      const absPos  = msg.search(/absolute/);
+      assert.ok(barePos !== -1 && absPos !== -1 && barePos < absPos,
+        'portable bare-pytest fix must precede the absolute fallback');
+      assert.match(msg, /will not work in CI|not .*portable|machine-specific/i);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it('preserves a previously written 04_TEST_RESULTS.json on ENOENT', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-enoent-preserve-'));
     try {

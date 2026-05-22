@@ -5,6 +5,18 @@
 
 ---
 
+## [2.0.0-rc.5] — 2026-05-22 — venv-migration guidance + cwd-aware feature-not-found (Cesar canary 2026-05-22)
+
+**Cesar canary (5 pytest features, alpha → rc.4 upgrade) surfaced two messaging defects that degraded a produced artifact.** The N1 venv-relative-runner finding (alpha.16) told the operator to fix the flagged `test_runner` and led its example with an **absolute path** — without mentioning that `verify-run` already auto-detects `.venv/`/`venv/` at the project root when the runner is a bare `pytest` ([verify.js:399-412](../../lib/commands/verify.js)). The agent followed the guidance and committed machine-specific paths (`/Users/.../pytest …`) into all 5 manifests — portable failure: those break in CI and on any other clone. Aitri detected one portability problem and steered to another, having the portable fix built in.
+
+### Fixes (all messaging — no schema, no `.aitri`, no artifact contract change)
+
+- **Guidance leads with the portable fix.** `diagnoseLegacyVenvManifest` reason ([from-0.1.65.js](../../lib/upgrade/migrations/from-0.1.65.js)) now leads with bare `pytest <args>` (auto-detected, portable), presents the absolute path only as a fallback for venvs outside the root (`env/`, poetry, conda, ~/venvs), and **warns absolute paths are machine-specific** and will not resolve in CI. The ENOENT pytest hint in `verify.js` was reworded to match (was also absolute-first).
+- **"Finding cleared" ≠ "fixed".** The N1 regex matches only the binary prefix, so clearing it does not prove the runner executes — the reason now says so and points to `aitri feature verify-run` to confirm. (The deeper gap — N1 does not detect a root-relative *test target* in the same string, which forced a second drift/re-approval round on Cesar — is logged in BACKLOG as P2, deferred pending a different-stack canary.)
+- **cwd-aware feature-not-found.** `aitri feature <verb> <name>` run from outside the project root (e.g. `~`) previously said *"Run: aitri feature init <name>"* — advising the operator to create a feature that already exists; the canary agent had to correct the human. `feature.js` now distinguishes wrong-cwd from genuinely-missing: when cwd is not a project root it names the ancestor project root (or reports "not an Aitri project") and reconstructs the retry command; the plain init suggestion is kept only when cwd IS the root and the feature is truly absent.
+
+AGENTS.md freshness audited — no change (these are runtime CLI outputs, not agent-instruction surfaces). Tests +6 (upgrade reason ordering ×1, ENOENT hint ×1, feature cwd-aware message ×4). No integrations CHANGELOG entry (CLI text only; subproducts read `.aitri` + artifacts, not stdout).
+
 ## [2.0.0-rc.4] — 2026-05-21 — seed-input elicitation: provenance contract (D1 + D2)
 
 **Closes the input-collapse class** diagnosed 2026-05-20/21 (see [ADR-032](DECISIONS.md#adr-032--2026-05-21--seed-input-elicitation-provenance-contract-over-honor-system-inference)). In agent mode (the only real operating mode) human input was structurally required at zero points: the wizard's agent briefing told the agent to *infer everything and ask nothing* (v0.1.38 collapse language); `approve`'s summary + checklist no-op on `!isTTY`; pre-flight criteria and Human-Review checklists are template text with no enforcement. The seed — the highest-value input in the pipeline — was a blank template the agent filled or reverse-engineered from code, verified across 6 canaries.

@@ -291,6 +291,76 @@ describe('aitri feature — error handling', () => {
   });
 });
 
+// ── cwd-aware "feature not found" message (rc.5 Cesar canary) ────────────────────
+// When `aitri feature <verb> <name>` runs from outside the project root, the
+// feature dir resolves against the wrong cwd and reports "not found". The pre-rc.5
+// message advised `aitri feature init <name>` — telling the operator to CREATE a
+// feature that already exists. The canary agent had to correct the human manually.
+
+describe('aitri feature — cwd-aware not-found message', () => {
+  it('names the ancestor project root when cwd is below it (wrong-dir case)', () => {
+    const proj = makeProjectDir();
+    const subDir = path.join(proj, 'sub');
+    fs.mkdirSync(subDir, { recursive: true });
+    try {
+      const { fn: err } = makeErr();
+      assert.throws(
+        () => cmdFeature({ dir: subDir, args: ['approve', 'card-x', 'build'], err, rootDir: ROOT_DIR }),
+        (e) => /not found/.test(e.message)
+            && /Project root:/.test(e.message)
+            && e.message.includes(path.resolve(proj))
+      );
+    } finally {
+      fs.rmSync(proj, { recursive: true, force: true });
+    }
+  });
+
+  it('reconstructs the retry command (verb + name + remaining args)', () => {
+    const proj = makeProjectDir();
+    const subDir = path.join(proj, 'sub');
+    fs.mkdirSync(subDir, { recursive: true });
+    try {
+      const { fn: err } = makeErr();
+      assert.throws(
+        () => cmdFeature({ dir: subDir, args: ['approve', 'card-x', 'build'], err, rootDir: ROOT_DIR }),
+        /cd .+ && aitri feature approve card-x build/
+      );
+    } finally {
+      fs.rmSync(proj, { recursive: true, force: true });
+    }
+  });
+
+  it('says "not an Aitri project" when cwd has no .aitri and no ancestor root', () => {
+    const dir = tmpDir(); // bare temp dir — no .aitri here or above
+    try {
+      const { fn: err } = makeErr();
+      assert.throws(
+        () => cmdFeature({ dir, args: ['approve', 'card-x', 'build'], err, rootDir: ROOT_DIR }),
+        (e) => /resolve relative to the current directory/.test(e.message)
+            && /not an Aitri project/.test(e.message)
+            && !/Project root:/.test(e.message)
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the plain init suggestion when cwd IS the project root and the feature is genuinely missing', () => {
+    const dir = makeProjectDir();
+    try {
+      const { fn: err } = makeErr();
+      assert.throws(
+        () => cmdFeature({ dir, args: ['approve', 'card-x', 'build'], err, rootDir: ROOT_DIR }),
+        (e) => /Run: aitri feature init card-x/.test(e.message)
+            && !/Project root:/.test(e.message)
+            && !/resolve relative to the current directory/.test(e.message)
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 // ── requirements.md template — PARENT_REQUIREMENTS block ───────────────────────────
 
 import { render } from '../../lib/prompts/render.js';

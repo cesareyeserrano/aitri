@@ -1134,6 +1134,28 @@ describe('lib/upgrade/migrations/from-0.1.65 — VALIDATOR-GAP: legacy venv-rela
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  it('rc.5 guidance: reason leads with portable bare pytest and warns absolute paths are machine-specific', () => {
+    const dir = tmpDir();
+    try {
+      writeLegacyConfig(dir);
+      writeRootManifest(dir, '.venv/bin/pytest tests/ -v');
+      const findings = from065.diagnose(dir, JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8')));
+      const f = findings.find(x => /legacy venv-relative/.test(x.transform));
+      assert.ok(f, 'expected a venv-relative finding');
+      // B: the portable fix (bare pytest + auto-detect) must precede the absolute fallback.
+      const barePos = f.reason.search(/bare `pytest/);
+      const absPos  = f.reason.search(/absolute path/);
+      assert.ok(barePos !== -1, 'reason must mention the bare-pytest fix');
+      assert.ok(absPos !== -1,  'reason must still mention the absolute fallback');
+      assert.ok(barePos < absPos, 'portable fix must be presented before the absolute fallback');
+      assert.match(f.reason, /auto-detect/i);
+      assert.match(f.reason, /machine-specific/);
+      // C: clearing the finding does not prove the runner executes — point to verify-run.
+      assert.match(f.reason, /verify-run/);
+      assert.match(f.reason, /not that the runner executes/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it('flags `venv/` (no leading dot) and `env/` prefixes', () => {
     for (const runner of ['venv/bin/pytest -v', 'env/bin/pytest -v']) {
       const dir = tmpDir();
