@@ -20,6 +20,13 @@
 {{FILE_LIST}}
 ```
 
+> **This command detects and classifies — it does not close the cycle.**
+> Running `aitri normalize` again will only re-display this briefing; it never
+> advances the baseline. After classifying every file below, close the cycle by:
+> - `aitri normalize --resolve` — for refactor / already-registered changes (advances the baseline), **or**
+> - routing any `fr-change` / `new-feature` through the pipeline (re-approving build advances the baseline automatically).
+> Until you do one of those, `status`/`resume` will keep reporting these changes.
+
 ---
 
 ## Current spec artifacts

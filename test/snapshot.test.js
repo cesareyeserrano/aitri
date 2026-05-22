@@ -1118,8 +1118,67 @@ describe('snapshot.normalize integration', () => {
         normalizeState: { status: 'pending', baseRef: 'abc', method: 'git' },
       });
       const snap = buildProjectSnapshot(dir);
-      const normalizeActions = snap.nextActions.filter(a => a.command === 'aitri normalize');
+      const normalizeActions = snap.nextActions.filter(a => a.command.startsWith('aitri normalize'));
       assert.equal(normalizeActions.length, 1, 'pending must not stack with uncounted detection');
+    } finally { cleanup(dir); }
+  });
+
+  it('pending state suggests --resolve (the closer), not plain normalize — rc.7 loop fix', () => {
+    // Regression guard for the Cesar loop 2026-05-22: pending emitted plain
+    // `aitri normalize`, which never advances the baseline — re-running it is a
+    // fixed point. The next-action must point to the command that actually
+    // closes the cycle.
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'pending', baseRef: 'abc', method: 'git' },
+      });
+      const snap = buildProjectSnapshot(dir);
+      const action = snap.nextActions.find(a => a.command.startsWith('aitri normalize'));
+      assert.ok(action, 'must emit a normalize next-action when pending');
+      assert.equal(action.command, 'aitri normalize --resolve',
+        'pending must suggest the closer, not the detect-only command');
+      assert.equal(action.priority, 4);
+      assert.match(action.reason, /resolve to advance the baseline|route any fr-change/);
+    } finally { cleanup(dir); }
+  });
+
+  it('resolved + uncounted still suggests plain normalize (classify first) — guard', () => {
+    const dir = tmpDir();
+    try {
+      gitInit(dir);
+      fs.writeFileSync(path.join(dir, 'a.js'), 'a');
+      gitAddCommit(dir, 'init');
+      const baseSha = gitHead(dir);
+      fs.writeFileSync(path.join(dir, 'b.js'), 'b');
+      gitAddCommit(dir, 'add b.js');
+
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'resolved', baseRef: baseSha, method: 'git' },
+      });
+      const snap = buildProjectSnapshot(dir);
+      const action = snap.nextActions.find(a => a.command.startsWith('aitri normalize'));
+      assert.equal(action.command, 'aitri normalize',
+        'resolved+uncounted is the classify step — must not jump to --resolve');
+    } finally { cleanup(dir); }
+  });
+
+  it('pending with blocking bugs suppresses the normalize action (--resolve would be refused)', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'pending', baseRef: 'abc', method: 'git' },
+      });
+      writeJsonSpec(dir, 'BUGS.json', {
+        bugs: [{ id: 'BG-001', title: 'x', severity: 'high', status: 'open' }],
+      });
+      const snap = buildProjectSnapshot(dir);
+      const normalizeActions = snap.nextActions.filter(a => a.command.startsWith('aitri normalize'));
+      assert.equal(normalizeActions.length, 0,
+        'priority-4 normalize must stay suppressed while blocking bugs exist');
     } finally { cleanup(dir); }
   });
 });
@@ -1406,8 +1465,9 @@ describe('nextActions — normalize suppression on blocking bugs (P1 2026-05-12)
       const snap = buildProjectSnapshot(dir);
       assert.equal(snap.bugs.blocking, 0,                'no blocking bugs');
       assert.equal(rootNormalizeState(snap), 'pending',  'normalize still pending');
-      const normalizeAction = snap.nextActions.find(a => a.command === 'aitri normalize');
+      const normalizeAction = snap.nextActions.find(a => a.command.startsWith('aitri normalize'));
       assert.ok(normalizeAction, 'normalize must re-emerge when no blocking bugs');
+      assert.equal(normalizeAction.command, 'aitri normalize --resolve', 'pending re-emerges as the closer');
       assert.equal(normalizeAction.priority, 4);
     } finally { cleanup(dir); }
   });
@@ -1426,7 +1486,7 @@ describe('nextActions — normalize suppression on blocking bugs (P1 2026-05-12)
       const snap = buildProjectSnapshot(dir);
       assert.equal(snap.bugs.blocking, 1,
         'in_progress + high counts as blocking (matches normalize --resolve gate)');
-      assert.equal(snap.nextActions.find(a => a.command === 'aitri normalize'), undefined,
+      assert.equal(snap.nextActions.find(a => a.command.startsWith('aitri normalize')), undefined,
         'normalize stays out of ladder while high+in_progress blocking bug exists');
     } finally { cleanup(dir); }
   });
@@ -1443,7 +1503,7 @@ describe('nextActions — normalize suppression on blocking bugs (P1 2026-05-12)
       });
       const snap = buildProjectSnapshot(dir);
       assert.equal(snap.bugs.blocking, 0, 'low severity is not blocking');
-      const action = snap.nextActions.find(a => a.command === 'aitri normalize');
+      const action = snap.nextActions.find(a => a.command.startsWith('aitri normalize'));
       assert.ok(action, 'normalize must surface — low bug is not a deadlock cause');
       assert.equal(action.priority, 4);
     } finally { cleanup(dir); }

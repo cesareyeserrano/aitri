@@ -18,6 +18,12 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.7 (2026-05-22) — `nextActions[].command` for pending normalize points to `--resolve` — additive
+
+**Value change, not a schema change.** No field added, removed, or retyped. When `normalizeState.status === 'pending'`, the `status --json` `nextActions[]` entry at priority 4 now carries `command: "aitri normalize --resolve"` (was `"aitri normalize"`); its `reason` changed accordingly. The freshly-detected state (`status='resolved'` + `uncountedFiles>0`) still carries `command: "aitri normalize"`.
+
+**Contract impact for subproducts:** none required. `nextActions[].command` is an opaque suggestion string with no parsing contract — readers render it verbatim. Marked `— additive`: a reader that keyed terminal/idle state off the old `"aitri normalize"` string in the pending case was tracking a command that could never resolve the condition; the corrected string is the one that actually advances the baseline. No reader needs to change.
+
 ## v2.0.0-rc.6 (2026-05-22) — `status --json` `uncountedFiles` excludes feature sub-pipeline artifacts — additive
 
 **Value correction, not a schema change.** No field added, removed, or retyped. `health`/`normalize.uncountedFiles` (and the `status --json` `normalize.uncountedFiles`) stops counting `features/<name>/spec/` and `features/<name>/.aitri` changes as parent off-pipeline drift, matching what `aitri normalize` already excluded since rc.3.

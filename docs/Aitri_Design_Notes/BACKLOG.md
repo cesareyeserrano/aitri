@@ -104,6 +104,16 @@ The `adopt --upgrade` reconciliation protocol (ADR-027 + addendum), the `.aitri`
   Per CLAUDE.md narrow-evidence rule: only Hub validates the rich format today. The scaffold alone covers the Tier-1 value (consumer projects start with the format guide visible). Adding schema/CLI surfaces without a second consumer asking is design-by-imagination.
   Re-open criterion: a second consumer asks for CLI-managed rich entries OR a concrete defect surfaces from the JSON-schema thinness (e.g. an agent picks up a 4-field entry and re-derives the wrong files to touch).
 
+### Core — add GitHub Copilot to compatible agents
+
+- [ ] P2 — **Generate a GitHub Copilot instruction file alongside the existing agent files.** Today `writeAgentFiles` emits `AGENTS.md`, `CLAUDE.md`, `.codex/instructions.md`, `GEMINI.md` — Copilot is absent, so a project driven by Copilot operates the Aitri pipeline with no AGENTS.md guidance (degrades produced software, tier-1 thread per "Purpose over process").
+  Problem: Copilot reads repository-wide custom instructions from `.github/copilot-instructions.md`; Aitri never writes it, so Copilot agents miss the `aitri resume`-first / phase-gate / functional-change rules every other supported agent receives verbatim.
+  Files: `lib/agent-files.js` (`AGENT_FILES` array — add `'.github/copilot-instructions.md'`; `mkdirSync(..., { recursive: true })` already handles the `.github/` dir). Detection half: `lib/state.js::detectAgent`. Tests: `test/commands/init.test.js` (all-agent-files-identical + non-overwrite), `test/commands/adopt.test.js` (--upgrade regenerates absent), `test/upgrade.test.js`.
+  Behavior: `aitri init` and `aitri adopt apply` write `.github/copilot-instructions.md` (same template content, non-destructive skip-if-exists). Existing consumers pick it up on next `adopt --upgrade` since the regeneration path recreates absent agent files.
+  Decisions pre-resolved: (1) Content is the shared `templates/AGENTS.md` verbatim — same as the other three, no Copilot-specific fork. (2) `.github/copilot-instructions.md` is the correct convention (repo-wide instructions), not per-path `.github/instructions/*.instructions.md` (that's for scoped overrides Aitri doesn't need). (3) **Open question — do NOT fake a detection branch:** `detectAgent()` keys off CLI env vars (`CLAUDE_CODE`, `CODEX_CLI`, `GEMINI_CLI`). Copilot is an editor/IDE extension, not a CLI session, and exposes no documented stable env signal equivalent to those. The file-write half is unambiguous and worth shipping; the `detectAgent` half should be added only if a real Copilot env marker is verified — otherwise `lastSession.agent` stays `unknown` for Copilot and that is honest. Ship the file generation; leave detection as a follow-up gated on a verified env var.
+  Acceptance: `aitri init` creates `.github/copilot-instructions.md` with content md5-identical to `CLAUDE.md`; re-init does not overwrite a hand-edited copy; `adopt --upgrade` on a project missing the file regenerates it.
+  Version/docs: bumps (new operator-visible artifact written by init/adopt). Update `templates/AGENTS.md` if it enumerates the supported-agent set, and the integrations docs only if the agent-file list is a documented surface — verify before claiming a CHANGELOG entry is required.
+
 ---
 
 ## Design Studies

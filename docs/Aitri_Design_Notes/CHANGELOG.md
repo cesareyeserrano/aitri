@@ -5,6 +5,25 @@
 
 ---
 
+## [2.0.0-rc.7] — 2026-05-22 — normalize next-action points to the closer (`--resolve`), not the detect-only command
+
+**Cesar canary 2026-05-22 surfaced a full-day approval loop driven by a capable agent misreading the contract.** With off-pipeline changes detected (`normalizeState: pending`), `status`/`resume`/the next-action ladder all suggested `aitri normalize`. But plain `aitri normalize` is a **fixed point** in the pending state — it re-prints the classification briefing and re-sets `pending`; it never advances the baseline. The baseline advances only via `aitri normalize --resolve` or re-approving build ([normalize.js:203](../../lib/commands/normalize.js)). The agent (Claude, in a separate session) believed `normalize` would "leave the changes baselined," ran it repeatedly, and never escaped. This is tier-1: an agent operating a consumer project loops indefinitely and may escalate to destructive escape behavior (re-approving phases, editing `.aitri`).
+
+### Root cause (verified in code, reproduced live)
+
+The next-action emitted for the pending state was the detect-only command, identical to the freshly-detected state — [snapshot.js:751](../../lib/snapshot.js), [resume.js:266](../../lib/commands/resume.js), [status.js:141](../../lib/commands/status.js). Reproduced on real Cesar: 2 genuine root test files (`tests/test_engine_groq.py`, `tests/test_frontend_remediation.py`) committed past the build baseline, surfaced as `uncountedFiles`, with every surface pointing at `aitri normalize`.
+
+### Fix
+
+The two normalize states now map to distinct commands:
+
+- **`status='pending'`** (briefing already shown) → suggest **`aitri normalize --resolve`** — the closer that advances the baseline (refactor / already-registered changes), with the reason naming the fork (route `fr-change`/`new-feature` through the pipeline). `--resolve`'s own TTY gate enforces the classification and blocks fr-changes, so it is safe to suggest.
+- **`status='resolved'` + `uncountedFiles>0`** (freshly detected) → keep **`aitri normalize`** — the classify step, which transitions to `pending`, which then points to the closer.
+
+`resume`'s "Code Outside Pipeline" block and `status`'s hint mirror this and add an explicit line that plain `aitri normalize` does not advance the baseline. The normalize briefing ([templates/phases/normalize.md](../../templates/phases/normalize.md)) now opens with a callout that the command detects/classifies but does not close the cycle — killing the agent-side root cause.
+
+**Contract impact for subproducts:** `status --json` `nextActions[].command` changes value for the pending normalize state (`aitri normalize` → `aitri normalize --resolve`). Value change, no schema/type change — old readers render whatever command string is present. integrations CHANGELOG `— additive`. Tests +3 (pending→--resolve, resolved→normalize guard, blocking-bug suppression guard) + 1 updated. AGENTS.md freshness audited — no change (no agent-instruction surface documents normalize internals).
+
 ## [2.0.0-rc.6] — 2026-05-22 — normalize/snapshot symmetry: feature artifacts no longer counted as off-pipeline drift
 
 **Canary 2026-05-22 surfaced an unresolvable normalize loop.** A deployable project ran `aitri normalize` (reported "✅ No code changes detected outside pipeline") but `aitri resume`/`status` kept reporting "1 file changed outside the pipeline" and routing to `aitri normalize` — a deterministic loop the operator could not clear.
