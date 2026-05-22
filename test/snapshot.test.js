@@ -1053,6 +1053,36 @@ describe('detectUncountedChanges()', () => {
         'mixed change set must count only the behavioral file');
     } finally { cleanup(dir); }
   });
+
+  it('excludes feature sub-pipeline artifacts — rc.6 normalize/snapshot symmetry', () => {
+    // Regression guard for the Hub canary 2026-05-22 cycle: `aitri normalize`
+    // excluded features/<name>/spec/ (rc.3) but detectUncountedChanges did not,
+    // so status/resume stayed stuck reporting "1 file changed outside pipeline"
+    // for a feature artifact normalize had already cleared. The two must agree.
+    const dir = tmpDir();
+    try {
+      gitInit(dir);
+      fs.writeFileSync(path.join(dir, 'main.js'), 'console.log("a");');
+      gitAddCommit(dir, 'init');
+      const baseSha = gitHead(dir);
+
+      // Post-baseline: one root source file (counts) + feature artifacts (must not).
+      fs.writeFileSync(path.join(dir, 'main.js'), 'console.log("b");');
+      fs.mkdirSync(path.join(dir, 'features', 'hub-web-only', 'spec'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'features', 'hub-web-only', 'spec', '04_TEST_RESULTS.json'), '{}');
+      fs.mkdirSync(path.join(dir, 'features', 'hub-web-only', '.aitri'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'features', 'hub-web-only', '.aitri', 'config.json'), '{}');
+      gitAddCommit(dir, 'root edit + feature pipeline output');
+
+      saveConfig(dir, {
+        projectName: 'p', artifactsDir: 'spec',
+        normalizeState: { status: 'resolved', baseRef: baseSha, method: 'git' },
+      });
+      const pl = buildPipelineEntry(dir, 'root');
+      assert.equal(detectUncountedChanges(pl).uncountedFiles, 1,
+        'feature sub-pipeline artifacts must not count as parent off-pipeline drift');
+    } finally { cleanup(dir); }
+  });
 });
 
 // ── snapshot.normalize integration ───────────────────────────────────────────

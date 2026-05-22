@@ -18,6 +18,12 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.6 (2026-05-22) — `status --json` `uncountedFiles` excludes feature sub-pipeline artifacts — additive
+
+**Value correction, not a schema change.** No field added, removed, or retyped. `health`/`normalize.uncountedFiles` (and the `status --json` `normalize.uncountedFiles`) stops counting `features/<name>/spec/` and `features/<name>/.aitri` changes as parent off-pipeline drift, matching what `aitri normalize` already excluded since rc.3.
+
+**Contract impact for subproducts:** none required. For projects with feature pipelines the count may **decrease** (false positives removed); the type and meaning are unchanged ("number of off-pipeline behavioral files since the last build approval"). Subproducts that rendered the old over-count were showing drift the operator could never clear — the corrected value is the one `aitri normalize` always agreed with. Marked `— additive`: no reader needs to change, and any reader keying terminal/deployable state off `uncountedFiles === 0` now resolves correctly instead of looping.
+
 ## v2.0.0-rc.4 (2026-05-21) — seed-input provenance fields on `01_REQUIREMENTS.json` — additive
 
 Two optional fields added to `01_REQUIREMENTS.json` to make the highest-value human input (the Tier-A seed inputs) auditable instead of silently inferred:

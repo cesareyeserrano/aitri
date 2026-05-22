@@ -5,6 +5,20 @@
 
 ---
 
+## [2.0.0-rc.6] — 2026-05-22 — normalize/snapshot symmetry: feature artifacts no longer counted as off-pipeline drift
+
+**Canary 2026-05-22 surfaced an unresolvable normalize loop.** A deployable project ran `aitri normalize` (reported "✅ No code changes detected outside pipeline") but `aitri resume`/`status` kept reporting "1 file changed outside the pipeline" and routing to `aitri normalize` — a deterministic loop the operator could not clear.
+
+### Root cause (verified in code, not hypothesized)
+
+`isFeaturePipelineArtifact()` — which excludes `features/<name>/spec/` and `features/<name>/.aitri` from off-pipeline change detection, since those are governed by the feature's own gate, not the parent build baseline — was added to [normalize.js](../../lib/commands/normalize.js) in rc.3 (Hub canary 2026-05-13) but **never mirrored** into [snapshot.js::detectUncountedChanges()](../../lib/snapshot.js) which feeds `status`/`resume`. The two off-pipeline detectors diverged: `normalize` excluded the feature artifact (`features/hub-web-only/spec/04_TEST_RESULTS.json`, a `.json` that `isBehavioralFile` treats as behavioral), `snapshot` counted it. Any multi-feature project that touches a feature artifact after the parent build approval reproduces it. The irony: [normalize-patterns.js](../../lib/normalize-patterns.js) header already declared itself the SSoT for *both* consumers — rc.3 violated its own SSoT by keeping the feature-artifact filter as a private function in normalize.js.
+
+### Fix
+
+`isFeaturePipelineArtifact()` moved to `lib/normalize-patterns.js` (the declared SSoT) and exported; `normalize.js` imports it (local definition removed) and `snapshot.js::detectUncountedChanges()` now applies `!isFeaturePipelineArtifact(f)` symmetrically with root `spec/` + `.aitri`. Closes the class: any future consumer of the off-pipeline contract inherits the full filter from one place.
+
+**Contract impact for subproducts:** `status --json` `uncountedFiles` value tightens for projects with feature pipelines (drops feature-artifact false positives). Type unchanged, field unchanged — a value correction, not a schema change. integrations CHANGELOG entry `— additive` (non-breaking value correction). Tests +1 (`detectUncountedChanges` excludes `features/<x>/spec` + `.aitri`). AGENTS.md freshness audited — no change (no operator-instruction surface changed).
+
 ## [2.0.0-rc.5] — 2026-05-22 — venv-migration guidance + cwd-aware feature-not-found (Cesar canary 2026-05-22)
 
 **Cesar canary (5 pytest features, alpha → rc.4 upgrade) surfaced two messaging defects that degraded a produced artifact.** The N1 venv-relative-runner finding (alpha.16) told the operator to fix the flagged `test_runner` and led its example with an **absolute path** — without mentioning that `verify-run` already auto-detects `.venv/`/`venv/` at the project root when the runner is a bare `pytest` ([verify.js:399-412](../../lib/commands/verify.js)). The agent followed the guidance and committed machine-specific paths (`/Users/.../pytest …`) into all 5 manifests — portable failure: those break in CI and on any other clone. Aitri detected one portability problem and steered to another, having the portable fix built in.
