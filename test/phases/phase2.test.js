@@ -121,6 +121,12 @@ describe('Phase 2 — buildBriefing() (BL-002)', () => {
     assert.ok(briefing.includes('≥2 options'), 'briefing must require ≥2 options per ADR');
   });
 
+  // P2 (rc.10) — architect persona now carries a concrete ❌/✅ ADR few-shot
+  it('briefing includes a bad/good ADR example (few-shot)', () => {
+    assert.ok(/Bad ADR/i.test(briefing) && /Good ADR/i.test(briefing),
+      'architect persona must show a concrete bad-vs-good ADR example');
+  });
+
   it('briefing contains Failure Blast Radius section', () => {
     assert.ok(briefing.toLowerCase().includes('blast radius'), 'briefing must mention failure blast radius');
   });

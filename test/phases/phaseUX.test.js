@@ -128,6 +128,18 @@ describe('Phase UX — buildBriefing()', () => {
     assert.ok(briefing.includes('End User'), 'persona role must appear in briefing');
   });
 
+  // A3 (rc.10) — responsive breakpoints are conditional on the target medium
+  it('breakpoints are conditional on medium, not imposed on every screen', () => {
+    assert.ok(/fixed-medium/i.test(briefing),
+      'persona must address fixed-medium UIs (desktop/TV/kiosk/CLI), not assume web');
+    assert.ok(/target medium/i.test(briefing),
+      'persona must tie breakpoints to the actual target medium');
+    // Web breakpoints still present as the web case, just not unconditional
+    assert.ok(briefing.includes('375px'), 'web breakpoints remain for web UIs');
+    assert.ok(!/every screen must specify behavior at 375px/i.test(briefing),
+      'the old unconditional "every screen must specify behavior at 375px" mandate must be gone');
+  });
+
   it('UX/Visual/Audio Requirements section contains UX FR but not logic FR', () => {
     const uxIdx = briefing.indexOf('## UX/Visual/Audio Requirements');
     const fullReqIdx = briefing.indexOf('## Full Requirements');

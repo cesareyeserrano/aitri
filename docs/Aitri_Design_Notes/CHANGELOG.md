@@ -5,6 +5,88 @@
 
 ---
 
+## [2.0.0-rc.14] — 2026-05-25 — CLI polish: flag documentation (E2) + AGENTS.md next-action wording; E1 refactor rejected as non-defect
+
+Final release of the pre-2.0.0 audit ([ADR-034](DECISIONS.md)). The CLI-polish tier.
+
+- **E2 — flag documentation in `help`.** Documented previously-undocumented flags: `resume --full`, `status --json`, `run-phase discovery --guided`, `validate --explain`, `verify-run --coverage-threshold N`. Pure help-text additions (cosmetic).
+- **AGENTS.md next-action wording corrected.** The line "Follow the PIPELINE INSTRUCTION at the end of *each* command" overstated reality — `complete`/`reject` deliberately present a *branch* (approve-or-reject), and `status`/`resume` print a human-facing `Next:`. Reworded to distinguish the singular authoritative `PIPELINE INSTRUCTION` (approve/verify) from branching next-actions.
+- **E1 (unify the next-action marker) — REJECTED as a non-defect (decision on record).** Investigation found the marker "inconsistency" the audit flagged is actually three deliberate channels: `PIPELINE INSTRUCTION` = the agent's single authoritative action (approve/verify); branching hints = where the human chooses (complete/reject); `→ Next:` = human display (status). Unifying them would conflate distinct semantics and risk breaking agents that key off "PIPELINE INSTRUCTION = my one action," plus ripple through AGENTS.md and the output-contract tests. The only real issue was the AGENTS.md wording (fixed above). No refactor. The Command-surface audit study in BACKLOG records this finding.
+
+No schema change. No integrations CHANGELOG entry (help stdout + agent template, not a subproduct contract). Tests unchanged (cosmetic help text + doc).
+
+## [2.0.0-rc.13] — 2026-05-25 — cross-artifact consistency: Phase 5 claim-vs-evidence gate (D1) + legacy-AC warning (D2)
+
+Fifth release of the pre-2.0.0 audit ([ADR-034](DECISIONS.md)). The lowest-impact tier (paper-trail consistency, user-deprioritized vs the code-rigor work) — shipped for completeness.
+
+- **D1 — Phase 5 claim-vs-evidence gate.** `lib/phases/phase5.js` validate() now cross-checks `05_PROOF_OF_COMPLIANCE.json` against `04_TEST_RESULTS.json#fr_coverage`: a compliance entry with `level` `complete` or `production_ready` must have `fr_coverage` status `covered` (or `manual`). A green proof can no longer over-claim past the test evidence. Conservative — only fires when the coverage entry exists and contradicts. Not theater: claim-vs-measured-evidence consistency, the same class Aitri already enforces, preventing a dishonest proof shipping broken software (tier-1).
+- **D2 — legacy-AC mismatch surfaced.** `lib/phases/phase3.js` validate() previously skipped the `ac_id`→Phase-1 cross-check silently when Phase 1 had no structured acceptance_criteria with ids. **Downgraded from the audit's proposed hard error to a warning** — `ac_id` is a required TC field, so erroring would block every project whose Phase 1 uses flat-string ACs (broad, not narrow). The warning surfaces the traceability gap without breaking the run. (Audit disposition corrected mid-implementation; recorded here.)
+
+Schema: D1 is a new validation rule on an existing artifact (no field change) → documented in ARTIFACTS.md + integrations CHANGELOG `— additive` with a newly-blocking note. D2 is stderr-only. Tests +3 (D1 blocks over-claim / passes on covered+manual; D2 warns without throwing).
+
+## [2.0.0-rc.12] — 2026-05-25 — human approval gate: checklist always visible + opt-in hard stop (B1/B2/E3/P1)
+
+Fourth release of the pre-2.0.0 audit ([ADR-034](DECISIONS.md)) — the #1 finding: the human-judgment gate was structurally absent in agent mode (`approve` no-op'd its summary + checklist on `!isTTY`).
+
+- **B1 — checklist always visible.** `lib/commands/approve.js` now prints the artifact summary AND the phase's real Human Review checklist on every approve (TTY and agent mode). The checklist is extracted from the phase template's `## Human Review` section via the new `extractHumanReview()` in `lib/prompts/render.js` — single source, no duplication. In agent mode it also prints a HUMAN REVIEW CHECKPOINT directive telling the agent to relay it to the user and not auto-chain phases.
+- **B2 — opt-in hard gate.** New `.aitri#humanApprovalGate` (additive). Default off: agent-mode approval proceeds (autonomy preserved). When on: agent-mode `approve` blocks and a human must run it — all phases. The drift re-approval block (already TTY-gated) is unchanged.
+- **E3 — `help` gains an "Interactive vs Agent mode" section** documenting which commands differ without a TTY and the two opt-in gates.
+- **P1 — reviewer verdict documented as advisory** in `templates/AGENTS.md` (the Code Review PASS/FAIL does not mechanically gate Phase 5).
+
+**Framing (per user clarification):** the opt-in gates are for **larger** projects, not "serious" ones — all projects are serious; small projects / MVPs run autonomously by default and that is equally valid. Wording corrected across SCHEMA.md, verify-run output, and AGENTS.md. Also fixed a version-provenance slip from the rc.10/rc.11 header bumps (a broad sed had wrongly advanced the `strictAssertions`/`line_coverage`/`low_confidence_tcs` body references from rc.9 → restored).
+
+Schema: `.aitri#humanApprovalGate` additive → integrations CHANGELOG `— additive`. Tests +3 (B1 prints summary+checklist+checkpoint; B2 blocks when on; default proceeds). AGENTS.md updated (approve-as-checkpoint + reviewer-advisory).
+
+## [2.0.0-rc.11] — 2026-05-25 — security applicability is a forced explicit decision in Phase 1 (F1)
+
+Third release of the pre-2.0.0 audit ([ADR-034](DECISIONS.md)). Security was threaded through the pipeline (Phase 2 Security Design, Phase 3 attack vectors, reviewer/auditor personas) but only fired if the user happened to declare a security NFR — opt-in by omission. F1 makes Phase 1 force a conscious decision.
+
+- **F1.** `templates/phases/requirements.md` — the operational-NFR "API security" item is promoted to a first-class **Security** category (applies to: user input, authn/authz, secrets/credentials, personal/sensitive data, network-exposed endpoints). The agent must decide explicitly: add a security NFR, OR state in one line why security does not apply — "do NOT leave security unaddressed by omission." The Human Review checklist gains a matching line. Consistent with the existing "declare not-applicable with reason" framing for the other operational categories.
+
+Scope deliberately narrow: prompt forcing-function only. **No mechanical gate** — a code check for "a security answer exists" would parse prose (fragile) and only validate presence, which CLAUDE.md classifies as theater. A dedicated security meta-persona (F2) stays deferred per ADR-034 until a security-sensitive adopter validates the need. Tests +1 (phase1 briefing forces the security decision). No schema change → no integrations CHANGELOG entry. AGENTS.md unaffected.
+
+## [2.0.0-rc.10] — 2026-05-25 — stack-agnosticism: Docker conditional + persona web/container assumptions removed (R2)
+
+Second release of the pre-2.0.0 audit ([ADR-034](DECISIONS.md)). Removes stack assumptions that degraded produced software for non-web/non-containerized projects (the canaries Go-on-RPi, Ultron, Cesar). Prompts/personas only — no schema change, no integrations CHANGELOG entry.
+
+- **A1 — Docker conditional.** `templates/phases/deploy.md` listed `Dockerfile` + `docker-compose.yml` as unconditional "Files to create" (invariant #4 violation). Now packaging is conditional on the deployment model declared in `02_SYSTEM_DESIGN.md` (containerized / binary / package / serverless / static), with an explicit "do NOT default to Docker". The Human Review checklist line is conditional too. `templates/phases/architecture.md` Deployment Architecture section now forces the agent to *state the deployment model explicitly* so Phase 5 has a declared input to read.
+- **A2 — DevOps persona.** `lib/personas/devops.js` Docker constraints (non-root, HEALTHCHECK) are now gated on "when the deployment is containerized"; a new constraint forbids inventing a Dockerfile for a non-containerized project. REASONING aligned.
+- **A3 — UX persona.** `lib/personas/ux.js` hardcoded web breakpoints (`375/768/1440`) for *every screen* while its own archetype list includes CLI tools — internal contradiction. Breakpoints are now conditional on the target medium (web vs fixed-medium: desktop/TV/kiosk/embedded/CLI-TUI).
+- **P2 — architect persona few-shot.** `lib/personas/architect.js` was the only generative persona without a ❌/✅ example; added a bad-vs-good ADR pair.
+
+Tests +5 (deploy briefing Docker-conditional + DevOps constraints conditional, UX breakpoints conditional, architect ADR few-shot). AGENTS.md audited — no change (prompt-content edits, not command/flag/contract surface). No `.aitri`/artifact schema change → no integrations CHANGELOG entry.
+
+## [2.0.0-rc.9] — 2026-05-25 — verification spine: stack-agnostic coverage (C1) + opt-in assertion-density gate (C2)
+
+First release of the pre-2.0.0 audit's verification spine — the eje that hardens rigor on **produced code** (the deliverable), not on the documentation trail. Outcome of a deep pre-promotion audit; full disposition + the rejected/deferred items are recorded in [ADR-034](DECISIONS.md). C3 (mutation testing) was **dropped**, respecting the existing immutable discard — see ADR-034 for the zero-dep reasoning correction (the discard's zero-dep argument was a category error; orchestrating a project-declared tool never violated zero-dep, but the real basis — assertion-density covers most of it at zero cost + no adopter demand — stands).
+
+### C1 — stack-agnostic coverage
+
+`verify-run --coverage-threshold` previously instrumented only the node built-in runner ([verify.js](../../lib/commands/verify.js) gated on `testCmd.startsWith('node ')`). Now coverage is collected for any recognized runner via the new `injectCoverageFlag()` helper: node `--coverage`/`--experimental-test-coverage`, `go test -cover`, `pytest --cov`, `jest`/`vitest --coverage`. `parseCoverageOutput()` extended to read istanbul tables, `go` `coverage: X%`, and `pytest-cov` `TOTAL … X%`. The figure persists as additive `04_TEST_RESULTS.json#line_coverage`. The coverage tool lives in the **project's** env — Aitri orchestrates via spawn, never bundles it (zero-dep intact, same pattern as the Playwright dispatch). Directly serves the non-node canaries (Cesar pytest, Go-on-RPi) which got no coverage signal before.
+
+### C2 — opt-in assertion-density gate
+
+The assertion-density scan (TCs with ≤1 assertion) was warning-only. rc.9 persists it as additive `04_TEST_RESULTS.json#low_confidence_tcs` and adds an opt-in `.aitri#strictAssertions` flag: when `true`, `verify-complete` BLOCKS until each low-confidence TC has real assertions. **Default is unchanged** (warning only) — opt-in keeps autonomy for projects that don't want it and gives production-grade projects a real gate. This is the zero-dep test-quality lever the project already chose over mutation.
+
+Schema: all additive (two artifact fields + one config field) → integrations CHANGELOG entry `— additive`. Tests +16 (`injectCoverageFlag` × 9, coverage parsing × 4, strictAssertions gate × 3). AGENTS.md freshness audited.
+
+## [2.0.0-rc.8] — 2026-05-23 — `normalize --resolve` rejects an uncommitted behavioral working tree (closes the double-cycle)
+
+**Cesar canary 2026-05-23, run via Codex, surfaced a self-inflicted second normalize cycle.** After fixes were committed (`66204df`), `verify-run` failed `TC-009f` (a linter reordered imports), the operator edited `src/web/app.py` to satisfy the literal-substring test contract, then ran the recommended closure sequence `verify-run && verify-complete → normalize --resolve`. The import edit was still **uncommitted** when `--resolve` stamped the baseline at HEAD (`66204df`). Committing the closure (`79fbb8c`) then carried that edit — `git diff 66204df..79fbb8c` surfaced `src/web/app.py` as a fresh off-pipeline change, forcing a second full `normalize` + `--resolve` (`b2824a5`). Cross-agent evidence: the same canary lineage that drove rc.6/rc.7 (Claude), now reproduced under Codex.
+
+### Root cause (verified in code)
+
+An asymmetry between commands designed to be used together: `verify-run` validates the **working tree** ([verify.js:436](../../lib/commands/verify.js) — `spawnSync` against disk, no git ops), while `normalize`/snapshot detection and `--resolve` read **committed state only** (`git diff baseRef..HEAD`, [normalize.js:64](../../lib/commands/normalize.js)) and `--resolve` stamps `baseRef = current HEAD` ([normalize.js:199](../../lib/commands/normalize.js)) with no working-tree check. An uncommitted behavioral edit is therefore invisible to the classification the operator confirms, and re-triggers `normalize` the instant it is committed. The closure sequence the template prescribed (no "commit first" step) is exactly what produces the uncommitted edit, so consumer agents reading `templates/AGENTS.md` walk into it.
+
+**Not a "blind spot" / correctness defect.** Uncommitted code is unshipped code; everything that ships passes through `baseRef..HEAD`. The re-flag is the detection *catching* the change, not missing it — an uncommitted `fr-change` is surfaced at commit time, never silently absorbed. This is a closure-sequence gap plus avoidable friction, not a safety hole. See ADR-033.
+
+### Fix
+
+- **Guard (`cmdNormalizeResolve`):** before the TTY confirmation, `--resolve` now **rejects** (exit 1) when the working tree has uncommitted behavioral files, listing them with an actionable message (`commit` or `git stash -u`, then re-run). Git baselines only — mtime baselines already read the working tree in `detectChanges()`, so the asymmetry does not exist for them. Fail-open if git is unavailable. Status semantics mirror `--diff-filter=ACMR` (Add/Modify/Rename/Copy + untracked; pure deletions excluded — detection never counts them, so they cannot re-trigger). Reject, not warn: an agent (the real consumer) steamrolls advisory output and answers `y`; only a non-zero exit enters its control loop and forces commit→retry.
+- **Templates:** `normalize.md` Step 5 maintenance path and `templates/AGENTS.md` now prescribe **commit → verify → resolve** and name the working-tree gate explicitly.
+
+No artifact/`.aitri`/`status --json` schema change (CLI text + exit code only) → no integrations CHANGELOG entry. Tests +3 (git dirty blocks, git clean reaches TTY gate, mtime skips the guard). AGENTS.md freshness audited — updated (the closure-sequence guidance was stale).
+
 ## [2.0.0-rc.7] — 2026-05-22 — normalize next-action points to the closer (`--resolve`), not the detect-only command
 
 **Cesar canary 2026-05-22 surfaced a full-day approval loop driven by a capable agent misreading the contract.** With off-pipeline changes detected (`normalizeState: pending`), `status`/`resume`/the next-action ladder all suggested `aitri normalize`. But plain `aitri normalize` is a **fixed point** in the pending state — it re-prints the classification briefing and re-sets `pending`; it never advances the baseline. The baseline advances only via `aitri normalize --resolve` or re-approving build ([normalize.js:203](../../lib/commands/normalize.js)). The agent (Claude, in a separate session) believed `normalize` would "leave the changes baselined," ran it repeatedly, and never escaped. This is tier-1: an agent operating a consumer project loops indefinitely and may escalate to destructive escape behavior (re-approving phases, editing `.aitri`).

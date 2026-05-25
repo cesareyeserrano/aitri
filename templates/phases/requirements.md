@@ -158,8 +158,9 @@ Include these as comments in project_summary or as a separate "product_analysis"
       NFR minimum: every request logs [timestamp] METHOD /path STATUS to stdout/stderr
     **CI/CD** — applies to: any project with a test suite
       NFR minimum: pipeline runs the full declared test suite — including any e2e runner the project uses — on every push to the main branch
-    **API security** — applies to: any endpoint with path or input parameters that reads filesystem, DB, or executes commands
-      NFR minimum: accepted values are restricted to a whitelist of allowed directories or resources — blocking `..` alone is insufficient
+    **Security** — applies to: any project that handles user input, authentication/authorization, secrets or credentials, personal/sensitive data, or network-exposed endpoints.
+      Decide explicitly — does security apply? If YES, add ≥1 security NFR covering the relevant surface (authn/authz, input validation, secret handling, transport/data protection). If NO, state why in one line (e.g. "offline single-user tool — no network, no secrets, no PII"). Do NOT leave security unaddressed by omission.
+      NFR minimum (API / endpoints with path or input parameters that read filesystem, DB, or execute commands): accepted values are restricted to a whitelist of allowed directories or resources — blocking `..` alone is insufficient
     **Healthcheck** — applies to: any project with Docker or server deployment
       NFR minimum: GET /health returns 200 when the process is alive
 - Every MUST FR must have a type (UX|persistence|security|reporting|logic)
@@ -238,4 +239,5 @@ Next: aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} 1   →   aitri {{SCOPE_VERB}}ap
   [ ] user_personas reflect real users — not "general user" — with a real goal and pain_point
   [ ] No FR invents scope beyond what the input artifact (IDEA.md on first run, or 01_REQUIREMENTS.json on re-run) implies
   [ ] North Star KPI, JTBD, and guardrail metric are identified in project_summary
-  [ ] Operational NFRs covered: observability, CI/CD, API security, healthcheck — or explicitly declared "not applicable" with reason
+  [ ] Operational NFRs covered: observability, CI/CD, security, healthcheck — or explicitly declared "not applicable" with reason
+  [ ] Security applicability decided explicitly — a security NFR exists, OR a one-line reason states why security does not apply (never left unaddressed by omission)

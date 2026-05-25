@@ -54,12 +54,38 @@ The `adopt --upgrade` reconciliation protocol (ADR-027 + addendum), the `.aitri`
   Decisions: ship only after D1+D2 prove out on a real canary; per ADR-032 the tier-1 value is provisional until a non-author consumer validates that operators answer honestly. Do NOT add per-phase gates speculatively.
   Acceptance: architecture briefing on a constraint-bearing project surfaces the confirmation block; if gated, `complete 2` blocks on an unconfirmed compliance-relevant constraint.
 
-- [ ] P3 — **`approve` human-review checklist no-ops in agent mode (separate finding from ADR-032).** `lib/commands/approve.js::printApprovalSummary` + `askChecklist` early-return on `!process.stdin.isTTY`, so when an agent runs `approve` there is no summary and no checklist — the content-judgment surface collapses exactly like the seed interview did.
+- [ ] P2 — **`approve` human-review checklist no-ops in agent mode — DESIGN RESOLVED (B1+B2), see [ADR-034](DECISIONS.md).** `lib/commands/approve.js::printApprovalSummary` + `askChecklist` early-return on `!process.stdin.isTTY`, so when an agent runs `approve` there is no summary and no checklist — the content-judgment surface collapses exactly like the seed interview did.
   Problem: the human-judgment gate (is the design good? are the FRs right?) is structurally absent in the only real operating mode. Distinct from D2 (which gates the seed mechanically) — this is about content review on every phase.
-  Files: `lib/commands/approve.js`.
-  Behavior: TBD — options include surfacing the summary to stdout unconditionally (agent relays to user) and/or recording an explicit human-acknowledgement event. Subject to the same architectural ceiling (Aitri talks to the agent, not the human).
-  Decisions: needs design before implementation; do not silently weaken the isTTY-gate invariant on the destructive op itself.
-  Acceptance: TBD per chosen design.
+  Files: `lib/commands/approve.js`; `lib/state.js` (config field); `templates/AGENTS.md`; `lib/commands/help.js` (E3 Interactive-vs-Agent section); `docs/integrations/SCHEMA.md`; tests in `test/commands/approve.test.js`.
+  Behavior (resolved): **B1** — print the per-phase checklist content + summary on EVERY approve, TTY and non-TTY (today non-TTY prints nothing). **B2** — default stays print-and-proceed (autonomy for CI/agent runs); add opt-in `.aitri#humanApprovalGate` (boolean, additive) — when true, non-TTY `approve` BLOCKS so serious projects get a real review window. Agent instruction in AGENTS.md: treat `approve` as a checkpoint, do not auto-chain phases. **E3** — `help` gains an "Interactive vs Agent mode" section.
+  Decisions: do NOT make TTY mandatory (breaks CI). The drift-re-approval isTTY block (approve.js:292) is unchanged. Comments handled by git/PR; modifications caught by existing drift detection — no new comment subsystem. Trade-off accepted (ADR-034): with the flag off a fully-autonomous run can approve all phases without a human; the window is opt-in.
+  Acceptance: non-TTY `approve` prints the checklist; with `humanApprovalGate: true` non-TTY `approve` exits non-zero pointing to a human; TTY behavior unchanged; default (flag absent) behavior unchanged except the checklist now prints.
+
+### Core — pre-2.0.0 audit (rc.9 spine shipped; R2–R6 queued)
+
+> Full disposition incl. theater rejections + zero-dep correction: [ADR-034](DECISIONS.md). C1 (stack-agnostic coverage) + C2 (assertion-density gate) shipped rc.9 — see CHANGELOG. Items below are queued, ordered by impact on produced code.
+
+- [ ] P2 — **A1/A2/A3 — stack-agnosticism: Docker + web-UI assumptions leak into non-web produced software.** `templates/phases/deploy.md:35-37` lists `Dockerfile` + `docker-compose.yml` as unconditional "Files to create" (invariant #4 violation — a Go binary / CLI / library is forced to invent containers); `lib/personas/devops.js:10,12,23` reinforces it; `lib/personas/ux.js:26,46` hardcodes web breakpoints (`375px/768px/1440px`) for *every screen* while its own archetype list (`ux.js:15`) includes CLI tools — internal contradiction.
+  Files: `templates/phases/deploy.md`, `lib/personas/devops.js`, `lib/personas/ux.js`; Phase 2 (`templates/phases/architecture.md`) to force an explicit "containerized? Y/N" decision so the conditional has a flag to read; tests in `test/phases/`.
+  Behavior: Docker files become conditional on System Design declaring containerized deployment; DevOps Docker constraints conditional on the same; UX breakpoints conditional on a web/screen medium. Consistent with the "Stack-aware project profile" study — local conditionals, NO `profile` axis.
+  Acceptance: a non-containerized project's Phase 5 briefing does not mandate Dockerfile; a CLI-archetype UX spec is not forced into 375px breakpoints; existing web projects unchanged.
+
+- [ ] P3 — **P2(persona) — architect persona lacks a ❌/✅ few-shot example.** `lib/personas/architect.js` is the only generative persona without a concrete bad/good pair, despite asking for something abstract (ADR with ≥2 options). Add a bad-ADR/good-ADR example. Files: `lib/personas/architect.js`; test in `test/phases/phase2.test.js`.
+
+- [ ] P3 — **F1 — security is opt-in across the pipeline; Phase 1 should force the question.** Security is threaded as conditionals (Phase 2 Security Design, Phase 3 attack vectors, audit/reviewer personas) but only fires if the user declares a security NFR. Make Phase 1 force the agent to *answer* whether security applies (Y/N + why), like it already does for observability/CI/CD/healthcheck.
+  Files: `templates/phases/requirements.md` (+ optional soft gate in `lib/phases/phase1.js`); test in `test/phases/phase1.test.js`.
+  Behavior: Phase 1 briefing requires an explicit security-applicability answer; a "not applicable" must carry a reason. Do NOT add a dedicated security persona (F2 — deferred, speculative without a security-sensitive adopter).
+  Acceptance: Phase 1 on a project with no security NFR surfaces the forced question; an explicit "not applicable + reason" satisfies it.
+
+- [ ] P3 — **D1 — Phase 5 compliance level not checked against test evidence.** `lib/phases/phase5.js` validates FR-id presence in `requirement_compliance` but does not enforce `level ≥ complete ⇒ fr_coverage shows covered`. An FR with `uncovered`/`partial` coverage can be marked `production_ready`. Claim-vs-evidence consistency (not field presence — legitimate, mirrors Phase 3 coverage checks).
+  Files: `lib/phases/phase5.js` (read `04_TEST_RESULTS.json#fr_coverage`); `docs/integrations/ARTIFACTS.md`; test in `test/phases/phase5.test.js`.
+  Behavior: `complete 5` blocks when any FR's compliance level is `complete`/`production_ready` while its fr_coverage status is not `covered`. Narrow surface — `verify-complete` already requires ≥1 passing test per FR to reach Phase 5; this closes the `uncovered`/`partial`-claimed-ready residual.
+  Acceptance: a compliance entry claiming `production_ready` on an `uncovered` FR blocks; a `covered` FR claiming `production_ready` passes.
+
+- [ ] P3 — **D2 — AC-traceability legacy skip is silent.** `lib/phases/phase3.js` skips the `ac_id`→Phase-1 cross-check when Phase 1 uses the legacy (non-structured) AC schema, so TCs can reference ACs that do not exist. Convert the silent skip to an error when `ac_id` fields are present but Phase 1 cannot be validated. Files: `lib/phases/phase3.js`; test in `test/phases/phase3.test.js`. Narrow (legacy projects only).
+
+- ~~E2 — document `--check`/`--full`/`--explain`/`--guided`/`--coverage-threshold` in `help`~~ — SHIPPED rc.14.
+- **E1 — unify the next-action marker — REJECTED as non-defect (rc.14, [ADR-034](DECISIONS.md) / CHANGELOG).** Investigation found three deliberate channels, not an inconsistency: `PIPELINE INSTRUCTION` = agent's single authoritative action (approve/verify); branching hints = where the human chooses (complete/reject); `→ Next:` = human display (status). Unifying would conflate semantics + risk breaking agents keyed on the marker. Only the AGENTS.md "each command" wording was wrong (fixed rc.14). Re-open ONLY if a real consumer-confusion case surfaces — tracked under the Command-surface audit study below.
 
 ### Core — verify-run swallows runner exit-code/parse divergence (rc.4 Hub canary 2026-05-21)
 
@@ -178,7 +204,7 @@ Items analyzed and explicitly rejected. Re-open only if the stated criterion is 
 
 | Item | Decision | Reason |
 | :--- | :--- | :--- |
-| Mutation testing | Discarded indefinitely | Violates zero-dep principle. `verify-run --assertion-density` covers 60% of the same problem at zero cost. Globally-installed stryker introduces an implicit env dependency — worse than explicit dep. ROI does not justify. |
+| Mutation testing | Dropped on evidence, not policy (reason corrected in [ADR-034](DECISIONS.md)) | **Reason corrected 2026-05-25:** the original "violates zero-dep" basis was a category error — zero-dep constrains what Aitri *imports*, not what it *orchestrates*. Orchestrating a project-declared mutation tool (in the consumer's own deps, like Playwright) adds zero deps to Aitri. The valid basis stands: C2 (assertion-density, now an opt-in `verify-complete` gate as of rc.9) covers ~60% of the same problem at zero cost, and no adopter has asked. Re-open: a security/production-critical adopter needing rigor deeper than C2 — implemented as project-declared orchestration, never bundled or globally-installed. |
 | Aitri CI (GitHub Actions step) | Discarded 2026-04-17 | No active user demand. Contract not stable enough to publish a separate Action. If needed later, lives outside Core. |
 | Aitri IDE (VSCode extension) | Discarded 2026-04-17 | Separate product with its own release cycle. Not incremental over the CLI; reconsidered if the CLI stabilizes across multiple external teams. |
 | Aitri Report (PDF/HTML compliance report) | Discarded 2026-04-17 | User declined the surface. Compliance evidence already lives in `05_PROOF_OF_COMPLIANCE.json` + git history. |

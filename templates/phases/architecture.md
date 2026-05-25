@@ -31,7 +31,7 @@ Required sections — use these EXACT names as `##` level-2 headers (aitri {{SCO
 4. `## API Design` — for backend apps: all endpoints (method, path, auth, request/response, errors); for frontend-only apps: internal module/package API (exported function and class signatures in the language's idiomatic style)
 5. `## Security Design` — auth, input validation, security headers, XSS/injection mitigations
 6. `## Performance & Scalability` — caching, query optimization, size bounds
-7. `## Deployment Architecture` — environments, containers, CI/CD
+7. `## Deployment Architecture` — **state the deployment model explicitly** (containerized / binary or native / package or library / serverless / static host); environments; CI/CD. Phase 5 reads this to decide what to package — do NOT default to containers unless the stack and FRs call for them.
 8. `## Risk Analysis` — top 3-5 risks + mitigation; ADRs belong here
 9. `## Technical Risk Flags` — output of stack × requirements analysis (see instructions below)
 

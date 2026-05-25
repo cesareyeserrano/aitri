@@ -180,4 +180,73 @@ describe('Phase 5 — buildBriefing()', () => {
     assert.ok(b.includes('/tmp/test/spec/05_PROOF_OF_COMPLIANCE.json'), 'artifact path must use artifactsBase/spec');
     assert.ok(!b.includes('/tmp/test/05_PROOF_OF_COMPLIANCE.json'), 'artifact path must NOT use bare dir');
   });
+
+  // A1 (rc.10) — Docker is conditional on the declared deployment model, not mandated
+  it('deployment packaging is conditional, not an unconditional Dockerfile mandate', () => {
+    // Dockerfile/docker-compose only appear under the conditional packaging block
+    assert.ok(briefing.includes('deployment model') || briefing.includes('Deployment packaging'),
+      'briefing must frame packaging by declared deployment model');
+    assert.ok(/do NOT default to Docker/i.test(briefing),
+      'briefing must explicitly tell the agent not to default to Docker');
+    assert.ok(briefing.includes('Binary') && briefing.includes('Serverless'),
+      'briefing must offer non-container packaging options');
+    // The old unconditional "Files to create: Dockerfile" line must be gone
+    assert.ok(!/^- \{\{DIR\}\}\/Dockerfile/m.test(briefing) && !/^- .*\/Dockerfile —/m.test(briefing),
+      'Dockerfile must not be an unconditional top-level file-to-create');
+  });
+
+  // A2 (rc.10) — DevOps persona Docker constraints are conditional
+  it('DevOps constraints gate Docker rules on containerized deployment', () => {
+    assert.ok(/never invent a Dockerfile/i.test(briefing),
+      'persona must forbid inventing a Dockerfile for non-containerized projects');
+    assert.ok(/When the deployment is containerized/i.test(briefing),
+      'container security constraints must be conditional on containerized deployment');
+  });
+});
+
+describe('Phase 5 — validate() D1 claim-vs-evidence gate (rc.13)', () => {
+  function seed(dir, frCoverage) {
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), JSON.stringify({
+      functional_requirements: [
+        { id: 'FR-001', priority: 'MUST', title: 'Login' },
+        { id: 'FR-002', priority: 'MUST', title: 'Dash' },
+      ],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), JSON.stringify({
+      executed_at: new Date().toISOString(), results: [], summary: {},
+      fr_coverage: frCoverage,
+    }));
+  }
+  // proof: FR-001 production_ready, FR-002 complete (both HIGH)
+  const proof = () => JSON.stringify({
+    project: 'P', version: '1.0.0', phases_completed: 5, overall_status: 'compliant',
+    requirement_compliance: [
+      { id: 'FR-001', title: 'Login', level: 'production_ready' },
+      { id: 'FR-002', title: 'Dash',  level: 'complete' },
+    ],
+  });
+
+  it('blocks production_ready when fr_coverage status is partial (over-claim)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-d1-'));
+    try {
+      seed(dir, [
+        { fr_id: 'FR-001', status: 'partial' },
+        { fr_id: 'FR-002', status: 'covered' },
+      ]);
+      assert.throws(() => PHASE_DEFS[5].validate(proof(), { dir, config: { artifactsDir: 'spec' } }),
+        /claim a level above their test evidence[\s\S]*FR-001/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('passes when HIGH levels are backed by covered (or manual) coverage', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-d1-'));
+    try {
+      seed(dir, [
+        { fr_id: 'FR-001', status: 'covered' },
+        { fr_id: 'FR-002', status: 'manual' },
+      ]);
+      assert.doesNotThrow(() => PHASE_DEFS[5].validate(proof(), { dir, config: { artifactsDir: 'spec' } }));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
 });

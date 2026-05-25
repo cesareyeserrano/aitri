@@ -97,10 +97,17 @@ After executing the proposed commands in Step 3, the warning in `aitri status` c
 - **Maintenance path:** if every entry is `refactor` or `bug-fix` that has been registered *and* verified in `BUGS.json`, the pipeline did not need spec changes. Run:
 
   ```
+  # 1. Commit every fix first. --resolve stamps the baseline at HEAD and
+  #    refuses to run while behavioral files are uncommitted.
+  git add -A && git commit -m "fix: ..."
+  # 2. Prove the committed code still passes.
   aitri verify-run && aitri verify-complete
+  # 3. Advance the baseline.
   aitri normalize --resolve
   ```
 
-  `normalize --resolve` performs mechanical gates (tests passing, no open critical/high bugs) plus a human TTY confirmation, then advances the baseline to current HEAD without cascading Phase 5.
+  `normalize --resolve` performs mechanical gates (tests passing, no open critical/high bugs, **clean working tree of behavioral files**) plus a human TTY confirmation, then advances the baseline to current HEAD without cascading Phase 5.
+
+  If `verify-run` forces a code edit (e.g. a linter reorders imports), commit that edit **before** `--resolve` too — the baseline is the committed HEAD, so an uncommitted edit re-triggers `normalize` the moment you commit it, costing a second cycle.
 
 Do NOT use `--resolve` if any entry is `fr-change`, `new-feature`, or `undetermined`. Route those through the pipeline first.

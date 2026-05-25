@@ -461,3 +461,36 @@ describe('Phase 3 — buildBriefing() (BL-003)', () => {
       'briefing must keep the aitri verify-run reference');
   });
 });
+
+describe('Phase 3 — validate() D2 legacy-AC warning (rc.13)', () => {
+  function captureStderr(fn) {
+    let out = '';
+    const orig = process.stderr.write;
+    process.stderr.write = (s) => { out += s; return true; };
+    try { fn(); } finally { process.stderr.write = orig; }
+    return out;
+  }
+
+  it('warns (does not throw) when TCs declare ac_id but Phase 1 has no structured ACs', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-d2-'));
+    try {
+      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), JSON.stringify({
+        functional_requirements: [
+          { id: 'FR-001', priority: 'MUST', acceptance_criteria: ['flat string AC'] },
+          { id: 'FR-002', priority: 'MUST', acceptance_criteria: ['flat string AC'] },
+        ],
+        // user_stories with flat-string ACs → no structured ac ids to validate against
+        user_stories: [
+          { id: 'US-001', requirement_id: 'FR-001', acceptance_criteria: ['user can log in'] },
+        ],
+      }));
+      let threw = false;
+      const out = captureStderr(() => {
+        try { PHASE_DEFS[3].validate(validP3(), { dir, config: {} }); }
+        catch { threw = true; }
+      });
+      assert.equal(threw, false, 'must not throw — ac_id is required, erroring would break broadly');
+      assert.match(out, /declare ac_id.*no structured acceptance_criteria/s);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});

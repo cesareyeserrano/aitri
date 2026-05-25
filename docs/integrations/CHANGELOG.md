@@ -18,6 +18,28 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.13 (2026-05-25) — Phase 5 claim-vs-evidence validation — additive
+
+No schema field added or changed. `aitri complete 5` gains a validation rule: a `requirement_compliance` entry with `level` `complete` or `production_ready` must have `04_TEST_RESULTS.json#fr_coverage` status `covered` (or `manual`) for that FR. Documented in ARTIFACTS.md.
+
+**Contract impact for subproducts:** none — no field read changes. Marked `— additive` (no field/event shape change); note that `complete 5` can now newly block a proof that over-claims a compliance level past its test evidence (a defect it previously let through). A subproduct that re-derived compliance honesty itself can now trust the level reflects coverage.
+
+## v2.0.0-rc.12 (2026-05-25) — opt-in human approval gate — additive
+
+- **`.aitri#humanApprovalGate`** (`boolean`, optional, default absent/false): when `true`, `aitri approve <phase>` in non-interactive (agent) mode blocks and requires a human to run it after review. Default unchanged — agent-mode approval proceeds. Independent of this flag, `approve` now always prints the artifact summary + the phase's Human Review checklist (previously silent in agent mode) — stdout only, no schema impact.
+
+**Contract impact for subproducts:** none required. New optional config field; a reader that surfaces project policy can show whether the human gate is enabled.
+
+## v2.0.0-rc.9 (2026-05-25) — verification spine: stack-agnostic coverage + assertion-density gate — additive
+
+Two new optional fields on `04_TEST_RESULTS.json` and one new optional `.aitri` config field. All additive — old readers keep working.
+
+- **`04_TEST_RESULTS.json#line_coverage`** (`number`, optional): measured line-coverage %, present only when `verify-run --coverage-threshold` ran against a recognized runner (node `--coverage`, `go test -cover`, `pytest --cov`, `jest`/`vitest --coverage`). Previously coverage instrumentation worked for the node built-in runner only; rc.9 makes it stack-agnostic and persists the figure.
+- **`04_TEST_RESULTS.json#low_confidence_tcs`** (`array<{tc_id,file,assertCount}>`): TCs with ≤1 assertion in their block. Always present (possibly `[]`).
+- **`.aitri#strictAssertions`** (`boolean`, optional, default absent/false): opt-in. When `true`, `verify-complete` BLOCKS on non-empty `low_confidence_tcs`. Default behavior is unchanged (warning only).
+
+**Contract impact for subproducts:** none required. New fields are optional reads. A reader that surfaces test quality can now show `line_coverage` and a low-confidence-TC count when present; absence is the legacy/default case.
+
 ## v2.0.0-rc.7 (2026-05-22) — `nextActions[].command` for pending normalize points to `--resolve` — additive
 
 **Value change, not a schema change.** No field added, removed, or retyped. When `normalizeState.status === 'pending'`, the `status --json` `nextActions[]` entry at priority 4 now carries `command: "aitri normalize --resolve"` (was `"aitri normalize"`); its `reason` changed accordingly. The freshly-detected state (`status='resolved'` + `uncountedFiles>0`) still carries `command: "aitri normalize"`.

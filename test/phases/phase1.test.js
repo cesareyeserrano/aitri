@@ -307,6 +307,16 @@ describe('Phase 1 — buildBriefing() (BL-001)', () => {
     assert.ok(briefing.includes('no-go'), 'briefing must mention no-go zone');
   });
 
+  // F1 (rc.11) — security applicability is a forced explicit decision, not opt-in by omission
+  it('briefing forces an explicit security-applicability decision', () => {
+    assert.ok(/\*\*Security\*\*/.test(briefing) || /Security.*applies to/i.test(briefing),
+      'briefing must surface Security as an operational category');
+    assert.ok(/does security apply/i.test(briefing),
+      'briefing must force an explicit "does security apply?" decision');
+    assert.ok(/not.*unaddressed by omission|state why/i.test(briefing),
+      'briefing must require a reason when security does not apply');
+  });
+
   it('briefing contains no_go_zone field in schema', () => {
     assert.ok(briefing.includes('no_go_zone'), 'briefing schema must include no_go_zone field');
   });

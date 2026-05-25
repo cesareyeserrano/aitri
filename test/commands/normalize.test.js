@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execSync } from 'child_process';
 import { cmdNormalize } from '../../lib/commands/normalize.js';
 import { cmdApprove }   from '../../lib/commands/approve.js';
 import { loadConfig, saveConfig, cascadeInvalidate } from '../../lib/state.js';
@@ -405,6 +406,123 @@ describe('cmdNormalize() --resolve — gates and cycle closure', () => {
       assert.ok(stderr.includes('non-interactively'), `expected TTY gate, got: ${stderr}`);
       const config = loadConfig(dir);
       assert.equal(config.normalizeState.status, 'pending');
+    } finally {
+      process.stdin.isTTY = origIsTTY;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── --resolve working-tree guard (git baselines, rc.8 / Codex Cesar canary) ──
+
+describe('cmdNormalize() --resolve — uncommitted behavioral working-tree guard', () => {
+  function captureStderr(fn) {
+    let out = '';
+    const orig = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk) => { out += chunk; return true; };
+    try { fn(); } catch {} finally { process.stderr.write = orig; }
+    return out;
+  }
+  function withExit(fn) {
+    const origExit = process.exit.bind(process);
+    let exitCode = null;
+    process.exit = (code) => { exitCode = code; throw new Error('exit'); };
+    try { fn(); } catch {} finally { process.exit = origExit; }
+    return exitCode;
+  }
+  function gitRepo(dir) {
+    const o = { cwd: dir, stdio: 'ignore' };
+    execSync('git init -q', o);
+    execSync('git config user.email t@t.t', o);
+    execSync('git config user.name t', o);
+    execSync('git config commit.gpgsign false', o);
+  }
+  function commitAll(dir, msg) {
+    execSync('git add -A', { cwd: dir, stdio: 'ignore' });
+    execSync(`git commit -q -m "${msg}"`, { cwd: dir, stdio: 'ignore' });
+    return execSync('git rev-parse HEAD', { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim();
+  }
+
+  it('blocks resolve when a behavioral file is uncommitted (git baseline)', () => {
+    const dir = tmpDir();
+    const origIsTTY = process.stdin.isTTY;
+    process.stdin.isTTY = true;            // guard fires before the TTY gate
+    try {
+      gitRepo(dir);
+      writeFile(dir, 'src/app.js', 'export const a = 1;\n');
+      const base = commitAll(dir, 'base');
+      writeFile(dir, 'src/app.js', 'export const a = 2;\n');
+      commitAll(dir, 'committed behavioral change');   // base..HEAD has 1 file
+      writeFile(dir, 'src/other.js', 'export const b = 3;\n');  // uncommitted (untracked)
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion:   '0.1.83',
+        artifactsDir:   'spec',
+        normalizeState: { baseRef: base, method: 'git', status: 'pending' },
+        verifyPassed:   true,
+      }));
+
+      const stderr = captureStderr(() => {
+        withExit(() => cmdNormalize({ dir, args: ['--resolve'], err: noopErr }));
+      });
+      assert.ok(stderr.includes('uncommitted behavioral'), `expected tree guard, got: ${stderr}`);
+      assert.ok(stderr.includes('src/other.js'), 'lists the uncommitted behavioral file');
+      const config = loadConfig(dir);
+      assert.equal(config.normalizeState.status, 'pending', 'must not advance the baseline');
+    } finally {
+      process.stdin.isTTY = origIsTTY;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('passes the guard when the working tree is clean (reaches the TTY gate)', () => {
+    const dir = tmpDir();
+    const origIsTTY = process.stdin.isTTY;
+    process.stdin.isTTY = false;           // stop at the TTY gate → proves guard passed
+    try {
+      gitRepo(dir);
+      writeFile(dir, 'src/app.js', 'export const a = 1;\n');
+      const base = commitAll(dir, 'base');
+      writeFile(dir, 'src/app.js', 'export const a = 2;\n');
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion:   '0.1.83',
+        artifactsDir:   'spec',
+        normalizeState: { baseRef: base, method: 'git', status: 'pending' },
+        verifyPassed:   true,
+      }));
+      commitAll(dir, 'committed change + aitri');   // tree now clean
+
+      const stderr = captureStderr(() => {
+        withExit(() => cmdNormalize({ dir, args: ['--resolve'], err: noopErr }));
+      });
+      assert.ok(!stderr.includes('uncommitted behavioral'), 'clean tree must pass the guard');
+      assert.ok(stderr.includes('non-interactively'), `expected TTY gate after guard, got: ${stderr}`);
+    } finally {
+      process.stdin.isTTY = origIsTTY;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not apply the guard to mtime baselines (working tree already read)', () => {
+    const dir = tmpDir();
+    const origIsTTY = process.stdin.isTTY;
+    process.stdin.isTTY = false;
+    try {
+      gitRepo(dir);                        // git repo, but baseline method is mtime
+      const pastRef = new Date(Date.now() - 60_000).toISOString();
+      writeFile(dir, 'src/app.js', 'export const a = 1;\n');   // uncommitted, recent mtime
+      writeFile(dir, '.aitri', JSON.stringify({
+        aitriVersion:   '0.1.83',
+        artifactsDir:   'spec',
+        normalizeState: { baseRef: pastRef, method: 'mtime', status: 'pending' },
+        verifyPassed:   true,
+      }));
+
+      const stderr = captureStderr(() => {
+        withExit(() => cmdNormalize({ dir, args: ['--resolve'], err: noopErr }));
+      });
+      assert.ok(!stderr.includes('uncommitted behavioral'), 'mtime baseline must skip the git guard');
+      assert.ok(stderr.includes('non-interactively'), `expected TTY gate, got: ${stderr}`);
     } finally {
       process.stdin.isTTY = origIsTTY;
       fs.rmSync(dir, { recursive: true, force: true });

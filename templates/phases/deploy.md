@@ -33,9 +33,14 @@
 
 ## Files to create
 - {{DIR}}/DEPLOYMENT.md — prerequisites, dev setup, prod deploy, rollback, health checks
-- {{DIR}}/Dockerfile — correct base image, multi-stage, non-root user, HEALTHCHECK
-- {{DIR}}/docker-compose.yml — all services, ${ENV_VAR} substitution, health checks
-- {{DIR}}/.env.example — all required env vars with example values
+- {{DIR}}/.env.example — all required env vars with example values (only if the project uses env vars)
+- **Deployment packaging — match the deployment model declared in `02_SYSTEM_DESIGN.md` (`## Deployment Architecture`). Do NOT default to Docker.**
+    - Containerized → {{DIR}}/Dockerfile (correct base image, multi-stage, non-root user, HEALTHCHECK) + {{DIR}}/docker-compose.yml (all services, ${ENV_VAR} substitution, health checks)
+    - Binary / native → build/release steps documented in DEPLOYMENT.md; no Dockerfile
+    - Package / library → publish config (e.g. package manifest, registry metadata); no Dockerfile
+    - Serverless → function bundle + infra config for the declared platform
+    - Static / host → build output + host config
+  → If System Design does not declare containerized deployment, do NOT create Dockerfile/docker-compose.
 - {{ARTIFACTS_BASE}}/05_PROOF_OF_COMPLIANCE.json
   REQUIRED fields — validator will reject if any are missing:
     "project":                string  — project name
@@ -93,7 +98,7 @@ Next: aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} 5   →   aitri {{SCOPE_VERB}}ap
   [ ] Compliance levels match fr_coverage from test results — no manual upgrades without evidence
   [ ] No FR has compliance level "placeholder" (pipeline blocks if present)
   [ ] technical_debt_inherited copied accurately from Phase 4 manifest
-  [ ] Dockerfile present, uses multi-stage build, non-root user, HEALTHCHECK
+  [ ] Deployment packaging matches the model declared in 02_SYSTEM_DESIGN.md — if containerized: Dockerfile (multi-stage, non-root, HEALTHCHECK) + docker-compose present; if not: the declared artifact (binary/package/serverless/static) is built and documented, and no stray Dockerfile was invented
   [ ] DEPLOYMENT.md includes rollback procedure and health check endpoints
   [ ] overall_status is honest — "compliant" only when all MUST FRs are complete or production_ready
   [ ] If CI/CD NFR exists: workflow file verified — trigger, dependency install, test command, and any declared e2e runner step all checked

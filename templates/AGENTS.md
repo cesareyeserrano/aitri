@@ -24,11 +24,13 @@ If `aitri resume` or `aitri status` reports a version mismatch (CLI version vs p
 
 ## During the pipeline
 
-- Follow the **PIPELINE INSTRUCTION** at the end of each Aitri command output exactly.
-- Your only next action is the one Aitri specifies. Do not choose an alternative.
+- Follow the next-action Aitri prints at the end of each command. When it is a **PIPELINE INSTRUCTION** (a single authoritative step — e.g. after `approve` or `verify`), do exactly that and nothing else. When the command offers a branch (e.g. `complete` → `approve` or `reject`; `status`/`resume` → `Next:`), take the step the situation calls for.
+- Do not invent an action Aitri did not offer.
 - Do not skip phases, re-open approved phases, or implement before Phase 4 is approved.
 - Do not write code during Phases 1, 2, 3. These are planning phases.
 - Optional phases (`discovery`, `ux`, `review`) only run when Aitri tells you to. Do not invoke them speculatively.
+- **`approve` is a human-review checkpoint, not a rubber stamp.** Every `aitri approve <phase>` prints the artifact summary and the phase's Human Review checklist. Present these to the user and get their confirmation — do NOT chain `approve 1 → 2 → 3 → 4 → 5` autonomously. If the project sets `"humanApprovalGate": true` in `.aitri`, agent-mode `approve` is blocked and a human must run it (typical on larger projects; small projects / MVPs approve autonomously by default).
+- **The Code Review phase verdict (`review`) is advisory.** A PASS/CONDITIONAL_PASS/FAIL verdict does not mechanically gate Phase 5 — surface it to the user and act on a FAIL; do not treat it as auto-blocking or auto-passing.
 - **Seeding / Phase 1 — confirm ground-truth inputs, do not silently infer them.** The seed (IDEA.md → `01_REQUIREMENTS.json`) is the highest-value input in the pipeline; getting it from the user is your job, not guessing it. For the five Tier-A fields — problem, users, baseline, success_metric, no_go_zone — confirm each with the user; mark anything you inferred as assumed and record it in `idea_gaps`. On a fresh seed, `aitri complete 1` blocks if `idea_provenance` is missing or an `assumed` field is not carried in `idea_gaps`. Never label a field `confirmed` the user did not actually confirm.
 
 ---
@@ -43,6 +45,10 @@ If `aitri resume` or `aitri status` reports a version mismatch (CLI version vs p
 
 For tests that genuinely cannot be automated (manual QA, external systems): `aitri tc mark-manual <TC-ID>` sets the TC's `automation` field to `manual` so the e2e coverage gate accepts it without an automated runner.
 
+**Test rigor signals (verify-run):**
+- `aitri verify-run --coverage-threshold <N>` measures line coverage and flags it below `N`. Works across stacks (node, `go test`, `pytest`, `jest`/`vitest`) — the coverage tool must already be in the project's deps.
+- `verify-run` flags **low-confidence TCs** (≤1 assertion — tests that may pass without verifying real behavior). This is a warning by default. A project can set `"strictAssertions": true` in `.aitri` to make `aitri verify-complete` **block** until each flagged TC has real assertions tied to its `expected_result`. If verify-complete blocks on this, add assertions that exercise the behavior (not constants / `assert.ok(true)`), then re-run `verify-run`.
+
 ---
 
 ## Code changed outside the pipeline
@@ -50,7 +56,7 @@ For tests that genuinely cannot be automated (manual QA, external systems): `ait
 If `aitri status` reports `normalize: pending` and the next-action is `aitri normalize`:
 
 - Run `aitri normalize` to classify the changes.
-- If the diff is refactor or already-registered bug fixes, run `aitri normalize --resolve` (TTY-gated; requires tests passing and no blocking bugs).
+- If the diff is refactor or already-registered bug fixes, **commit your fixes first** (including any edit `verify-run` forced), then run `aitri normalize --resolve` (TTY-gated; requires tests passing, no blocking bugs, and a clean working tree — `--resolve` stamps the baseline at the current commit and rejects while behavioral files are uncommitted, or they re-trigger normalize after you commit them).
 - If the diff contains functional behavior changes, route them through the pipeline: `aitri feature init <name>` or `aitri run-phase requirements` for a root-pipeline change.
 
 The behavioral allowlist filters out documentation, build manifests, lockfiles, CI configs, and generated assets — those will not trigger `normalize: pending` by themselves.

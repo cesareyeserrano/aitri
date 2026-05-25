@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, parseGoOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, extractTCId, cmdVerifyRun, cmdVerifyComplete } from '../../lib/commands/verify.js';
+import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, parseGoOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, injectCoverageFlag, extractTCId, cmdVerifyRun, cmdVerifyComplete } from '../../lib/commands/verify.js';
 import { cmdStatus } from '../../lib/commands/status.js';
 
 describe('parseRunnerOutput()', () => {
@@ -584,6 +584,85 @@ describe('parseCoverageOutput()', () => {
   it('is case-insensitive for all files row', () => {
     const output = `All Files      |  80.00 |    75.00 |  90.00 |`;
     assert.equal(parseCoverageOutput(output), 80.00);
+  });
+
+  // C1 (rc.9) — stack-agnostic coverage parsing
+  it('extracts go test -cover coverage', () => {
+    const output = `ok  \texample/pkg\t0.012s\ncoverage: 87.5% of statements\n`;
+    assert.equal(parseCoverageOutput(output), 87.5);
+  });
+
+  it('extracts pytest-cov TOTAL row coverage', () => {
+    const output =
+      `Name        Stmts   Miss  Cover\n` +
+      `-------------------------------\n` +
+      `app.py        100     20    80%\n` +
+      `-------------------------------\n` +
+      `TOTAL         100     20    80%\n`;
+    assert.equal(parseCoverageOutput(output), 80);
+  });
+
+  it('istanbul table wins over a stray percent elsewhere', () => {
+    const output = `Something 50% done\nall files | 95.24 | 90 | 100 |\n`;
+    assert.equal(parseCoverageOutput(output), 95.24);
+  });
+
+  it('handles null/empty output', () => {
+    assert.equal(parseCoverageOutput(''), null);
+    assert.equal(parseCoverageOutput(null), null);
+  });
+
+});
+
+describe('injectCoverageFlag() — C1 stack-agnostic coverage instrumentation', () => {
+
+  it('node ≥22 uses --coverage', () => {
+    const { cmd, tool } = injectCoverageFlag('node --test test/', 22);
+    assert.equal(cmd, 'node --coverage --test test/');
+    assert.equal(tool, '--coverage');
+  });
+
+  it('node <22 uses --experimental-test-coverage', () => {
+    const { cmd, tool } = injectCoverageFlag('node --test test/', 20);
+    assert.equal(cmd, 'node --experimental-test-coverage --test test/');
+    assert.equal(tool, '--experimental-test-coverage');
+  });
+
+  it('node: does not double-inject when coverage flag already present', () => {
+    const { cmd } = injectCoverageFlag('node --coverage --test test/', 22);
+    assert.equal(cmd, 'node --coverage --test test/');
+  });
+
+  it('go test gets -cover', () => {
+    const { cmd, tool } = injectCoverageFlag('go test ./... -v', 22);
+    assert.equal(cmd, 'go test -cover ./... -v');
+    assert.equal(tool, 'go -cover');
+  });
+
+  it('go test: no double -cover', () => {
+    const { cmd } = injectCoverageFlag('go test -cover ./...', 22);
+    assert.equal(cmd, 'go test -cover ./...');
+  });
+
+  it('pytest gets --cov (incl. venv-resolved binary path)', () => {
+    const { cmd, tool } = injectCoverageFlag('/proj/.venv/bin/pytest -v', 22);
+    assert.equal(cmd, '/proj/.venv/bin/pytest -v --cov=. --cov-report=term');
+    assert.equal(tool, 'pytest-cov');
+  });
+
+  it('jest gets --coverage', () => {
+    assert.equal(injectCoverageFlag('jest --verbose', 22).tool, 'jest --coverage');
+    assert.match(injectCoverageFlag('jest --verbose', 22).cmd, /--coverage$/);
+  });
+
+  it('vitest gets --coverage', () => {
+    assert.equal(injectCoverageFlag('vitest run', 22).tool, 'vitest --coverage');
+  });
+
+  it('unrecognized runner returns tool=null and unchanged cmd', () => {
+    const { cmd, tool } = injectCoverageFlag('cargo test', 22);
+    assert.equal(tool, null);
+    assert.equal(cmd, 'cargo test');
   });
 
 });
@@ -1209,6 +1288,72 @@ describe('cmdVerifyRun() — L2 mensajería conditional on Playwright config', (
 // whether phase 5 was already approved. When operator re-runs verify after a
 // code change to a deployed product, the instruction contradicted resume /
 // status. Surfaced by Zombite canary 2026-04-29.
+describe('cmdVerifyComplete() — C2 strictAssertions gate', () => {
+  function seed(dir, { strict, lowConfidence }) {
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+      projectName: 'p', artifactsDir: 'spec',
+      approvedPhases: [1, 2, 3, 4], completedPhases: [1, 2, 3, 4],
+      ...(strict ? { strictAssertions: true } : {}),
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), JSON.stringify({
+      functional_requirements: [{ id: 'FR-001', title: 'r', priority: 'must-have' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/03_TEST_CASES.json'), JSON.stringify({
+      test_cases: [{ id: 'TC-001', title: 't', requirement_id: 'FR-001', expected_result: 'r' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), JSON.stringify({
+      files_created: [{ path: 'x.js' }], test_runner: 'node --test',
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), JSON.stringify({
+      executed_at: new Date().toISOString(),
+      test_runner: 'node --test',
+      exit_code: 0,
+      results: [{ tc_id: 'TC-001', status: 'pass' }],
+      fr_coverage: [{ fr_id: 'FR-001', tests_passing: 1, tests_failing: 0, tests_skipped: 0, tests_manual: 0, status: 'covered' }],
+      summary: { total: 1, passed: 1, failed: 0, skipped: 0 },
+      low_confidence_tcs: lowConfidence ? [{ tc_id: 'TC-001', file: 'x.test.js', assertCount: 1 }] : [],
+    }));
+  }
+
+  it('blocks when strictAssertions ON and low_confidence_tcs non-empty', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-c2-block-'));
+    try {
+      seed(dir, { strict: true, lowConfidence: true });
+      let msg = '';
+      try { cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } }); }
+      catch (e) { msg = e.message; }
+      assert.match(msg, /strictAssertions is ON/);
+      assert.match(msg, /TC-001/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  function runQuiet(fn) {
+    const origLog = console.log; const origErr = process.stderr.write;
+    console.log = () => {}; process.stderr.write = () => true;
+    try { fn(); } finally { console.log = origLog; process.stderr.write = origErr; }
+  }
+
+  it('does NOT block when strictAssertions ON but no low-confidence TCs', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-c2-clean-'));
+    try {
+      seed(dir, { strict: true, lowConfidence: false });
+      // err throws only on gate failure — reaching the end means the C2 gate passed
+      assert.doesNotThrow(() => runQuiet(() =>
+        cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } })));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does NOT block when strictAssertions OFF even with low-confidence TCs (default)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-c2-default-'));
+    try {
+      seed(dir, { strict: false, lowConfidence: true });
+      assert.doesNotThrow(() => runQuiet(() =>
+        cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } })));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 describe('cmdVerifyComplete() — Z3 next-action respects phase 5 state', () => {
   function seedReady(dir, opts = {}) {
     const phase5Approved = opts.phase5Approved ?? false;

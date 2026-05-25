@@ -35,8 +35,10 @@ function writeFile(dir, relPath, content) {
 function captureAll(fn) {
   let out = '';
   const origLog = console.log.bind(console);
+  const origWrite = process.stdout.write.bind(process.stdout);
   console.log = (...a) => { out += a.join(' ') + '\n'; };
-  try { fn(); } finally { console.log = origLog; }
+  process.stdout.write = (s) => { out += s; return true; }; // B1 (rc.12): summary/checklist use stdout.write
+  try { fn(); } finally { console.log = origLog; process.stdout.write = origWrite; }
   return out;
 }
 
@@ -53,6 +55,57 @@ const minimalConfig = (overrides = {}) => JSON.stringify({
 const ARTIFACT_CONTENT = '{"project_name":"T","functional_requirements":[]}';
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe('cmdApprove() — B1/B2 human-review gate (rc.12)', () => {
+  function captureStdout(fn) {
+    let out = '';
+    const origWrite = process.stdout.write.bind(process.stdout);
+    const origLog = console.log;
+    process.stdout.write = (s) => { out += s; return true; };
+    console.log = (...a) => { out += a.join(' ') + '\n'; };
+    try { fn(); } finally { process.stdout.write = origWrite; console.log = origLog; }
+    return out;
+  }
+
+  function seedPhase1(dir, overrides = {}) {
+    writeFile(dir, 'spec/01_REQUIREMENTS.json', '{"project_name":"T","functional_requirements":[]}');
+    writeFile(dir, '.aitri', minimalConfig({ completedPhases: [1], ...overrides }));
+  }
+
+  it('B1 — agent-mode approve prints summary + real checklist + checkpoint (was silent before)', () => {
+    const dir = tmpDir();
+    try {
+      seedPhase1(dir);
+      const out = captureStdout(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+      assert.match(out, /You are about to approve/, 'summary must print in agent mode (was silent on !isTTY)');
+      assert.match(out, /Human Review/, 'real Human Review checklist must be extracted from the template');
+      assert.match(out, /HUMAN REVIEW CHECKPOINT/, 'agent-relay checkpoint directive must print');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('B2 — humanApprovalGate ON blocks agent-mode approval and does not record it', () => {
+    const dir = tmpDir();
+    try {
+      seedPhase1(dir, { humanApprovalGate: true });
+      let msg = '';
+      assert.throws(() => captureStdout(() =>
+        cmdApprove({ dir, args: ['requirements'], err: (m) => { msg = m; throw new Error(m); } })));
+      assert.match(msg, /humanApprovalGate is ON/);
+      assert.ok(!(loadConfig(dir).approvedPhases || []).map(String).includes('1'),
+        'approval must NOT be recorded when the gate blocks');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('B2 — default (gate absent) proceeds and records approval', () => {
+    const dir = tmpDir();
+    try {
+      seedPhase1(dir);
+      captureStdout(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+      assert.ok((loadConfig(dir).approvedPhases || []).map(String).includes('1'),
+        'default agent-mode approval must still proceed (autonomy preserved)');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
 
 describe('cmdApprove() — first approve of phase 1 archives IDEA.md', () => {
   let dir;

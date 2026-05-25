@@ -1,6 +1,6 @@
 # Aitri — `.aitri` Schema Contract
 
-**Aitri version:** v2.0.0-rc.7+
+**Aitri version:** v2.0.0-rc.14+
 **Maintenance rule:** Update this file in the same commit as any `.aitri` schema change.
 
 ---
@@ -57,6 +57,8 @@ Present after any `aitri init` or `aitri adopt --upgrade`.
 | `lastSession` | `object\|null` | `null` | Session checkpoint — see schema below. Written automatically by state-mutating commands |
 | `normalizeState` | `object\|null` | `null` | Off-pipeline change baseline. Set on `approve 4`, by `aitri normalize`, and by `aitri normalize --resolve`. Schema: `{ status: "pending" \| "resolved", baseRef: "<git-sha>" \| "<ISO>", method: "git" \| "mtime", lastRun: "ISO" }` (v0.1.80+; `--resolve` flag added v0.1.84) |
 | `upgradeFindings` | `array<object>` | `[]` | Unresolved flagged findings from the last `aitri adopt --upgrade`. Snapshot model — overwritten on every run; cleared when diagnose returns empty. Each entry: `{ target, transform, reason, module, category, recordedAt }`. (v2.0.0-alpha.3+) |
+| `strictAssertions` | `boolean` | `false` (absent) | Opt-in. When `true`, `aitri verify-complete` BLOCKS if `04_TEST_RESULTS.json#low_confidence_tcs` is non-empty (any TC with ≤1 assertion). Default behavior unchanged — assertion density is a warning only. Typically set on larger projects that want stricter test-quality enforcement (v2.0.0-rc.9+) |
+| `humanApprovalGate` | `boolean` | `false` (absent) | Opt-in. When `true`, `aitri approve <phase>` in non-interactive (agent) mode BLOCKS and requires a human to run it after review. Default unchanged — agent-mode approval proceeds (the summary + Human Review checklist always print regardless). Typically set on larger projects that want a human at every gate; small projects / MVPs run autonomously by default (v2.0.0-rc.12+) |
 
 ---
 

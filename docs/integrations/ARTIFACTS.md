@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-rc.7+
+**Aitri version:** v2.0.0-rc.14+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -235,9 +235,17 @@ Written by `aitri verify-run`. Never written by the agent — always auto-genera
     "skipped_e2e": 1,
     "skipped_no_marker": 0,
     "manual": 1
-  }
+  },
+  "line_coverage": 87.5,
+  "low_confidence_tcs": [
+    { "tc_id": "TC-004", "file": "test/foo.test.js", "assertCount": 1 }
+  ]
 }
 ```
+
+**`line_coverage`** (optional, v2.0.0-rc.9+) — measured line-coverage percentage, present only when `verify-run` was invoked with `--coverage-threshold` AND a recognized runner emitted a parseable figure. Stack-agnostic: node built-in `--coverage`, `go test -cover`, `pytest --cov`, `jest`/`vitest --coverage`. Absent when no threshold was requested or the runner's coverage output could not be parsed.
+
+**`low_confidence_tcs`** (v2.0.0-rc.9+) — TCs whose test block contains ≤1 assertion (possible trivial test). Always present (possibly `[]`). Each entry: `{ tc_id, file, assertCount }`. Informational by default; becomes a hard gate in `verify-complete` only when the project sets `strictAssertions: true` in `.aitri` (see SCHEMA.md).
 
 **Status values:**
 - `pass` — TC detected in runner output as passing
@@ -286,6 +294,7 @@ Written by Phase 5 (DevOps persona). FR coverage proof linking requirements to t
 - `level: "placeholder"` blocks the pipeline — placeholder implementations cannot be shipped
 - Entries use field `id` (not `fr_id`) — a common mistake; validation will report the mismatch
 - If `01_REQUIREMENTS.json` is present: every FR with `priority: "MUST"` must have an entry in `requirement_compliance`
+- **Claim-vs-evidence (v2.0.0-rc.13+):** if `04_TEST_RESULTS.json` is present, any entry with `level` `complete` or `production_ready` must have `fr_coverage` status `covered` (or `manual`) for that FR. An entry claiming a high level over `partial`/`uncovered` evidence is rejected — the proof must not over-claim past the tests. (Conservative: only fires when the coverage entry exists and contradicts.)
 
 **Phase gate:** Approved when `"5"` is in `approvedPhases[]`. Requires `verifyPassed: true`.
 
