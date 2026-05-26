@@ -5,6 +5,11 @@
 
 ---
 
+## [2.0.0-rc.15] — 2026-05-26 — GitHub Copilot agent file + pre-2.0.0 audit backlog hygiene
+
+- **Copilot agent file (file-write half).** `lib/agent-files.js` `AGENT_FILES` now includes `.github/copilot-instructions.md` (repo-wide custom instructions convention). Content is the shared `templates/AGENTS.md` verbatim — same as the other four files, no Copilot-specific fork. `aitri init` and `aitri adopt --upgrade` write it (non-destructive: skip if present). Existing consumers regenerate it on next `--upgrade` via the missing-file path. **Detection half deliberately NOT shipped:** `detectAgent()` keys off CLI env vars (`CLAUDE_CODE`, `CODEX_CLI`, `GEMINI_CLI`); Copilot is an IDE extension with no documented stable env signal, so `lastSession.agent` stays `unknown` for Copilot sessions — honest until a real env marker is verified. `templates/AGENTS.md` line 4 and the `help` AGENTS line now list GitHub Copilot. Tests updated: init's "all agent files identical" now covers 5 files; adopt --upgrade and dry-run loops include the copilot file. Tests +1 file assertion in `--upgrade`. No `.aitri`/artifact schema change → no integrations CHANGELOG entry (agent files are project surfaces, not subproduct-read contracts).
+- **Backlog hygiene.** Removed stale `[ ]` entries for items shipped in rc.10–rc.13 — A1/A2/A3 (stack-agnosticism), P2(architect), F1 (security forcing), D1 (Phase 5 claim-vs-evidence), D2 (legacy-AC warning), B1/B2 (human approval gate). Per "backlog = open only" rule, shipped features leave the backlog and live in CHANGELOG. The pre-2.0.0 audit section is now closed.
+
 ## [2.0.0-rc.14] — 2026-05-25 — CLI polish: flag documentation (E2) + AGENTS.md next-action wording; E1 refactor rejected as non-defect
 
 Final release of the pre-2.0.0 audit ([ADR-034](DECISIONS.md)). The CLI-polish tier.

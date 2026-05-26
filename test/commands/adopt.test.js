@@ -567,7 +567,7 @@ describe('aitri adopt --upgrade', () => {
       cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
       // cmdInit already writes agent files, so delete them first so --upgrade
       // has something to regenerate.
-      for (const f of ['CLAUDE.md', 'GEMINI.md', '.codex/instructions.md']) {
+      for (const f of ['CLAUDE.md', 'GEMINI.md', '.codex/instructions.md', '.github/copilot-instructions.md']) {
         const p = path.join(dir, f);
         if (fs.existsSync(p)) fs.rmSync(p);
       }

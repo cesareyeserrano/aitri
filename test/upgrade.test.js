@@ -125,13 +125,14 @@ describe('lib/upgrade — runUpgrade (Corte A: absorbed legacy behavior)', () =>
     const dir = tmpDir();
     try {
       cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
-      for (const f of ['CLAUDE.md', 'GEMINI.md', '.codex/instructions.md']) {
+      for (const f of ['CLAUDE.md', 'GEMINI.md', '.codex/instructions.md', '.github/copilot-instructions.md']) {
         const p = path.join(dir, f);
         if (fs.existsSync(p)) fs.rmSync(p);
       }
       silence(() => runUpgrade({ dir, VERSION: '0.1.99', rootDir: ROOT_DIR }));
       assert.ok(fs.existsSync(path.join(dir, 'CLAUDE.md')));
       assert.ok(fs.existsSync(path.join(dir, 'GEMINI.md')));
+      assert.ok(fs.existsSync(path.join(dir, '.github', 'copilot-instructions.md')), 'copilot file regenerated when missing');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -2304,7 +2305,7 @@ describe('lib/upgrade — dry-run preview', () => {
     try {
       cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.10' });
       // Remove agent files created by cmdInit so dry-run would otherwise recreate them.
-      for (const f of ['CLAUDE.md', 'GEMINI.md', '.codex/instructions.md']) {
+      for (const f of ['CLAUDE.md', 'GEMINI.md', '.codex/instructions.md', '.github/copilot-instructions.md']) {
         try { fs.rmSync(path.join(dir, f), { force: true }); } catch {}
       }
       try { fs.rmSync(path.join(dir, '.codex'), { recursive: true, force: true }); } catch {}
@@ -2312,6 +2313,7 @@ describe('lib/upgrade — dry-run preview', () => {
       silence(() => runUpgrade({ dir, VERSION: '9.9.9', rootDir: ROOT_DIR, dryRun: true }));
 
       assert.equal(fs.existsSync(path.join(dir, 'CLAUDE.md')), false, 'CLAUDE.md must not be recreated in dry-run');
+      assert.equal(fs.existsSync(path.join(dir, '.github', 'copilot-instructions.md')), false, 'copilot file must not be recreated in dry-run');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 

@@ -105,13 +105,14 @@ describe('aitri init — Hub registration', () => {
 });
 
 describe('aitri init — agent instruction files', () => {
-  it('creates AGENTS.md, CLAUDE.md, GEMINI.md, and .codex/instructions.md', () => {
+  it('creates AGENTS.md, CLAUDE.md, GEMINI.md, .codex/instructions.md, and .github/copilot-instructions.md', () => {
     const dir = tmpDir();
     cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '0.1.70' });
     assert.ok(fs.existsSync(path.join(dir, 'AGENTS.md')), 'AGENTS.md must exist');
     assert.ok(fs.existsSync(path.join(dir, 'CLAUDE.md')), 'CLAUDE.md must exist');
     assert.ok(fs.existsSync(path.join(dir, 'GEMINI.md')), 'GEMINI.md must exist');
     assert.ok(fs.existsSync(path.join(dir, '.codex', 'instructions.md')), '.codex/instructions.md must exist');
+    assert.ok(fs.existsSync(path.join(dir, '.github', 'copilot-instructions.md')), '.github/copilot-instructions.md must exist');
     fs.rmSync(dir, { recursive: true });
   });
 
@@ -132,9 +133,11 @@ describe('aitri init — agent instruction files', () => {
     const claude = fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8');
     const gemini = fs.readFileSync(path.join(dir, 'GEMINI.md'), 'utf8');
     const codex  = fs.readFileSync(path.join(dir, '.codex', 'instructions.md'), 'utf8');
+    const copilot = fs.readFileSync(path.join(dir, '.github', 'copilot-instructions.md'), 'utf8');
     assert.equal(agents, claude, 'CLAUDE.md must match AGENTS.md');
     assert.equal(agents, gemini, 'GEMINI.md must match AGENTS.md');
     assert.equal(agents, codex, '.codex/instructions.md must match AGENTS.md');
+    assert.equal(agents, copilot, '.github/copilot-instructions.md must match AGENTS.md');
     fs.rmSync(dir, { recursive: true });
   });
 });

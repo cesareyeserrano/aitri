@@ -1,7 +1,7 @@
 # AGENTS.md — Aitri Pipeline Rules
 
 This project is managed with **Aitri** — an SDLC pipeline CLI.
-All agents (Claude, Codex, Gemini, etc.) must follow these rules.
+All agents (Claude, Codex, Gemini, GitHub Copilot, etc.) must follow these rules.
 
 For the full command surface and flags, run `aitri help`. This document covers the **rules** — what to run, when, and why — not every command's syntax.
 
