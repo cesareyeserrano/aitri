@@ -18,6 +18,12 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.16 (2026-05-29) — canonical TC-id gate in Phase 3 — additive
+
+No schema field added or changed. `aitri complete 3` gains a validation rule: every `test_cases[].id` must be canonical (`TC` + optional UPPERCASE namespace + numeric block + suffix, e.g. `TC-001h`, `TC-E2E-001h`). Ids without a numeric block (`TC-e2eFolderScan`) or with a lowercase namespace (`TC-fe-001h`) are rejected. The grammar is shared with the `verify-run` output parser (`lib/tc-id.js`) so the gate and the linker cannot drift. Documented in ARTIFACTS.md.
+
+**Contract impact for subproducts:** none — no field read changes; canonical ids are a subset of what the field already held. Marked `— additive`. Note that `complete 3` can now newly block a test plan whose ids `verify-run` could not have linked (they would have silently dropped to `skip`). Surfaced by the Hub `hub-folder-scan` feature, whose `TC-e2eFolderScan`/`TC-e2eFolderEmpty` ids slipped past Phase 3 and then could not be matched to runner output. **Existing approved projects are unaffected** until they re-run Phase 3.
+
 ## v2.0.0-rc.13 (2026-05-25) — Phase 5 claim-vs-evidence validation — additive
 
 No schema field added or changed. `aitri complete 5` gains a validation rule: a `requirement_compliance` entry with `level` `complete` or `production_ready` must have `04_TEST_RESULTS.json#fr_coverage` status `covered` (or `manual`) for that FR. Documented in ARTIFACTS.md.

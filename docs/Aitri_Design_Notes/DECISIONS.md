@@ -980,3 +980,34 @@ The seed is the garbage-in/garbage-out point of the whole artifact chain. "Input
 **Scope.**
 - Decides: code-rigor-over-doc-rigor prioritization; C1/C2 shipped; C3 dropped on evidence with zero-dep reasoning corrected; zero-dep kept; B2 print+opt-in-gate; P1 advisory; the theater rejections.
 - Does not decide: whether C3/F2 ever ship (gated on a security/production adopter); the `profile` axis (separate study); E1 next-action-marker unification (queued, R6).
+
+---
+
+## ADR-035 — 2026-05-29 — Enforce the canonical TC-id at authoring time; one grammar shared by the Phase 3 gate and the verify-run parser
+
+**Status:** Active
+
+**Context.** Three layers had an opinion about the shape of a TC id and only two agreed in code:
+- The **template** (`templates/phases/tests.md`) *teaches* the canonical form (`TC-001h`, `TC-E2E-001h`) and explicitly warns that other shapes "verify-run cannot parse."
+- The **`verify-run` parser** (`extractTCId`) *requires* it: a parsed runner-output id is linked to a plan id by string equality (`detected.get(tc.id)` in `lib/commands/verify.js`). An id the parser cannot round-trip is unlinkable.
+- **`phase3.validate()`** *did not enforce it.* It checked uniqueness, per-FR `h`/`f` suffixes, types — but never the id grammar itself.
+
+The gap was an honor system between the template and the parser. Hub's `hub-folder-scan` feature exercised it: an agent authored `TC-e2eFolderScan` / `TC-e2eFolderEmpty` (descriptive, no numeric block). They passed Phase 3 (the FR's `h`/`f` quota was met by a separate numbered `TC-021` series), then `verify-run` could not link them and they dropped to `skip`. A green test the system could not credit = degraded produced software. The first response was a half-finished patch that *loosened the parser* to accept digit-free ids — fixing the symptom in the wrong layer: it condoned off-convention naming and widened the parser to match stray `TC-<word>` log tokens (`TC-PASS`, `TC-NOTES`) into phantom TCs.
+
+This closes the **"Phase 3 canonical TC id regex"** item, which had been Discarded (2026-04-23) pending a second evidence case. Hub is that case. Per CLAUDE.md's narrow-evidence rule, the wait-for-more-consumers reflex does **not** apply here: this is a limitation verifiable in code today and a real (author-owned) project producing degraded output — the fix is the removal of an incorrect honor-system assumption, not a speculative abstraction.
+
+**Decision.**
+1. The canonical-id grammar becomes a **single source of truth** in `lib/tc-id.js`: `extractTCId` (moved verbatim from `verify.js`, re-exported there for back-compat) and `isCanonicalTCId(id) = extractTCId(id) === id`. A leaf module — `phase3.js` importing it cannot create the cycle that importing `verify.js` would (`verify.js → snapshot.js → phases/index.js → phase3.js`).
+2. **Revert** the digit-free parser branch. The numeric block is required on purpose.
+3. **Phase 3 gate:** reject any `test_cases[].id` that does not round-trip through the shared parser, naming the offenders and the canonical form. Because the gate and the parser are literally the same function, they cannot drift again.
+4. **Deterministic rename suggestion** (`suggestCanonicalTCId`): when the only defect is a glued pure-letter namespace (`TC-NFR010h` → `TC-NFR-010h`), the gate prints the exact fix — the dominant real case (the Hub scan found ~30 such ids, mostly glued NFR forms). It deliberately refuses to guess for (a) digit-bearing namespaces (`TC-E2E001h` — ambiguous, the very reason the separator exists) and (b) descriptive ids with no numeric block (`TC-e2eFolderScan` — a human must assign the number). Every suggestion is re-checked for canonicity before being offered.
+
+**Trade-off.** A project with non-canonical ids will fail `complete 3` where it previously passed (and silently mis-verified later). Acceptable — it converts a silent downstream failure into a loud, fixable authoring error at the right phase, with a message that says how to fix it. Fresh-validation only: existing approved projects are not re-validated until they re-run Phase 3, so no migration is forced (Hub fixes its two ids by hand). The gate enforces an UPPERCASE namespace (the parser normalizes to it); a project using a lowercase namespace must uppercase it — correct, because the lowercase form never actually linked in `verify-run`.
+
+**Why not enforce at the parser instead (the patch's approach).** Loosening the parser would (a) accept ids the convention forbids, eroding the contract the template teaches; (b) re-introduce the phantom-TC false-positive surface the numeric anchor exists to prevent; (c) leave the authoring/linking asymmetry in place for the next non-canonical shape. Enforcing at authoring time keeps the parser strict and makes its strictness safe.
+
+**Second divergent grammar, same fix.** A sweep for other ad-hoc TC-id parsing found one: the `@aitri-tc` marker scanner in `scanTestContent` (`verify.js:283`) used its own `TC-[A-Za-z0-9]+`, which truncated namespaced ids at the second hyphen (`TC-E2E-001h` → `TC-E2E`) and named the wrong TC in the assertion-density (C2) report. Routed through `extractTCId` so the marker scanner shares the SSoT grammar too. All runner-output parsers (`parseVitest`/`parsePytest`/`parseGo`/…) already used `extractTCId`; this was the last divergent reader.
+
+**Scope.**
+- Decides: canonical-id grammar is SSoT in `lib/tc-id.js`; Phase 3 enforces it via round-trip; the deterministic rename suggestion; the digit-free parser loosening is reverted; the `@aitri-tc` marker scanner is unified onto the SSoT; the Discarded "Phase 3 canonical TC id regex" item is closed (shipped).
+- Does not decide: any change to the grammar itself (namespace casing, suffix vocabulary) — out of scope; this only enforces the existing one.

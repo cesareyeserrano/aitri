@@ -87,6 +87,15 @@ describe('parseRunnerOutput()', () => {
     assert.equal(result.get('TC-FE-001h')?.status, 'pass');
   });
 
+  // The parser requires a numeric block on purpose: a digit-free id like
+  // TC-e2eFolderScan must NOT match, otherwise stray log tokens (TC-PASS,
+  // TC-NOTES) become phantom TCs. Non-canonical authoring is blocked at the
+  // Phase 3 gate instead (see test/phases/phase3.test.js). Guards against
+  // re-introducing the reverted digit-free branch.
+  it('does NOT extract a digit-free id (TC-e2eFolderScan → null)', () => {
+    assert.equal(extractTCId('✔ TC-e2eFolderScan: register folder type'), null);
+  });
+
 });
 
 describe('parseVitestOutput()', () => {
@@ -515,6 +524,22 @@ describe('scanTestContent()', () => {
     const content = `it('TC-001: test', () => {\n  // @aitri-tc TC-001\n});`;
     const result = scanTestContent(content, 'tests/unit.test.js');
     assert.equal(result[0].file, 'tests/unit.test.js');
+  });
+
+  // Marker extraction uses the shared canonical grammar — a namespaced id must
+  // not be truncated at the second hyphen (was TC-E2E-001h → TC-E2E, which named
+  // the wrong TC in the assertion-density report). Same SSoT as extractTCId.
+  it('captures a namespaced marker id in full (TC-E2E-001h, not TC-E2E)', () => {
+    const content = `test('TC-E2E-001h: flow', () => {\n  // @aitri-tc TC-E2E-001h\n});`;
+    const result = scanTestContent(content, 'tests/e2e.test.js');
+    assert.equal(result.length, 1);
+    assert.equal(result[0].tc_id, 'TC-E2E-001h');
+  });
+
+  it('normalizes an underscore marker id to canonical form (pytest)', () => {
+    const content = `def test_x():\n    # @aitri-tc TC_API_010f\n    pass`;
+    const result = scanTestContent(content, 'tests/test_x.py');
+    assert.equal(result[0].tc_id, 'TC-API-010f');
   });
 
   it('returns empty array when no @aitri-tc markers present', () => {

@@ -56,6 +56,63 @@ describe('Phase 3 — validate()', () => {
     assert.match(msg, /TC-002h \(×2\)/);
   });
 
+  // Canonical TC-id gate. Closes the asymmetry surfaced by the Hub
+  // `hub-folder-scan` feature (2026-05-29): the template teaches the canonical
+  // form and verify-run REQUIRES it to link runner output, but Phase 3 never
+  // enforced it — so `TC-e2eFolderScan` (no numeric block) passed validation and
+  // then could not be linked by verify-run, dropping to skip. The gate reuses the
+  // SAME grammar verify-run parses with (lib/tc-id.js) so the two cannot drift.
+  it('throws on a digit-free TC id (the Hub TC-e2eFolderScan case)', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[0].id = 'TC-e2eFolderScan';
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)),
+      /Non-canonical TC id\(s\).*TC-e2eFolderScan/s);
+  });
+
+  it('throws on a lowercase-namespace TC id that would not round-trip', () => {
+    const d = JSON.parse(validP3());
+    // `TC-fe-001h` normalizes to `TC-FE-001h` in the parser → never matches the
+    // plan id by string equality, so verify-run cannot link it.
+    d.test_cases[0].id = 'TC-fe-001h';
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)),
+      /Non-canonical TC id\(s\).*TC-fe-001h/s);
+  });
+
+  it('lists every non-canonical id in one message', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[0].id = 'TC-e2eFolderScan';
+    d.test_cases[3].id = 'TC-e2eFolderEmpty';
+    let msg = '';
+    try { PHASE_DEFS[3].validate(JSON.stringify(d)); } catch (e) { msg = e.message; }
+    assert.match(msg, /TC-e2eFolderScan/);
+    assert.match(msg, /TC-e2eFolderEmpty/);
+  });
+
+  // The gate suggests the deterministic canonical form for a glued namespace
+  // (the dominant Hub case: TC-NFR010h is just a missing separator). Descriptive
+  // ids with no numeric block cannot be auto-suggested — the agent assigns one.
+  it('suggests the separator fix for a glued namespace (TC-NFR010h → TC-NFR-010h)', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[0].id = 'TC-NFR010h';
+    let msg = '';
+    try { PHASE_DEFS[3].validate(JSON.stringify(d)); } catch (e) { msg = e.message; }
+    assert.match(msg, /TC-NFR010h → TC-NFR-010h/);
+  });
+
+  it('does not invent a number for a digit-free id (asks the agent to assign one)', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[0].id = 'TC-e2eFolderScan';
+    let msg = '';
+    try { PHASE_DEFS[3].validate(JSON.stringify(d)); } catch (e) { msg = e.message; }
+    assert.match(msg, /TC-e2eFolderScan → \(assign a numeric block/);
+  });
+
+  it('accepts canonical namespaced and plain ids (TC-001h, TC-E2E-001h)', () => {
+    const d = JSON.parse(validP3());
+    d.test_cases[2].id = 'TC-E2E-001f'; // uppercase namespace round-trips cleanly
+    assert.doesNotThrow(() => PHASE_DEFS[3].validate(JSON.stringify(d)));
+  });
+
   it('throws when a requirement has fewer than 3 test cases', () => {
     const d = JSON.parse(validP3());
     d.test_cases = d.test_cases.filter(tc => !(tc.requirement_id === 'FR-001' && tc.id === 'TC-001f'));
