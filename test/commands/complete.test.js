@@ -9,7 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { cmdComplete } from '../../lib/commands/complete.js';
-import { loadConfig } from '../../lib/state.js';
+import { loadConfig, hashArtifact } from '../../lib/state.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -291,6 +291,95 @@ describe('cmdComplete() — feature-context "Approved →" hint carries `feature
         'root context must not emit feature-prefixed commands');
       assert.ok(/aitri approve requirements\b/.test(out),
         `expected root-style approve hint, got:\n${out}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('cmdComplete() — re-opening an approved phase whose content changed (drift-launder fix)', () => {
+  const VALID_DESIGN = `# System Design
+
+## Executive Summary
+We build a Node service. Decision: REST over gRPC because clients are browsers.
+Justification: simplicity and broad client support outweigh streaming needs.
+
+## System Architecture
+Three components: API gateway, service layer, datastore.
+The gateway routes requests to the service, which reads/writes the datastore.
+Each component is independently deployable.
+
+## Data Model
+Users(id, email), Sessions(id, user_id, token). Normalized to 3NF.
+Indexes on Users.email and Sessions.token for lookup performance.
+
+## API Design
+POST /login returns a token. GET /dashboard returns the view.
+POST /export returns CSV. All endpoints require a valid bearer token except /login.
+
+## Security Design
+TLS 1.3 everywhere. Tokens are short-lived JWTs with rotation.
+Input is validated at the gateway; output is escaped at the view layer.
+
+## Performance & Scalability
+p99 < 200ms target. Horizontal scaling behind a load balancer.
+Cache hot reads in an in-memory layer with a short TTL.
+
+## Deployment Architecture
+Containerized service deployed behind a reverse proxy.
+Rolling deploys with health checks gate each step.
+
+## Risk Analysis
+- Risk 1: token theft — mitigated by short TTL and rotation.
+- Risk 2: datastore outage — mitigated by replicas and failover.
+- Risk 3: traffic spike — mitigated by autoscaling and rate limits.
+
+## Technical Risk Flags
+None detected — the stack is well understood and the scope is bounded.
+The team has shipped comparable services before.
+`;
+
+  it('withdraws approval + cascades downstream when an approved phase is re-completed with changed content', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', VALID_REQUIREMENTS);
+      writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', VALID_DESIGN);
+      // Phase 2 approved, with 3 and 4 also approved downstream; hash for phase 2
+      // stamped to the ORIGINAL design content.
+      writeFile(dir, '.aitri', minimalConfig({
+        approvedPhases:  [1, 2, 3, 4],
+        completedPhases: [1, 2, 3, 4],
+        verifyPassed: true,
+        artifactHashes: { '1': 'h1', '2': hashArtifact(VALID_DESIGN), '3': 'h3', '4': 'h4' },
+      }));
+      // Operator edits the approved design directly on disk (drift).
+      writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', VALID_DESIGN + '\n## Addendum\nA new architectural decision was added after approval.\n');
+
+      captureStdout(() => cmdComplete({ dir, args: ['architecture'], err: noopErr }));
+
+      const cfg = loadConfig(dir);
+      // Phase 2 re-opened (withdrawn from approved), downstream 3/4 cascaded out.
+      assert.ok(!cfg.approvedPhases.map(String).includes('2'), 'phase 2 approval must be withdrawn');
+      assert.ok(!cfg.approvedPhases.map(String).includes('3'), 'phase 3 must be cascade-invalidated');
+      assert.ok(!cfg.approvedPhases.map(String).includes('4'), 'phase 4 must be cascade-invalidated');
+      assert.ok(cfg.approvedPhases.map(String).includes('1'), 'phase 1 (upstream) stays approved');
+      assert.equal(cfg.verifyPassed, false, 'verifyPassed reset (phase 4 was in the cascade)');
+      // Hash re-stamped to the new content (no phantom drift after).
+      assert.ok(cfg.artifactHashes['2'], 'phase 2 hash present');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does NOT cascade when an approved phase is re-completed with UNCHANGED content', () => {
+    const dir = tmpDir();
+    try {
+      writeFile(dir, 'spec/01_REQUIREMENTS.json', VALID_REQUIREMENTS);
+      writeFile(dir, 'spec/02_SYSTEM_DESIGN.md', VALID_DESIGN);
+      writeFile(dir, '.aitri', minimalConfig({
+        approvedPhases:  [1, 2, 3],
+        completedPhases: [1, 2, 3],
+        artifactHashes: { '2': hashArtifact(VALID_DESIGN) },
+      }));
+      captureStdout(() => cmdComplete({ dir, args: ['architecture'], err: noopErr }));
+      const cfg = loadConfig(dir);
+      assert.ok(cfg.approvedPhases.map(String).includes('3'), 'unchanged re-complete must NOT cascade downstream');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

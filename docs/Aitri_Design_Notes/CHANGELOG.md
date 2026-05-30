@@ -5,6 +5,15 @@
 
 ---
 
+## [2.0.0-rc.24] — 2026-05-30 — `complete` no longer launders drift on an approved phase (state-core hunt, finding #1)
+
+Defect hunt on the state + phase-lifecycle core (state.js + complete/approve/reject + snapshot drift). The critical finding:
+
+- **`complete` on a still-approved phase bypassed the drift cascade.** `complete <phase>` unconditionally re-stamped `artifactHashes[phase]` and cleared drift (`complete.js:71-78`). The normal flow (run-phase → complete → approve) is safe because run-phase removes the phase from `approvedPhases` first. But editing an approved artifact directly on disk and running `complete <phase>` re-stamped the hash — **laundering the drift** — while leaving downstream Phases 3/4/5 approved against the changed upstream. `approve`-after-drift and `run-phase` both cascade-invalidate downstream; `complete` was a silent bypass, reachable by an agent in non-interactive mode where `approve` hard-blocks. The spec→downstream chain was sealed stale with no human in the loop.
+- **Fix:** when `complete` runs on a phase that is currently approved AND whose content differs from the stored hash, it now re-opens the phase (withdraws approval) and `cascadeInvalidate`s downstream — same as run-phase/approve-after-drift. Normal flow unaffected (phase isn't approved at complete time); an unchanged re-complete does not cascade. Prints a notice naming the invalidated phases. Enforces the existing cascade invariant (no new contract). +2 tests (1269 → 1271).
+
+Other hunt findings logged for later (not yet fixed): reject never withdraws approval / rejections never clear (moderate, advisory-by-design); EVENT_CAP=20 can evict the verify-run event that the no-op-loop guard depends on (moderate); acquireLock proceeds without a lock on non-EEXIST failure (low).
+
 ## [2.0.0-rc.23] — 2026-05-30 — opt-in review gate (ADR-037 follow-up #2 / ADR-038)
 
 Closes the second ADR-037 deferred item — code-review as a gate — **without reversing ADR-034 P1**.
