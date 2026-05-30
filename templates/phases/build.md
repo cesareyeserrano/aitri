@@ -143,6 +143,9 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
     Python:                {name:"lint", command:"ruff check ."} | {name:"typecheck", command:"mypy src"} | {name:"security", command:"bandit -q -r src", required:false}
     Go:                    {name:"vet", command:"go vet ./..."} | {name:"staticcheck", command:"staticcheck ./..."} | {name:"security", command:"gosec ./...", required:false}
     Rust:                  {name:"clippy", command:"cargo clippy -- -D warnings"} | {name:"fmt", command:"cargo fmt --check"}
+    Coverage gate: declare {name:"coverage", threshold:80} (a numeric threshold instead of a command).
+      verify-run measures line coverage (stack-aware: node/go/pytest/jest/vitest — the coverage tool
+      must be in the project's deps) and the gate passes when measured ≥ threshold. required defaults true.
     If the project genuinely has no quality tooling, omit quality_gates — but prefer wiring at least a
     linter, because Aitri's promise is well-built code, not only passing tests.
 

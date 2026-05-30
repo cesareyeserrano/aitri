@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-rc.21+
+**Aitri version:** v2.0.0-rc.22+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -194,7 +194,7 @@ Written by Phase 4 (Developer persona). Implementation tracking and test runner 
 }
 ```
 
-**`quality_gates`** (optional, v2.0.0-rc.21+) — code-quality checks Aitri runs and gates on, beyond test execution. Each entry: `{ name?, command, required? }`. `aitri verify-run` runs each `command` (stack-agnostic, exit-code judged: 0 = pass) and records the outcome in `04_TEST_RESULTS.json#quality_gates`. `required` defaults to `true`; a failing `required` gate (or one whose tool is missing → `error`) resets `verifyPassed` and blocks `verify-complete`. `required: false` gates are surfaced but never block (gradual adoption). Aitri never bundles analyzers — the project declares its own `eslint`/`tsc`/`ruff`/`mypy`/`go vet`/`gosec` (orchestrate-don't-bundle, ADR-037). Absent ≡ no gates (behavior unchanged).
+**`quality_gates`** (optional, v2.0.0-rc.21+) — code-quality checks Aitri runs and gates on, beyond test execution. Two entry shapes: a **command gate** `{ name?, command, required? }` (`verify-run` runs `command`, exit-code judged: 0 = pass — `eslint .`, `tsc --noEmit`, `ruff check .`, `mypy src`, `go vet ./...`, `gosec ./...`), or a **coverage gate** `{ name?, threshold, required? }` (a numeric `threshold` 0–100 instead of a command — `verify-run` measures line coverage via the same stack-aware mechanism as `--coverage-threshold` and passes when `measured ≥ threshold`). Outcomes recorded in `04_TEST_RESULTS.json#quality_gates`. `required` defaults to `true`; a failing `required` gate (a command gate whose tool is missing → `error`, or an unmeasurable coverage gate → `error`) resets `verifyPassed` and blocks `verify-complete`. `required: false` gates are surfaced but never block (gradual adoption). Aitri never bundles analyzers — the project declares its own tools (orchestrate-don't-bundle, ADR-037). Absent ≡ no gates (behavior unchanged).
 
 **Validation rules (enforced by `aitri complete 4`):**
 - `quality_gates`, when present, must be an array; each entry needs a non-empty `command` string; `required` (if present) must be boolean. Absent → non-blocking note nudging the agent to declare them.
@@ -260,7 +260,7 @@ Written by `aitri verify-run`. Never written by the agent — always auto-genera
 
 **`low_confidence_tcs`** (v2.0.0-rc.9+) — TCs whose test block contains ≤1 assertion (possible trivial test). Always present (possibly `[]`). Each entry: `{ tc_id, file, assertCount }`. Informational by default; becomes a hard gate in `verify-complete` only when the project sets `strictAssertions: true` in `.aitri` (see SCHEMA.md).
 
-**`quality_gates`** (optional, v2.0.0-rc.21+) — per-gate code-quality results, present only when the manifest declares `quality_gates`. Each entry: `{ name, command, required, status: "pass"|"fail"|"error", exit_code: number|null, output?: string }`. `status: "error"` means the gate's tool was not found (ENOENT) — it could not certify the code. A `required` gate that is not `pass` blocks `verify-complete` and resets `verifyPassed`. `output` is the last ~600 chars of the gate's stdout+stderr (present when non-empty). Tests verify behavior; these verify the code is well-built (lint/type-check/security). See ADR-037.
+**`quality_gates`** (optional, v2.0.0-rc.21+) — per-gate code-quality results, present only when the manifest declares `quality_gates`. A command-gate entry: `{ name, command, required, status: "pass"|"fail"|"error", exit_code: number|null, output?: string }` (`status: "error"` = tool not found / ENOENT). A coverage-gate entry: `{ name, threshold, measured: number|null, required, status }` (`status: "error"` when `measured` is null — coverage could not be parsed). A `required` gate that is not `pass` blocks `verify-complete` and resets `verifyPassed`. `output` (command gates) is the last ~600 chars of stdout+stderr. Tests verify behavior; these verify the code is well-built (lint/type-check/security/coverage). See ADR-037.
 
 **`summary` counts** (v2.0.0-rc.20+) — `passed`/`failed`/`skipped`/`manual` are all counted by per-result `status`, so `passed + failed + skipped + manual === total`. `skipped_e2e` + `skipped_no_marker` partition `skipped`. `manual` counts results still awaiting manual verification (status `manual`); a manual TC that a human verified via `aitri tc verify` carries its verdict (`pass`/`fail`) and is counted there, with `manual_verified` reporting how many manual TCs were verified. (Before rc.20 `manual` was a declared-manual count that overlapped `passed`/`failed`.)
 

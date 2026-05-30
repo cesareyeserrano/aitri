@@ -5,6 +5,16 @@
 
 ---
 
+## [2.0.0-rc.22] — 2026-05-30 — coverage unified into quality_gates (ADR-037 follow-up #1)
+
+First of the ADR-037 deferred items. Coverage is now a declared `quality_gate`, not only an ad-hoc flag.
+
+- **Coverage gate:** a `quality_gates` entry with a numeric `threshold` (0–100) instead of a `command`. `verify-run` derives `coverageThreshold` from the gate (or the `--coverage-threshold` flag as override), measures line coverage via the existing stack-aware path, and judges the gate: `measured ≥ threshold` → pass, below → fail, unmeasurable → error. The result `{ name, threshold, measured, required, status }` joins `quality_gates` and gates exactly like a command gate (required-fail resets `verifyPassed` + blocks `verify-complete`).
+- **Before:** coverage was opt-in measurement + a non-blocking warning. **Now:** a declared coverage gate blocks the pipeline when required — coverage is part of the verification floor, not advice.
+- `phase4.validate()` accepts either shape per entry (command XOR threshold; threshold ∈ [0,100]). build.md + ARTIFACTS.md document the coverage gate.
+
+Tests +3 (below→fail+block, at/above→pass, advisory→no block). 1262 → 1265. Version header bumped on the header line ONLY this release (the prior global `sed` had drifted inline annotations — see rc.21 note). Remaining ADR-037 follow-up: code-review as a hard gate (next).
+
 ## [2.0.0-rc.21] — 2026-05-30 — code-quality gates: the verification spine enforces well-built code, not only passing tests
 
 The session's strategic shift. The author flagged that Aitri verified *behavior* (tests pass) but not *code quality* (lint/types/security), risking process ceremony that doesn't raise the floor on produced software — against "Purpose over process". Per [ADR-037](DECISIONS.md):

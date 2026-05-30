@@ -1779,3 +1779,73 @@ describe('runQualityGates() + verify-run/complete integration (ADR-037)', () => 
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
+
+describe('coverage as a declared quality_gate (ADR-037 follow-up)', () => {
+  // test_runner carries `--coverage` so injectCoverageFlag sees it present and
+  // leaves the command unchanged; the script prints a parseable coverage line.
+  function seedCov(dir, threshold, measuredLine, required = true) {
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+      projectName: 'p', artifactsDir: 'spec',
+      approvedPhases: [1, 2, 3, 4], completedPhases: [1, 2, 3, 4],
+      verifyPassed: true, verifySummary: { total: 1, passed: 1, failed: 0, skipped: 0 },
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), JSON.stringify({
+      functional_requirements: [{ id: 'FR-001', title: 'r', priority: 'must-have' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/03_TEST_CASES.json'), JSON.stringify({
+      test_cases: [{ id: 'TC-001', title: 't', requirement_id: 'FR-001', expected_result: 'r' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), JSON.stringify({
+      files_created: [{ path: 'runner.js' }],
+      test_runner: 'node runner.js --coverage',
+      quality_gates: [{ name: 'coverage', threshold, required }],
+    }));
+    fs.writeFileSync(path.join(dir, 'runner.js'),
+      `console.log('✔ TC-001 — ran');\nconsole.log('All files | ${measuredLine} |');\n`);
+  }
+  const readResults = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), 'utf8'));
+  const silent = (fn) => {
+    const ol = console.log, oe = process.stderr.write;
+    console.log = () => {}; process.stderr.write = () => true;
+    try { return fn(); } finally { console.log = ol; process.stderr.write = oe; }
+  };
+  const run = (dir) => silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+
+  it('coverage below threshold → fail gate, blocks verify-complete', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-cov-fail-'));
+    try {
+      seedCov(dir, 80, '72');
+      run(dir);
+      const g = readResults(dir).quality_gates.find(x => x.name === 'coverage');
+      assert.equal(g.status, 'fail');
+      assert.equal(g.measured, 72);
+      let msg = '';
+      try { silent(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } })); }
+      catch (e) { msg = e.message; }
+      assert.match(msg, /required code-quality gate/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('coverage at/above threshold → pass gate, does not block', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-cov-pass-'));
+    try {
+      seedCov(dir, 80, '88');
+      run(dir);
+      const g = readResults(dir).quality_gates.find(x => x.name === 'coverage');
+      assert.equal(g.status, 'pass');
+      assert.equal(g.measured, 88);
+      assert.doesNotThrow(() => silent(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } })));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('coverage gate is advisory (required:false) does not block when below', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-cov-adv-'));
+    try {
+      seedCov(dir, 90, '50', false);
+      run(dir);
+      assert.equal(readResults(dir).quality_gates.find(x => x.name === 'coverage').status, 'fail');
+      assert.doesNotThrow(() => silent(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } })));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});

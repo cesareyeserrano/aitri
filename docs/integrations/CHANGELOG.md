@@ -18,6 +18,12 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.22 (2026-05-30) — coverage as a declared quality_gate — additive
+
+`quality_gates` now accepts a **coverage gate**: `{ name?, threshold, required? }` — a numeric `threshold` (0–100) instead of a `command`. `verify-run` measures line coverage (same stack-aware mechanism as the `--coverage-threshold` flag) and the gate passes when `measured ≥ threshold`, `error` when coverage could not be measured. Its result `{ name, threshold, measured, required, status }` joins `04_TEST_RESULTS.json#quality_gates` and gates like any other (required-fail resets `verifyPassed` + blocks `verify-complete`). The `--coverage-threshold` flag still works as an ad-hoc override; the declared gate is the durable, pipeline-gating form.
+
+**Contract impact for subproducts:** additive — a new entry shape in `quality_gates` (coverage entries carry `threshold`/`measured` instead of `command`/`exit_code`). Old readers ignore it; readers that surface gate status can treat both shapes uniformly via `name`/`required`/`status`.
+
 ## v2.0.0-rc.21 (2026-05-30) — code-quality gates (manifest `quality_gates` + results `quality_gates`) — additive
 
 Two additive fields wire the project's code-quality toolchain into the verification spine:
