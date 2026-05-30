@@ -18,6 +18,12 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.23 (2026-05-30) — opt-in `reviewGate` (.aitri) — additive
+
+New optional `.aitri` boolean `reviewGate` (default `false`/absent). When `true`, a `FAIL` verdict in `04_CODE_REVIEW.md` blocks `aitri verify-complete`. Default behavior is unchanged — the code-review verdict stays advisory (ADR-034 P1). `CONDITIONAL_PASS`/`PASS` and an absent review never block. Per ADR-038.
+
+**Contract impact for subproducts:** additive — a new opt-in config field old readers ignore. No existing field/behavior changed unless a project sets `reviewGate: true`.
+
 ## v2.0.0-rc.22 (2026-05-30) — coverage as a declared quality_gate — additive
 
 `quality_gates` now accepts a **coverage gate**: `{ name?, threshold, required? }` — a numeric `threshold` (0–100) instead of a `command`. `verify-run` measures line coverage (same stack-aware mechanism as the `--coverage-threshold` flag) and the gate passes when `measured ≥ threshold`, `error` when coverage could not be measured. Its result `{ name, threshold, measured, required, status }` joins `04_TEST_RESULTS.json#quality_gates` and gates like any other (required-fail resets `verifyPassed` + blocks `verify-complete`). The `--coverage-threshold` flag still works as an ad-hoc override; the declared gate is the durable, pipeline-gating form.

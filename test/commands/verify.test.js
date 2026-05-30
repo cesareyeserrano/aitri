@@ -1849,3 +1849,73 @@ describe('coverage as a declared quality_gate (ADR-037 follow-up)', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
+
+describe('opt-in review gate (ADR-034 addendum)', () => {
+  function seedReview(dir, { reviewGate, verdict }) {
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+      projectName: 'p', artifactsDir: 'spec',
+      approvedPhases: [1, 2, 3, 4], completedPhases: [1, 2, 3, 4],
+      verifyPassed: true, verifySummary: { total: 1, passed: 1, failed: 0, skipped: 0 },
+      ...(reviewGate ? { reviewGate: true } : {}),
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), JSON.stringify({
+      functional_requirements: [{ id: 'FR-001', title: 'r', priority: 'must-have' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/03_TEST_CASES.json'), JSON.stringify({
+      test_cases: [{ id: 'TC-001', title: 't', requirement_id: 'FR-001', expected_result: 'r' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), JSON.stringify({
+      files_created: [{ path: 'runner.js' }], test_runner: 'node runner.js',
+    }));
+    fs.writeFileSync(path.join(dir, 'runner.js'), `console.log('✔ TC-001 — ran');\n`);
+    if (verdict) {
+      fs.writeFileSync(path.join(dir, 'spec/04_CODE_REVIEW.md'),
+        `# Code Review\n## Issues\n- something\n## Verdict\nVerdict: ${verdict} — note\n`);
+    }
+  }
+  const silent = (fn) => {
+    const ol = console.log, oe = process.stderr.write;
+    console.log = () => {}; process.stderr.write = () => true;
+    try { return fn(); } finally { console.log = ol; process.stderr.write = oe; }
+  };
+  const run = (dir) => silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+  const complete = (dir) => silent(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } }));
+
+  it('reviewGate ON + verdict FAIL → blocks verify-complete', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-rev-fail-'));
+    try {
+      seedReview(dir, { reviewGate: true, verdict: 'FAIL' });
+      run(dir);
+      let msg = ''; try { complete(dir); } catch (e) { msg = e.message; }
+      assert.match(msg, /reviewGate is ON.*FAIL/s);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('reviewGate OFF (default) + verdict FAIL → does NOT block (advisory, per ADR-034)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-rev-off-'));
+    try {
+      seedReview(dir, { reviewGate: false, verdict: 'FAIL' });
+      run(dir);
+      assert.doesNotThrow(() => complete(dir));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('reviewGate ON + verdict PASS → does not block', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-rev-pass-'));
+    try {
+      seedReview(dir, { reviewGate: true, verdict: 'PASS' });
+      run(dir);
+      assert.doesNotThrow(() => complete(dir));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('reviewGate ON + no review present → does not block (review stays optional)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-rev-none-'));
+    try {
+      seedReview(dir, { reviewGate: true, verdict: null });
+      run(dir);
+      assert.doesNotThrow(() => complete(dir));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});

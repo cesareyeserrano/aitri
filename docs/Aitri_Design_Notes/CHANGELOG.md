@@ -5,6 +5,16 @@
 
 ---
 
+## [2.0.0-rc.23] — 2026-05-30 — opt-in review gate (ADR-037 follow-up #2 / ADR-038)
+
+Closes the second ADR-037 deferred item — code-review as a gate — **without reversing ADR-034 P1**.
+
+- **`.aitri#reviewGate`** (opt-in, default off): when `true`, a `FAIL` verdict in `04_CODE_REVIEW.md` blocks `aitri verify-complete`. Same opt-in pattern as `strictAssertions`/`humanApprovalGate`. Default unchanged — the verdict stays advisory.
+- **`extractReviewVerdict`** (phaseReview.js, exported) reads the verdict from the `## Verdict` section specifically (strips placeholder menus like `[PASS | … | FAIL]`; worst-verdict precedence FAIL > CONDITIONAL_PASS > PASS). verify.js imports it (cycle-free — phaseReview imports nothing that reaches verify).
+- **Honest boundary (ADR-038):** the verdict is agent-written, so `reviewGate` makes a *written* FAIL binding — it does not detect review quality or force a review to exist (absent review never blocks; CONDITIONAL_PASS/PASS proceed). Deliberately opt-in: a universal hard block on an honor-system verdict would be the "structural gate without defect evidence" theater CLAUDE.md warns against.
+
+Tests +4 + verdict-extractor coverage (1265 → 1269). Docs: SCHEMA.md (`reviewGate`), AGENTS.md, ADR-038. Header-only version bump again. **Both ADR-037 follow-ups now closed** (coverage rc.22, review gate rc.23).
+
 ## [2.0.0-rc.22] — 2026-05-30 — coverage unified into quality_gates (ADR-037 follow-up #1)
 
 First of the ADR-037 deferred items. Coverage is now a declared `quality_gate`, not only an ad-hoc flag.

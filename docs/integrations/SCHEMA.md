@@ -1,6 +1,6 @@
 # Aitri — `.aitri` Schema Contract
 
-**Aitri version:** v2.0.0-rc.22+
+**Aitri version:** v2.0.0-rc.23+
 **Maintenance rule:** Update this file in the same commit as any `.aitri` schema change.
 
 ---
@@ -59,6 +59,7 @@ Present after any `aitri init` or `aitri adopt --upgrade`.
 | `upgradeFindings` | `array<object>` | `[]` | Unresolved flagged findings from the last `aitri adopt --upgrade`. Snapshot model — overwritten on every run; cleared when diagnose returns empty. Each entry: `{ target, transform, reason, module, category, recordedAt }`. (v2.0.0-alpha.3+) |
 | `strictAssertions` | `boolean` | `false` (absent) | Opt-in. When `true`, `aitri verify-complete` BLOCKS if `04_TEST_RESULTS.json#low_confidence_tcs` is non-empty (any TC with ≤1 assertion). Default behavior unchanged — assertion density is a warning only. Typically set on larger projects that want stricter test-quality enforcement (v2.0.0-rc.9+) |
 | `humanApprovalGate` | `boolean` | `false` (absent) | Opt-in. When `true`, `aitri approve <phase>` in non-interactive (agent) mode BLOCKS and requires a human to run it after review. Default unchanged — agent-mode approval proceeds (the summary + Human Review checklist always print regardless). Typically set on larger projects that want a human at every gate; small projects / MVPs run autonomously by default (v2.0.0-rc.12+) |
+| `reviewGate` | `boolean` | `false` (absent) | Opt-in. When `true`, a `FAIL` verdict in `04_CODE_REVIEW.md` BLOCKS `aitri verify-complete` (Phase 5). Default unchanged — the code-review verdict stays advisory (ADR-034 P1). Honor-system: the verdict is agent-written, so this makes a written `FAIL` binding; it does not judge review quality. Review remains optional — an absent `04_CODE_REVIEW.md` never blocks. `CONDITIONAL_PASS`/`PASS` do not block (v2.0.0-rc.23+) |
 
 ---
 

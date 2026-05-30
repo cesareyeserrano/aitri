@@ -1056,3 +1056,19 @@ This closes the **"Phase 3 canonical TC id regex"** item, which had been Discard
 **Scope.**
 - Decides: `quality_gates` declared in the manifest, run by `verify-run`, gated by `verify-complete`/`verifyPassed`; `required` defaults true; ENOENT = error = blocking-if-required; Phase 4 briefing forces declaration; orchestrate-not-bundle; the CLAUDE.md clarification.
 - Does not decide: folding coverage (`--coverage-threshold`) into `quality_gates` (deferred follow-up — coverage already works via its own mechanism); making code review (reviewer persona) a hard gate (stays advisory per ADR-034 P1); auto-detecting the stack's tools (the project declares them — auto-detection would re-introduce stack assumptions).
+
+---
+
+## ADR-038 — 2026-05-30 — Code-review verdict: opt-in hard gate (`reviewGate`), advisory by default
+
+**Status:** Active
+
+**Context.** ADR-034 P1 kept the optional Code Review phase's PASS/CONDITIONAL_PASS/FAIL verdict **advisory** — not a hard gate on Phase 5 — reasoning that making an optional phase a blocker adds friction with no evidence of a defect it would catch, and that real rigor lives in the mechanical gates (tests, assertion-density) plus the human approve gate. ADR-037 then built the mechanical code-quality gates (lint/type-check/security/coverage) and explicitly deferred "make code-review a hard gate." With the code-QA floor now in place, the author asked to close that follow-up.
+
+**Decision.** Add an **opt-in** gate, not a blanket reversal. `.aitri#reviewGate` (default `false`, absent) — when `true`, a `FAIL` verdict in `04_CODE_REVIEW.md` blocks `aitri verify-complete`. Default behavior is unchanged: the verdict stays advisory (ADR-034 P1 preserved). Same opt-in pattern as `strictAssertions` (ADR-034) and `humanApprovalGate` (rc.12) — serious projects raise the bar; MVPs are unaffected. `CONDITIONAL_PASS`/`PASS` never block; an absent `04_CODE_REVIEW.md` never blocks (review stays optional). The verdict is read from the `## Verdict` section via `extractReviewVerdict` (placeholder menus stripped; worst-verdict precedence).
+
+**Honest boundary (why this is weaker than the mechanical gates).** The verdict is **agent-written** — `reviewGate` makes a *written* FAIL binding, it does not detect review quality or force a review to exist. An agent could write PASS, or skip review entirely, to avoid the gate. So this is a soft/honor-system gate, deliberately opt-in: it has value for a team that runs review and wants its FAIL to be non-ignorable, but it is not a substitute for the mechanical floor (tests + `quality_gates`) or the human approve gate. This is exactly why it is NOT on by default — turning an honor-system verdict into a universal hard block would be the "structural gate without defect evidence" theater CLAUDE.md warns against. As an opt-in, the project that enables it is making an informed choice.
+
+**Scope.**
+- Decides: `reviewGate` opt-in flag; FAIL-only blocking at `verify-complete`; default stays advisory (ADR-034 P1 intact); verdict extracted from the `## Verdict` section.
+- Does not decide: forcing a code review to exist; gating on CONDITIONAL_PASS; any mechanical verification of review quality (out of reach — the reviewer is an LLM/human judgment layer).
