@@ -54,13 +54,28 @@ describe('parseRunnerOutput()', () => {
     assert.equal(result.get('TC-003')?.status, 'fail');
   });
 
-  it('does not double-detect same TC id (first occurrence wins)', () => {
+  it('fail wins when one TC id appears as both pass and fail (no masked failure)', () => {
+    // Parametrized/repeated tests share one TC id; a passing case can print
+    // before a failing one. First-occurrence-wins used to mask the failure.
     const output = [
-      `✔ TC-001: first run (0.2ms)`,
-      `✖ TC-001: second run? (0.1ms)`,
+      `✔ TC-001: case A (0.2ms)`,
+      `✖ TC-001: case B fails (0.1ms)`,
     ].join('\n');
     const result = parseRunnerOutput(output);
-    assert.equal(result.get('TC-001')?.status, 'pass');
+    assert.equal(result.get('TC-001')?.status, 'fail');
+    assert.equal(result.size, 1);
+  });
+
+  it('fail wins regardless of order (fail before pass)', () => {
+    const result = parseRunnerOutput(`✖ TC-001: case A fails\n✔ TC-001: case B`);
+    assert.equal(result.get('TC-001')?.status, 'fail');
+  });
+
+  it('classifies a node:test todo (✔ … # TODO) as skip, not pass', () => {
+    // node --test prints ✔ for todo tests; crediting an unimplemented placeholder
+    // as a pass would mark its FR covered on nothing.
+    const result = parseRunnerOutput(`✔ TC-002h: not built yet (0.1ms) # TODO`);
+    assert.equal(result.get('TC-002h')?.status, 'skip');
   });
 
   it('handles TC ids with multiple digits', () => {
@@ -136,13 +151,19 @@ describe('parseVitestOutput()', () => {
     assert.equal(result.size, 0);
   });
 
-  it('does not double-detect same TC id (first occurrence wins)', () => {
+  it('fail wins when one TC id appears as both pass and fail (no masked failure)', () => {
     const output = [
-      ` ✓ TC-001: first run (2ms)`,
-      ` × TC-001: retry (1ms)`,
+      ` ✓ TC-001: case A (2ms)`,
+      ` × TC-001: case B fails (1ms)`,
     ].join('\n');
     const result = parseVitestOutput(output);
-    assert.equal(result.get('TC-001')?.status, 'pass');
+    assert.equal(result.get('TC-001')?.status, 'fail');
+    assert.equal(result.size, 1);
+  });
+
+  it('does not misread a fail whose title contains a ✓ glyph as a pass', () => {
+    const result = parseVitestOutput(` × TC-001f: rejects the ✓ marker (1ms)`);
+    assert.equal(result.get('TC-001f')?.status, 'fail');
   });
 
   it('detects alphanumeric TC id (TC-020b) in Vitest output', () => {
@@ -194,13 +215,14 @@ describe('parsePlaywrightOutput()', () => {
     assert.equal(result.get('TC-023')?.status, 'fail');
   });
 
-  it('does not double-detect same TC id (first occurrence wins)', () => {
+  it('fail wins when one TC id appears as both pass and fail (no masked failure)', () => {
     const output = [
       `  ✓  1 tests/e2e/sales-tracker.spec.js › TC-020: No scroll (0.3s)`,
-      `  ✗  2 tests/e2e/sales-tracker.spec.js › TC-020: No scroll retry (0.1s)`,
+      `  ✗  2 tests/e2e/sales-tracker.spec.js › TC-020: No scroll retry fails (0.1s)`,
     ].join('\n');
     const result = parsePlaywrightOutput(output);
-    assert.equal(result.get('TC-020')?.status, 'pass');
+    assert.equal(result.get('TC-020')?.status, 'fail');
+    assert.equal(result.size, 1);
   });
 
   it('returns empty map for output with no TC patterns', () => {
@@ -749,13 +771,17 @@ describe('parsePytestOutput()', () => {
     assert.equal(result.get('TC-004f')?.status, 'fail');
   });
 
-  it('does not double-detect same TC id (first occurrence wins)', () => {
+  it('fail wins when one TC id appears as both pass and fail (parametrized, no masked failure)', () => {
+    // The canonical real case: pytest parametrize prints one line per case,
+    // all sharing the function name → one TC id. A failing case must not be
+    // masked by a passing one that printed first.
     const output = [
-      `tests/test_foo.py::test_TC_001h_first PASSED`,
-      `tests/test_foo.py::test_TC_001h_duplicate FAILED`,
+      `tests/test_foo.py::test_TC_001h_x[case0] PASSED`,
+      `tests/test_foo.py::test_TC_001h_x[case1] FAILED`,
     ].join('\n');
     const result = parsePytestOutput(output);
-    assert.equal(result.get('TC-001h')?.status, 'pass');
+    assert.equal(result.get('TC-001h')?.status, 'fail');
+    assert.equal(result.size, 1);
   });
 
   it('returns empty map for output with no TC patterns', () => {

@@ -5,6 +5,16 @@
 
 ---
 
+## [2.0.0-rc.19] — 2026-05-30 — verify-run parser correctness: no masked failures, no false passes
+
+Defect hunt on the verify-run flow (Aitri's crown jewel — it executes real tests and credits TCs). Three confirmed false-pass/miscount bugs, all reproduced against real runner output before fixing:
+
+- **C1 (critical) — masked failure when a TC id repeats.** All five parsers used first-occurrence-wins (`if (detected.has(tcId)) continue;`). When one TC id appears more than once — the canonical case is a **parametrized pytest test** (`test_TC_001h[case0] PASSED` / `[case1] FAILED`), also repeated `it()` blocks or a retried test — a passing line that printed first masked a later failure. The TC (and its FR) was credited green while a real assertion failed. Fix: a shared `recordDetected` with **fail-precedence** (`STATUS_RANK fail>pass>skip`) — a fail always wins regardless of order; equal status keeps the first (notes preserved). Applied to all five parsers.
+- **M1 (moderate) — node:test todo counted as pass.** `node --test` prints `✔ … # TODO` for a todo (unimplemented) test; the `✔` marker made it a pass, marking its FR covered on nothing. Now classified `skip`. (`# SKIP` already fell through correctly — only TODO was wrong.)
+- **L1 (low) — a ✓ glyph inside a failing test's title flipped it to pass.** Vitest/Playwright parsers tested `/[✓✔]/` anywhere in the line; a fail like `× TC-001f: rejects the ✓ marker` matched the pass branch first. Now the verdict is anchored to the leading symbol (`/^\s*[✓✔]/`).
+
+Tests +3 (the three scenarios, each confirmed to fail on the old code), existing first-occurrence-wins tests rewritten to assert fail-precedence. 1251 → 1254. No schema/contract change — results are simply more correct. Remaining hunt findings NOT yet addressed (logged for a decision): M2 (manual TCs double-counted in the summary buckets — display only, not a gate), C2 (case-insensitive id fallback can collide `TC-001h`/`TC-001H` — narrow), L2 (Playwright `×` U+00D7 fail symbol — unconfirmed).
+
 ## [2.0.0-rc.18] — 2026-05-30 — upgrade: same-file migrations compose instead of clobbering (C1)
 
 - **Critical-path fix in `adopt --upgrade`.** Two auto-migratable findings can target the same artifact (`diagnoseNonFunctionalRequirements` and the orphan-IDEA absorb in `diagnoseOrphanIdea`, both rewrite `01_REQUIREMENTS.json`). Each captured a full-file `afterContent` at *diagnose* time; `migrate()` applies them sequentially with no re-read, so the last writer (always the IDEA absorb, by `diagnose()` order) silently reverted the NFR rewrite — while the report claimed both applied. The brief was preserved (absorb wrote last), but a BLOCKING NFR migration became a silent no-op on the exact pre-0.1.89 population the migrator targets. Found by a defect hunt on the upgrade module (the v2 core path).
