@@ -18,6 +18,12 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.17 (2026-05-30) — status --json honors the documented health contract — additive
+
+`aitri status --json` now emits `health.driftPresent` and `health.staleVerify` — two fields STATUS_JSON.md has documented as part of the `health` block since v0.1.77 but the payload never actually output (a consumer reading them got `undefined`). The data was already computed by `computeHealth`; this only adds it to the projection. `driftPresent` is `[{ scope, phase }]` (per-scope drift across root + features — richer than the root-only top-level `driftPhases`); `staleVerify` is `[{ scope, days }]` (pipelines whose `verifyRanAt` is older than 14 days). Found by a contract-vs-code audit (rc.17).
+
+**Contract impact for subproducts:** none for existing readers (additive — new fields on an existing object). A consumer that coded against the documented `health.driftPresent`/`staleVerify` and defensively handled `undefined` now receives real arrays. Also doc-only: SCHEMA.md's per-machine-state note referenced a non-existent `lastSession.when` — corrected to `lastSession.at` (the field has always been `at`).
+
 ## v2.0.0-rc.16 (2026-05-29) — canonical TC-id gate in Phase 3 — additive
 
 No schema field added or changed. `aitri complete 3` gains a validation rule: every `test_cases[].id` must be canonical (`TC` + optional UPPERCASE namespace + numeric block + suffix, e.g. `TC-001h`, `TC-E2E-001h`). Ids without a numeric block (`TC-e2eFolderScan`) or with a lowercase namespace (`TC-fe-001h`) are rejected. The grammar is shared with the `verify-run` output parser (`lib/tc-id.js`) so the gate and the linker cannot drift. Documented in ARTIFACTS.md.

@@ -41,6 +41,21 @@ describe('cmdStatus --json', () => {
     assert.ok(typeof result.rejections === 'object');
   });
 
+  // health.driftPresent + health.staleVerify have been part of the documented
+  // health contract (STATUS_JSON.md) since v0.1.77 but were never emitted — a
+  // consumer reading them got undefined. Guard that they are present.
+  it('health emits the full documented field set incl. driftPresent + staleVerify', () => {
+    const dir = tmpDir();
+    cmdInit({ dir, rootDir: ROOT_DIR, err: (m) => { throw new Error(m); }, VERSION: '0.1.52' });
+    const result = captureJson(() => cmdStatus({ dir, VERSION: '0.1.52', args: ['--json'] }));
+    for (const k of ['deployable', 'deployableReasons', 'staleAudit', 'blockedByBugs',
+                     'activeFeatures', 'versionMismatch', 'driftPresent', 'staleVerify']) {
+      assert.ok(k in result.health, `health.${k} must be present in status --json`);
+    }
+    assert.ok(Array.isArray(result.health.driftPresent));
+    assert.ok(Array.isArray(result.health.staleVerify));
+  });
+
   it('driftPhases is empty when no phases have drift', () => {
     const dir = tmpDir();
     cmdInit({ dir, rootDir: ROOT_DIR, err: (m) => { throw new Error(m); }, VERSION: '0.1.52' });

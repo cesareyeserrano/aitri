@@ -1,6 +1,6 @@
 # Aitri — `.aitri` Schema Contract
 
-**Aitri version:** v2.0.0-rc.16+
+**Aitri version:** v2.0.0-rc.17+
 **Maintenance rule:** Update this file in the same commit as any `.aitri` schema change.
 
 ---
@@ -269,7 +269,7 @@ Projects that run `aitri adopt --upgrade` will have missing fields written to di
 
 `.aitri` currently serializes both **shared** state (the contract above) and **per-machine** state in the same file. Fields whose values are per-machine by nature:
 
-- `lastSession.when` — local timestamp of the last pipeline event on this machine
+- `lastSession.at` — local timestamp of the last pipeline event on this machine
 - `lastSession.agent` — detected from local env
 - `normalizeState.lastRun` — local event timestamp
 - `normalizeState.baseRef` — meaningful only against the local git workdir

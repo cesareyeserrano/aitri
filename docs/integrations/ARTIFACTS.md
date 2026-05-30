@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-rc.16+
+**Aitri version:** v2.0.0-rc.17+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -147,7 +147,7 @@ Written by Phase 3 (QA persona). Test cases keyed to FRs, user stories, and acce
 **Validation rules (enforced by `aitri complete 3`):**
 - Required: `test_plan`, `test_cases` (non-empty)
 - TC `id` values must be unique across `test_cases[]` (v2.0.0-alpha.13+) — duplicates break downstream cardinality (`summary.manual` = Set size vs `results.length` = array length)
-- TC `id` values must be **canonical** (v2.0.0-rc.16+): `TC` + optional UPPERCASE namespace segments + a numeric block + suffix — e.g. `TC-001h`, `TC-E2E-001h`, `TC-API-USER-010f`. Ids without a numeric block (`TC-e2eFolderScan`) or with a lowercase namespace (`TC-fe-001h`) are rejected. Rationale: `verify-run` links a parsed runner-output id to a plan id by string equality, so any id the shared parser cannot round-trip would silently drop to `skip`. The grammar is shared between the parser and this gate (`lib/tc-id.js`), so the two cannot drift.
+- TC `id` values must be **canonical** (v2.0.0-rc.17+): `TC` + optional UPPERCASE namespace segments + a numeric block + suffix — e.g. `TC-001h`, `TC-E2E-001h`, `TC-API-USER-010f`. Ids without a numeric block (`TC-e2eFolderScan`) or with a lowercase namespace (`TC-fe-001h`) are rejected. Rationale: `verify-run` links a parsed runner-output id to a plan id by string equality, so any id the shared parser cannot round-trip would silently drop to `skip`. The grammar is shared between the parser and this gate (`lib/tc-id.js`), so the two cannot drift.
 - `type` must be: `unit` | `integration` | `e2e`
 - `scenario` must be: `happy_path` | `edge_case` | `negative`
 - Each TC must have: `requirement_id`, `user_story_id`, `ac_id`

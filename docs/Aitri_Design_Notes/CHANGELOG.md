@@ -5,6 +5,13 @@
 
 ---
 
+## [2.0.0-rc.17] — 2026-05-30 — integration-contract audit: status --json honors the documented health fields
+
+- **Contract-vs-code audit** of the three integration contracts a third-party adopter reads (`ARTIFACTS.md`, `SCHEMA.md`, `STATUS_JSON.md`) against the actual `phase*.validate()` + `state.js` + `snapshot.js` code. Motivated by today's discovery that "the technical case for v2 is clean" was optimistic — two latent grammar asymmetries existed (rc.16). The audit hunted the same class: a documented/required contract the code does not honor.
+- **Finding 1 (code fix):** `STATUS_JSON.md` has documented `health.driftPresent` and `health.staleVerify` since v0.1.77, but `status --json` never emitted them — a ~40-version latent gap; a consumer reading them got `undefined`. The data was already computed by `computeHealth`; added both to the payload in `status.js` (additive). `driftPresent` = `[{scope, phase}]` (per-scope drift, richer than the root-only top-level `driftPhases`); `staleVerify` = `[{scope, days}]`.
+- **Finding 2 (doc fix):** `SCHEMA.md`'s per-machine-state note named a non-existent `lastSession.when` — the field has always been `at`. Corrected.
+- **Audit result otherwise clean:** phases 1/4/5 `validate()` (the three CLAUDE.md flagged "stale since alpha.14") match `ARTIFACTS.md` exactly; all 18 code-written `.aitri` config fields are documented in `SCHEMA.md`; the `nextActions[]` priority ladder (1,2,3,4,5,6,7,9) and every top-level `status --json` field match the code. The "stale since alpha.14" warning was over-cautious. Tests +1 (1249 → 1250).
+
 ## [2.0.0-rc.16] — 2026-05-29 — canonical TC-id gate (Phase 3 / verify-run asymmetry closed)
 
 - **Root fix for the TC-id parser/gate asymmetry.** The template (`templates/phases/tests.md`) teaches the canonical TC-id form and `verify-run` *requires* it to link runner output to a plan id (`detected.get(tc.id)` — string equality), but `phase3.validate()` never enforced it. An agent could author a non-canonical id, pass Phase 3, then have `verify-run` silently drop the TC to `skip` because the parser could not round-trip the id. Surfaced when Hub's `hub-folder-scan` feature authored `TC-e2eFolderScan` / `TC-e2eFolderEmpty` (no numeric block); a half-finished patch had loosened the `verify-run` parser to accept digit-free ids — the wrong layer (it condoned off-convention naming and introduced a phantom-TC false-positive surface, e.g. `TC-PASS` in a log line).
