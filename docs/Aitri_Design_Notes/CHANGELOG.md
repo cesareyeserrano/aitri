@@ -5,6 +5,11 @@
 
 ---
 
+## [2.0.0-rc.18] — 2026-05-30 — upgrade: same-file migrations compose instead of clobbering (C1)
+
+- **Critical-path fix in `adopt --upgrade`.** Two auto-migratable findings can target the same artifact (`diagnoseNonFunctionalRequirements` and the orphan-IDEA absorb in `diagnoseOrphanIdea`, both rewrite `01_REQUIREMENTS.json`). Each captured a full-file `afterContent` at *diagnose* time; `migrate()` applies them sequentially with no re-read, so the last writer (always the IDEA absorb, by `diagnose()` order) silently reverted the NFR rewrite — while the report claimed both applied. The brief was preserved (absorb wrote last), but a BLOCKING NFR migration became a silent no-op on the exact pre-0.1.89 population the migrator targets. Found by a defect hunt on the upgrade module (the v2 core path).
+- **Fix:** new `rewriteArtifactInPlace(full, mutate)` re-reads the file at *apply* time, applies the specific transform to the current on-disk content, and recomputes the event hashes — so same-target writes compose regardless of order. The three artifact writers (TC rename, NFR rewrite, IDEA absorb) now use it; each `mutate` is guarded to be idempotent-safe. The IDEA absorb only unlinks `IDEA.md` if the write landed, so a re-read failure can never lose the brief. Per [ADR-036](DECISIONS.md). Tests +1 (the C1 regression: NFR rewrite + IDEA absorb in one upgrade, both survive). 1250 → 1251. No schema/contract change — the post-upgrade artifact now correctly matches the schema it always should have.
+
 ## [2.0.0-rc.17] — 2026-05-30 — integration-contract audit: status --json honors the documented health fields
 
 - **Contract-vs-code audit** of the three integration contracts a third-party adopter reads (`ARTIFACTS.md`, `SCHEMA.md`, `STATUS_JSON.md`) against the actual `phase*.validate()` + `state.js` + `snapshot.js` code. Motivated by today's discovery that "the technical case for v2 is clean" was optimistic — two latent grammar asymmetries existed (rc.16). The audit hunted the same class: a documented/required contract the code does not honor.

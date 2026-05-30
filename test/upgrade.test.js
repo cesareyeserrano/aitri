@@ -1271,6 +1271,37 @@ describe('lib/upgrade/migrations/from-0.1.65 — orphan IDEA.md absorption', () 
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  it('composes with the NFR rewrite on the same file — both migrations survive (C1 regression)', () => {
+    const dir = tmpDir();
+    try {
+      // Legacy NFR shape (constraint, no requirement) AND an orphan IDEA.md:
+      // both the NFR rewrite and the IDEA absorb fully overwrite
+      // 01_REQUIREMENTS.json in the same --upgrade. Before the apply-time
+      // re-read fix, the last writer (IDEA absorb) silently reverted the NFR
+      // rewrite while reporting it as applied.
+      writeLegacyConfig(dir, { approvedPhases: [1] });
+      writeReqsArtifact(dir, {
+        functional_requirements: [],
+        non_functional_requirements: [
+          { id: 'NFR-001', category: 'Performance', constraint: '<100ms' },
+        ],
+      });
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Brief\n\nseed.\n');
+
+      silence(() => runUpgrade({ dir, VERSION: '0.1.99' }));
+
+      const after = JSON.parse(fs.readFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), 'utf8'));
+      // IDEA absorb survived:
+      assert.equal(fs.existsSync(path.join(dir, 'IDEA.md')), false, 'IDEA.md must be removed');
+      assert.equal(after.original_brief, '# Brief\n\nseed.\n', 'original_brief must be set');
+      // NFR rewrite ALSO survived (the bug silently reverted this):
+      assert.equal(after.non_functional_requirements[0].requirement, '<100ms',
+        'NFR constraint→requirement must survive the same-run IDEA absorb');
+      assert.equal(after.non_functional_requirements[0].constraint, undefined,
+        'legacy constraint field must be gone');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it('flags (does NOT auto-migrate) when original_brief already exists', () => {
     const dir = tmpDir();
     try {

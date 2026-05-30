@@ -1011,3 +1011,21 @@ This closes the **"Phase 3 canonical TC id regex"** item, which had been Discard
 **Scope.**
 - Decides: canonical-id grammar is SSoT in `lib/tc-id.js`; Phase 3 enforces it via round-trip; the deterministic rename suggestion; the digit-free parser loosening is reverted; the `@aitri-tc` marker scanner is unified onto the SSoT; the Discarded "Phase 3 canonical TC id regex" item is closed (shipped).
 - Does not decide: any change to the grammar itself (namespace casing, suffix vocabulary) — out of scope; this only enforces the existing one.
+
+---
+
+## ADR-036 — 2026-05-30 — Upgrade migrations must transform at apply time, never write a diagnose-time snapshot
+
+**Status:** Active
+
+**Context.** `adopt --upgrade` runs every `diagnose*` function against the current on-disk project, collecting findings. `migrate()` then applies each auto-migratable finding's `apply()` **sequentially, with no re-read between them**. Each artifact-writing finding had captured a full-file `afterContent` at *diagnose* time and its `apply()` did `fs.writeFileSync(full, afterContent)`. When two findings target the same file — `diagnoseNonFunctionalRequirements` (NFR shape rewrite) and the orphan-IDEA absorb in `diagnoseOrphanIdea`, both on `01_REQUIREMENTS.json` — the second `apply()` overwrote the first with a snapshot taken before the first ran. By `diagnose()` order the IDEA absorb always wins, so the NFR rewrite was silently reverted while the upgrade report claimed both applied. Triggers on the exact pre-0.1.89 population the migrator targets (legacy NFRs + an orphan `IDEA.md`). The brief was not lost (absorb wrote last and includes it), but a BLOCKING migration became a reported-success no-op. Found by a defect hunt on the upgrade module.
+
+**Decision.** Artifact-writing migration `apply()`s MUST re-read the file at apply time and mutate the current on-disk content — never persist a diagnose-time snapshot. Codified as `rewriteArtifactInPlace(full, mutate)` in `from-0.1.65.js`: it re-reads, runs `mutate(data)` against fresh content, writes, and returns the actual before/after hashes (which the finding stamps onto itself so the `upgrade_migration` event matches final disk). Each `mutate` is written to be idempotent-safe (it guards the fields it may have already changed), because it now runs against whatever is currently on disk rather than a known snapshot. Destructive side effects (the IDEA `unlinkSync`) run only after a successful write, so a re-read failure cannot lose data.
+
+**Invariant for future migration authors:** if your `apply()` writes a whole artifact file, route it through `rewriteArtifactInPlace` (or re-read equivalently). Writing a precomputed full-file blob is the clobber bug. Diagnose-time `beforeHash`/`afterHash` may still be computed for the dry-run preview, but the real run's recorded hashes come from the apply-time read/write.
+
+**Trade-off.** `apply()` now does one extra read+parse per artifact write (negligible — upgrades are rare and the files are small). The mutate functions must be idempotent-safe, which is slightly more code than a blind overwrite — accepted, because it also makes a double-run safe. Alternative considered and rejected: serialize/merge same-target writes at the `migrate()` orchestration layer — infeasible, because the precomputed-blob design gives the orchestrator no way to merge two full-file snapshots without understanding each transform.
+
+**Scope.**
+- Decides: artifact-writing `apply()`s re-read at apply time via `rewriteArtifactInPlace`; the three current writers (TC rename, NFR rewrite, IDEA absorb) are converted; IDEA unlink is gated on write success.
+- Does not decide: a broader migration-framework refactor — the helper is the minimal invariant that closes the clobber class; richer migration composition is unneeded until a migration must transform a file a third writer also touches.
