@@ -1102,6 +1102,53 @@ describe('cmdVerifyRun() — Z1 verifyPassed invalidation', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  it('does not link TC-001h to TC-001H result via the case-insensitive fallback (C2)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-c2-'));
+    try {
+      // Two canonical ids differing only by suffix case; the runner only ran the
+      // uppercase one. The lowercase one's test never ran → must be skip, not a
+      // false pass borrowed from TC-001H.
+      seedProject(dir, {
+        testCases: [
+          { id: 'TC-001h', title: 'lower', requirement_id: 'FR-001', expected_result: 'r' },
+          { id: 'TC-001H', title: 'upper', requirement_id: 'FR-001', expected_result: 'r' },
+        ],
+        runnerScript: `console.log('✔ TC-001H — only this one ran');\n`,
+      });
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      const results = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), 'utf8')).results;
+      const byId = Object.fromEntries(results.map(r => [r.tc_id, r.status]));
+      assert.equal(byId['TC-001H'], 'pass', 'the id that actually ran passes');
+      assert.equal(byId['TC-001h'], 'skip', 'the id that never ran must NOT borrow the other case’s pass');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('manual TC verified via tc verify counts as passed, not double-counted as manual (M2)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-m2-'));
+    try {
+      seedProject(dir, {
+        testCases: [
+          { id: 'TC-001', title: 'auto',   requirement_id: 'FR-001', expected_result: 'r' },
+          { id: 'TC-002', title: 'manual', requirement_id: 'FR-001', expected_result: 'r', automation: 'manual' },
+        ],
+        runnerScript: `console.log('✔ TC-001 — runner ran');\n`,
+      });
+      // Prior run: the manual TC-002 was verified by a human as pass.
+      fs.writeFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), JSON.stringify({
+        results: [{ tc_id: 'TC-002', status: 'pass', verified_manually: true,
+                    verified_at: '2026-01-01T00:00:00Z', notes: 'human checked' }],
+      }));
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      const s = JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), 'utf8')).summary;
+      // The bug counted TC-002 in both `manual` (declared) and `passed` (status).
+      assert.equal(s.passed + s.failed + s.skipped + s.manual, s.total,
+        'passed + failed + skipped + manual must equal total');
+      assert.equal(s.passed, 2, 'TC-001 (auto) + TC-002 (manual-verified) both pass');
+      assert.equal(s.manual, 0, 'no TC remains in manual status');
+      assert.equal(s.manual_verified, 1, 'TC-002 still tracked as manual-verified');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it('healthy results (passed > 0, failed === 0) preserve prior verifyPassed', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-z1-healthy-'));
     try {

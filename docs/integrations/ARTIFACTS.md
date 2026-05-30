@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-rc.19+
+**Aitri version:** v2.0.0-rc.20+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -147,7 +147,7 @@ Written by Phase 3 (QA persona). Test cases keyed to FRs, user stories, and acce
 **Validation rules (enforced by `aitri complete 3`):**
 - Required: `test_plan`, `test_cases` (non-empty)
 - TC `id` values must be unique across `test_cases[]` (v2.0.0-alpha.13+) — duplicates break downstream cardinality (`summary.manual` = Set size vs `results.length` = array length)
-- TC `id` values must be **canonical** (v2.0.0-rc.19+): `TC` + optional UPPERCASE namespace segments + a numeric block + suffix — e.g. `TC-001h`, `TC-E2E-001h`, `TC-API-USER-010f`. Ids without a numeric block (`TC-e2eFolderScan`) or with a lowercase namespace (`TC-fe-001h`) are rejected. Rationale: `verify-run` links a parsed runner-output id to a plan id by string equality, so any id the shared parser cannot round-trip would silently drop to `skip`. The grammar is shared between the parser and this gate (`lib/tc-id.js`), so the two cannot drift.
+- TC `id` values must be **canonical** (v2.0.0-rc.20+): `TC` + optional UPPERCASE namespace segments + a numeric block + suffix — e.g. `TC-001h`, `TC-E2E-001h`, `TC-API-USER-010f`. Ids without a numeric block (`TC-e2eFolderScan`) or with a lowercase namespace (`TC-fe-001h`) are rejected. Rationale: `verify-run` links a parsed runner-output id to a plan id by string equality, so any id the shared parser cannot round-trip would silently drop to `skip`. The grammar is shared between the parser and this gate (`lib/tc-id.js`), so the two cannot drift.
 - `type` must be: `unit` | `integration` | `e2e`
 - `scenario` must be: `happy_path` | `edge_case` | `negative`
 - Each TC must have: `requirement_id`, `user_story_id`, `ac_id`
@@ -247,6 +247,8 @@ Written by `aitri verify-run`. Never written by the agent — always auto-genera
 **`line_coverage`** (optional, v2.0.0-rc.9+) — measured line-coverage percentage, present only when `verify-run` was invoked with `--coverage-threshold` AND a recognized runner emitted a parseable figure. Stack-agnostic: node built-in `--coverage`, `go test -cover`, `pytest --cov`, `jest`/`vitest --coverage`. Absent when no threshold was requested or the runner's coverage output could not be parsed.
 
 **`low_confidence_tcs`** (v2.0.0-rc.9+) — TCs whose test block contains ≤1 assertion (possible trivial test). Always present (possibly `[]`). Each entry: `{ tc_id, file, assertCount }`. Informational by default; becomes a hard gate in `verify-complete` only when the project sets `strictAssertions: true` in `.aitri` (see SCHEMA.md).
+
+**`summary` counts** (v2.0.0-rc.20+) — `passed`/`failed`/`skipped`/`manual` are all counted by per-result `status`, so `passed + failed + skipped + manual === total`. `skipped_e2e` + `skipped_no_marker` partition `skipped`. `manual` counts results still awaiting manual verification (status `manual`); a manual TC that a human verified via `aitri tc verify` carries its verdict (`pass`/`fail`) and is counted there, with `manual_verified` reporting how many manual TCs were verified. (Before rc.20 `manual` was a declared-manual count that overlapped `passed`/`failed`.)
 
 **Status values:**
 - `pass` — TC detected in runner output as passing

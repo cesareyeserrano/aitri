@@ -18,6 +18,12 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.20 (2026-05-30) — 04_TEST_RESULTS.json `summary.manual` is now status-based — breaking
+
+`summary.manual` (in `04_TEST_RESULTS.json`, also surfaced in `.aitri#verifySummary`) changed from a **declared-manual** count (`# of TCs with automation: "manual"`) to a **status-based** count (`# of results whose status === "manual"`). Why: passed/failed/skipped were already status-based, so a manual TC that a human later verified via `aitri tc verify` (status becomes `pass`/`fail`) was counted in BOTH `manual` and `passed` — the buckets did not sum to `total`. Now `passed + failed + skipped + manual === total`, and `manual_verified` still reports how many manual TCs were human-verified.
+
+**Contract impact for subproducts:** a consumer that read `summary.manual` as "how many TCs are declared manual" now gets "how many are still awaiting manual verification" — they differ once any manual TC is verified. Field shape unchanged (still an integer). Marked `— breaking` conservatively (existing-field semantic change), though the practical effect is a correctness fix: the buckets now reconcile. To recover the old number, count `results[]` where `status === "manual"` plus those carrying `verified_manually: true`.
+
 ## v2.0.0-rc.17 (2026-05-30) — status --json honors the documented health contract — additive
 
 `aitri status --json` now emits `health.driftPresent` and `health.staleVerify` — two fields STATUS_JSON.md has documented as part of the `health` block since v0.1.77 but the payload never actually output (a consumer reading them got `undefined`). The data was already computed by `computeHealth`; this only adds it to the projection. `driftPresent` is `[{ scope, phase }]` (per-scope drift across root + features — richer than the root-only top-level `driftPhases`); `staleVerify` is `[{ scope, days }]` (pipelines whose `verifyRanAt` is older than 14 days). Found by a contract-vs-code audit (rc.17).

@@ -5,6 +5,16 @@
 
 ---
 
+## [2.0.0-rc.20] — 2026-05-30 — verify-run matching/accounting: case-collision false pass + manual double-count
+
+Closes the remaining verify-run hunt findings.
+
+- **C2 (was: case-insensitive fallback collision).** The `detectedCI` lowercase fallback could link a plan TC to a *different* TC's result: `TC-001h` and `TC-001H` are both canonical (differ only by suffix case) and collapse to one lowercase key. If the runner ran only `TC-001H`, `TC-001h` borrowed its pass — a false pass on a test that never ran. Fix: the fallback now refuses any lowercase key shared by >1 detected id, and refuses to fire for any lowercase id shared by >1 plan TC (exact-match only in the ambiguous case). +1 test.
+- **M2 (was: manual double-count).** `summary.manual` was `manualTCIds.size` (declared-manual) while passed/failed/skipped are status-based, so a manual TC later `tc verify`'d to pass was counted in BOTH `manual` and `passed` — the buckets did not sum to `total`. Now `manual` is status-based (`results.filter(status==='manual')`); a verified manual TC counts under its verdict, and `manual_verified` still tracks the verified subset. Buckets now sum. +1 test. ARTIFACTS.md note clarified.
+- **L2 — DISCARDED (not a defect).** Suspected Playwright `×` (U+00D7) fail symbol unhandled. Playwright's list reporter emits `✘` (U+2718), already in the fail set; no runner confirmed to emit `×` in the Playwright parser. Adding it would be speculative (narrow-evidence rule). Re-open only if a real Playwright run shows a `×` failure read as skip.
+
+1254 → 1256. No artifact schema *shape* change; `summary.manual` value semantics corrected (see integrations CHANGELOG).
+
 ## [2.0.0-rc.19] — 2026-05-30 — verify-run parser correctness: no masked failures, no false passes
 
 Defect hunt on the verify-run flow (Aitri's crown jewel — it executes real tests and credits TCs). Three confirmed false-pass/miscount bugs, all reproduced against real runner output before fixing:
