@@ -5,6 +5,18 @@
 
 ---
 
+## [2.0.0-rc.21] — 2026-05-30 — code-quality gates: the verification spine enforces well-built code, not only passing tests
+
+The session's strategic shift. The author flagged that Aitri verified *behavior* (tests pass) but not *code quality* (lint/types/security), risking process ceremony that doesn't raise the floor on produced software — against "Purpose over process". Per [ADR-037](DECISIONS.md):
+
+- **New: `04_IMPLEMENTATION_MANIFEST.json#quality_gates`** `[{ name?, command, required? }]`. The project declares its own `eslint`/`tsc`/`ruff`/`mypy`/`go vet`/`gosec`/etc.
+- **Execution (`verify.js#runQualityGates`):** each gate runs via `spawnSync` (same as the test runner), judged by exit code (0 = pass); a missing tool is `error`. Results recorded in `04_TEST_RESULTS.json#quality_gates`. **Orchestrate, not bundle** — zero-dep intact (constrains imports, not what Aitri runs).
+- **Gating:** `required` defaults true; a failing required gate resets `verifyPassed` and blocks `verify-complete`, exactly like a failing test. `required: false` = advisory.
+- **Discipline:** the Phase 4 (build) briefing now requires the agent to wire lint/type-check (+offer security) as `quality_gates`, with per-stack examples; `phase4.validate()` nudges (non-blocking) when none are declared, and validates the shape when present.
+- **Constitution:** CLAUDE.md amended — principle 1 (zero-dep) clarified import-vs-orchestrate; new principle 8 (the verification spine enforces well-built code, not only passing tests). Clarified, not weakened.
+
+Tests +6 (`runQualityGates` unit + verify-run/verify-complete integration: required-fail blocks + resets verifyPassed, advisory does not, pass does not). 1256 → 1262. Docs: ARTIFACTS.md (both fields), integrations CHANGELOG (additive), build.md briefing. Deferred follow-ups (ADR-037 scope): fold coverage into quality_gates; make code-review a hard gate (stays advisory). **Also fixed:** a too-broad version-header `sed` had drifted two inline `(v2.0.0-rc.N+)` annotations in ARTIFACTS.md across rc.17–21 — the canonical-TC-id note (restored to rc.16) and the summary-counts note (rc.20).
+
 ## [2.0.0-rc.20] — 2026-05-30 — verify-run matching/accounting: case-collision false pass + manual double-count
 
 Closes the remaining verify-run hunt findings.

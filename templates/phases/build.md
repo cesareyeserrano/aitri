@@ -90,7 +90,7 @@ If `01_REQUIREMENTS.json` contains an NFR for CI/CD (category: "CI/CD" or keywor
 
 ## Technical Definition of Done
 You MUST verify ALL of the following before calling aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} 4:
-  [ ] Linter/type checks pass (zero errors — use the linter declared in System Design)
+  [ ] Linter/type checks pass (zero errors) — AND declared in manifest `quality_gates` so aitri {{SCOPE_VERB}}verify-run{{SCOPE_ARG}} enforces them mechanically, not on the honor system
   [ ] Tests pass — no failures, no skipped tests (use test_runner from manifest)
   [ ] technical_debt in manifest is complete — every simplification is declared
   [ ] All files listed in files_created exist on disk
@@ -123,7 +123,8 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
   { files_created:[], files_modified:[], setup_commands:[], environment_variables:[{name, default}],
     technical_debt:[{fr_id, substitution, reason, effort_to_fix:"low|medium|high"}],
     test_runner: "<exact command matching your stack>",
-    test_files: ["<test files containing @aitri-tc markers>"] }
+    test_files: ["<test files containing @aitri-tc markers>"],
+    quality_gates:[{name, command, required}] }
   setup_commands and environment_variables are optional fields. When the project has none, you may either include them as empty arrays `[]` or omit the keys entirely — the validator accepts both forms (alpha.9). technical_debt is required, even if empty.
   test_runner examples by stack:
     JavaScript/TypeScript: "npm test" | "vitest run --reporter verbose" | "jest --verbose" | "node --test tests/"
@@ -132,6 +133,18 @@ In 04_IMPLEMENTATION_MANIFEST.json, you MUST declare every simplification made v
     Rust:                  "cargo test -- --nocapture"
     Java:                  "./mvnw test" | "./gradlew test"
   test_files: every file that contains @aitri-tc markers — required for aitri {{SCOPE_VERB}}verify-run{{SCOPE_ARG}}
+  quality_gates: the code-quality checks Aitri runs and gates on, BEYOND tests. Tests prove the
+    behavior works; quality_gates prove the code is well-built. Declare the gates your stack supports —
+    Aitri runs each `command` and judges it by exit code (0 = pass). `required: true` (the default)
+    BLOCKS Phase 5 on failure; set `required: false` for advisory gates you are adopting gradually.
+    Declare ONLY tools the project actually has configured — do not invent a linter the project does
+    not use. Examples by stack:
+    JavaScript/TypeScript: {name:"lint", command:"eslint ."} | {name:"typecheck", command:"tsc --noEmit"} | {name:"audit", command:"npm audit --audit-level=high", required:false}
+    Python:                {name:"lint", command:"ruff check ."} | {name:"typecheck", command:"mypy src"} | {name:"security", command:"bandit -q -r src", required:false}
+    Go:                    {name:"vet", command:"go vet ./..."} | {name:"staticcheck", command:"staticcheck ./..."} | {name:"security", command:"gosec ./...", required:false}
+    Rust:                  {name:"clippy", command:"cargo clippy -- -D warnings"} | {name:"fmt", command:"cargo fmt --check"}
+    If the project genuinely has no quality tooling, omit quality_gates — but prefer wiring at least a
+    linter, because Aitri's promise is well-built code, not only passing tests.
 
 {{#IF_BEST_PRACTICES}}
 {{BEST_PRACTICES}}

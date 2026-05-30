@@ -45,13 +45,14 @@ In those cases the evidence is the code plus the present case, and "wait for mor
 
 ## Engineering principles
 
-1. Zero external dependencies — Node.js built-ins only
+1. Zero external dependencies — Node.js built-ins only. **This constrains what Aitri _imports_, not what it _orchestrates_.** Aitri runs the project's own tools (test runner, linter, type-checker, security scanner) via `child_process` and gates on their exit codes — that adds zero dependencies to Aitri. Bundling or implementing an analyzer would violate this; orchestrating a project-declared one does not (ADR-034, ADR-037).
 2. Modularity: each command and phase is independent
 3. Model-agnostic prompts (the CLI generates prompts; the user chooses the model)
 4. **Stack-agnostic outputs** — generated prompts, validators, and gates must not assume target stack (web, CLI, service, library, embedded). Examples may name tools but only as conditional ("if Playwright is declared as runner, …"); imperative "MUST use X" bound to a specific stack is a defect. Same applies to manifest schemas, e2e gate behavior, NFR examples, and CI checklists.
 5. Persona ceiling: one persona per phase, maximum 8 phase-bound personas. Meta-personas for transversal commands (adopter, auditor) do not count against the ceiling
 6. Artifacts as SSoT: the file chain is the handoff protocol between agents
 7. isTTY-gating on destructive operations (approve, reject)
+8. **The verification spine enforces well-built code, not only passing tests.** `verify-run`/`verify-complete` gate the pipeline on BOTH: (a) functional behavior — every MUST FR traced to a passing test (`fr_coverage`), and (b) code quality — the project-declared `quality_gates` (lint, type-check, security; coverage and assertion-density as opt-ins). All are orchestrated from project-declared commands and judged by exit code (principle 1), never bundled. A gate that is honor-system-only (the agent attests) is weaker than one Aitri executes; prefer mechanical enforcement where the tool exists (ADR-037).
 
 ## Decision matrix
 

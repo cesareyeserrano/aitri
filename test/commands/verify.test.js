@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, parseGoOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, injectCoverageFlag, extractTCId, cmdVerifyRun, cmdVerifyComplete } from '../../lib/commands/verify.js';
+import { parseRunnerOutput, parsePlaywrightOutput, parseVitestOutput, parsePytestOutput, parseGoOutput, buildFRCoverage, scanTestContent, parseCoverageOutput, injectCoverageFlag, extractTCId, cmdVerifyRun, cmdVerifyComplete, runQualityGates } from '../../lib/commands/verify.js';
 import { cmdStatus } from '../../lib/commands/status.js';
 
 describe('parseRunnerOutput()', () => {
@@ -1681,6 +1681,101 @@ describe('cmdVerifyComplete() — e2e gate honours automation: "manual" and runn
       const err = (m) => { captured = m; throw new Error(m); };
       try { cmdVerifyComplete({ dir, err }); } catch { /* may fail later checks; only assert e2e gate not hit */ }
       assert.doesNotMatch(captured, /E2E tests required but none covered/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('runQualityGates() + verify-run/complete integration (ADR-037)', () => {
+  function seedQA(dir, gates) {
+    fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.aitri'), JSON.stringify({
+      projectName: 'p', artifactsDir: 'spec',
+      approvedPhases: [1, 2, 3, 4], completedPhases: [1, 2, 3, 4],
+      verifyPassed: true, verifySummary: { total: 1, passed: 1, failed: 0, skipped: 0 },
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/01_REQUIREMENTS.json'), JSON.stringify({
+      functional_requirements: [{ id: 'FR-001', title: 'r', priority: 'must-have' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/03_TEST_CASES.json'), JSON.stringify({
+      test_cases: [{ id: 'TC-001', title: 't', requirement_id: 'FR-001', expected_result: 'r' }],
+    }));
+    fs.writeFileSync(path.join(dir, 'spec/04_IMPLEMENTATION_MANIFEST.json'), JSON.stringify({
+      files_created: [{ path: 'runner.js' }],
+      test_runner: 'node runner.js',
+      quality_gates: gates,
+    }));
+    fs.writeFileSync(path.join(dir, 'runner.js'), `console.log('✔ TC-001 — ran');\n`);
+  }
+  const readResults = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'spec/04_TEST_RESULTS.json'), 'utf8'));
+  const readCfg     = (dir) => JSON.parse(fs.readFileSync(path.join(dir, '.aitri'), 'utf8'));
+  const silent = (fn) => {
+    const ol = console.log, oe = process.stderr.write;
+    console.log = () => {}; process.stderr.write = () => true;
+    try { return fn(); } finally { console.log = ol; process.stderr.write = oe; }
+  };
+
+  it('runQualityGates classifies pass/fail/advisory/missing-binary', () => {
+    const r = runQualityGates([
+      { name: 'ok',   command: 'true',  required: true },
+      { name: 'bad',  command: 'false', required: true },
+      { name: 'adv',  command: 'false', required: false },
+      { name: 'gone', command: 'definitely-not-a-real-binary-zzz', required: true },
+    ], '/tmp');
+    assert.equal(r[0].status, 'pass');
+    assert.equal(r[1].status, 'fail');
+    assert.equal(r[2].status, 'fail');
+    assert.equal(r[2].required, false);
+    assert.equal(r[3].status, 'error');
+    assert.equal(r[3].exit_code, null);
+  });
+
+  it('required defaults to true when omitted', () => {
+    const r = runQualityGates([{ name: 'x', command: 'true' }], '/tmp');
+    assert.equal(r[0].required, true);
+  });
+
+  it('verify-run records quality_gates and a failing required gate resets verifyPassed', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-qa-fail-'));
+    try {
+      seedQA(dir, [{ name: 'lint', command: 'false', required: true }]);
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      const res = readResults(dir);
+      assert.ok(Array.isArray(res.quality_gates), 'quality_gates recorded in results');
+      assert.equal(res.quality_gates[0].status, 'fail');
+      assert.equal(readCfg(dir).verifyPassed, false, 'required gate fail must reset verifyPassed');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('verify-complete BLOCKS on a failing required gate', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-qa-block-'));
+    try {
+      seedQA(dir, [{ name: 'lint', command: 'false', required: true }]);
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      let blocked = false, msg = '';
+      try { silent(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } })); }
+      catch (e) { blocked = true; msg = e.message; }
+      assert.ok(blocked, 'verify-complete must block');
+      assert.match(msg, /required code-quality gate/);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('an advisory (required:false) failing gate does NOT block verify-complete', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-qa-adv-'));
+    try {
+      seedQA(dir, [{ name: 'sec', command: 'false', required: false }]);
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      // verify-complete should pass the gate check (TC-001 passed, advisory gate ignored).
+      assert.doesNotThrow(() => silent(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } })));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('a passing required gate does not block and is recorded', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-qa-pass-'));
+    try {
+      seedQA(dir, [{ name: 'lint', command: 'true', required: true }]);
+      silent(() => cmdVerifyRun({ dir, args: [], flagValue: () => null, err: (m) => { throw new Error(m); } }));
+      assert.equal(readResults(dir).quality_gates[0].status, 'pass');
+      assert.doesNotThrow(() => silent(() => cmdVerifyComplete({ dir, err: (m) => { throw new Error(m); } })));
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

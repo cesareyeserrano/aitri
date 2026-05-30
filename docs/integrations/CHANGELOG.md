@@ -18,6 +18,17 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.21 (2026-05-30) — code-quality gates (manifest `quality_gates` + results `quality_gates`) — additive
+
+Two additive fields wire the project's code-quality toolchain into the verification spine:
+
+- `04_IMPLEMENTATION_MANIFEST.json#quality_gates` (optional) — `[{ name?, command, required? }]`. The project declares its own lint/type-check/security commands.
+- `04_TEST_RESULTS.json#quality_gates` (present only when declared) — `[{ name, command, required, status: "pass"|"fail"|"error", exit_code, output? }]`. Written by `verify-run`.
+
+`verify-run` runs each gate (stack-agnostic, exit-code judged; Aitri bundles no analyzers) and a failing `required` gate resets `verifyPassed` and blocks `verify-complete` — same gating mechanism as a failing test. `required` defaults to `true`; `required: false` is advisory (surfaced, never blocks). Per ADR-037.
+
+**Contract impact for subproducts:** purely additive — old readers ignore both fields. A consumer that wants to surface code-quality status can read `04_TEST_RESULTS.json#quality_gates`. No existing field changed. (Note: `verifyPassed` semantics are unchanged in shape — still boolean — but it now also reflects required-gate outcomes, so a project can be `verifyPassed: false` with all tests green if a required gate failed; this is the intended deploy-gate behavior.)
+
 ## v2.0.0-rc.20 (2026-05-30) — 04_TEST_RESULTS.json `summary.manual` is now status-based — breaking
 
 `summary.manual` (in `04_TEST_RESULTS.json`, also surfaced in `.aitri#verifySummary`) changed from a **declared-manual** count (`# of TCs with automation: "manual"`) to a **status-based** count (`# of results whose status === "manual"`). Why: passed/failed/skipped were already status-based, so a manual TC that a human later verified via `aitri tc verify` (status becomes `pass`/`fail`) was counted in BOTH `manual` and `passed` — the buckets did not sum to `total`. Now `passed + failed + skipped + manual === total`, and `manual_verified` still reports how many manual TCs were human-verified.

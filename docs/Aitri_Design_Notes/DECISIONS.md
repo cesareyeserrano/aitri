@@ -1029,3 +1029,30 @@ This closes the **"Phase 3 canonical TC id regex"** item, which had been Discard
 **Scope.**
 - Decides: artifact-writing `apply()`s re-read at apply time via `rewriteArtifactInPlace`; the three current writers (TC rename, NFR rewrite, IDEA absorb) are converted; IDEA unlink is gated on write success.
 - Does not decide: a broader migration-framework refactor — the helper is the minimal invariant that closes the clobber class; richer migration composition is unneeded until a migration must transform a file a third writer also touches.
+
+---
+
+## ADR-037 — 2026-05-30 — Code-quality gates: the verification spine enforces well-built code, not only passing tests (orchestrate, don't bundle)
+
+**Status:** Active
+
+**Context.** Aitri's verification spine answered one question — *"do the tests pass?"* — via `verify-run` executing the project's real suite and `verify-complete` + `fr_coverage` gating the pipeline on functional behavior (every MUST FR traced to a passing test). That functional layer is strong and is the core of Aitri. But the tool markets itself as **SDLC + CI/CD**, and a serious SDLC gate also asks *"is the code well-built?"* — lint, type-check, security, coverage. None of those were enforced: lint/type-check were honor-system checklist items in the Phase 4 briefing (the agent attests), security was only a yes/no Phase-1 question, coverage was an opt-in flag. A project could pass Aitri end-to-end with green tests and a broken linter, unsafe code, or no type-checking. The author flagged the gap directly: without code QA, Aitri risks being process ceremony that does not raise the floor on the produced software — which contradicts "Purpose over process."
+
+**Decision.** Add **code-quality gates** to the verification spine, built on the pattern already proven by `test_runner`: **Aitri orchestrates the project's declared QA commands and gates on their exit codes — it never bundles or implements analyzers.**
+
+- **Schema (additive):** `04_IMPLEMENTATION_MANIFEST.json#quality_gates: [{ name?, command, required? }]`. The project declares its own `eslint`/`tsc`/`ruff`/`mypy`/`go vet`/`gosec`/etc.
+- **Execution:** `runQualityGates` in `verify.js` runs each `command` via `spawnSync` (same as the test runner), judging by **exit code** (0 = pass). A missing tool (ENOENT) is `error` — it could not certify the code, so a `required` error is treated like a fail (a declared-but-uninstalled gate is a setup defect, not a silent pass). Results land in `04_TEST_RESULTS.json#quality_gates`.
+- **Gating:** `required` defaults to `true`. A failing `required` gate resets `verifyPassed` and blocks `verify-complete`, exactly like a failing test. `required: false` gates are surfaced but never block (gradual adoption of security/mutation/etc.).
+- **Discipline:** the Phase 4 briefing now requires the agent to wire the project's lint/type-check (and offer security) as `quality_gates`, with per-stack examples; `phase4.validate()` emits a non-blocking nudge when none are declared. The seriousness comes from the briefing forcing declaration; the gate enforces it.
+
+**Why orchestrate, not bundle.** Zero-dep constrains what Aitri *imports*, not what it *runs* — Aitri already spawns the project's pytest/playwright. Running the project's declared linter adds zero deps to Aitri and keeps it stack-agnostic (Aitri needs no knowledge of what `ruff` is — only its exit code). Bundling analyzers would violate zero-dep AND couple Aitri to specific stacks; both are non-starters. This is the same import-vs-orchestrate distinction corrected in ADR-034.
+
+**Constitution (CLAUDE.md) impact — clarified, not weakened.** This does not loosen any invariant. It makes the *purpose* explicit: the verification spine includes code-quality gates, orchestrated from project-declared commands. Added as an engineering principle plus a clarifying clause on zero-dep (import vs orchestrate). Model-agnostic, stack-agnostic, persona-ceiling, artifact-chain — all respected (no new persona; no new phase; one additive manifest field + one additive results field).
+
+**Decision matrix.** Impact High (new artifact field + new gate + verify lifecycle change). Value-to-produced-software 9/10 (enforcing lint/type-check/security directly prevents shipped defects — the core deliverable). Severity Moderate, mitigated by additivity (no `quality_gates` declared → behavior unchanged). Trade-off: more manifest surface; honor-system remains on the *declaration* (did the agent declare all available tools? is the linter config strict?) — but execution and gating are mechanical (exit code), which is the same boundary as tests.
+
+**What this does NOT do (honest boundary).** It cannot judge whether the declared linter is a *good* linter, whether the agent declared every available tool, or whether a passing gate is meaningful — those stay human-reviewable (the `approve` gate) and partially mechanical (assertion-density C2 for tests). It is the floor, not a guarantee of quality.
+
+**Scope.**
+- Decides: `quality_gates` declared in the manifest, run by `verify-run`, gated by `verify-complete`/`verifyPassed`; `required` defaults true; ENOENT = error = blocking-if-required; Phase 4 briefing forces declaration; orchestrate-not-bundle; the CLAUDE.md clarification.
+- Does not decide: folding coverage (`--coverage-threshold`) into `quality_gates` (deferred follow-up — coverage already works via its own mechanism); making code review (reviewer persona) a hard gate (stays advisory per ADR-034 P1); auto-detecting the stack's tools (the project declares them — auto-detection would re-introduce stack assumptions).

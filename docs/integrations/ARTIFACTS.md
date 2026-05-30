@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-rc.20+
+**Aitri version:** v2.0.0-rc.21+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -147,7 +147,7 @@ Written by Phase 3 (QA persona). Test cases keyed to FRs, user stories, and acce
 **Validation rules (enforced by `aitri complete 3`):**
 - Required: `test_plan`, `test_cases` (non-empty)
 - TC `id` values must be unique across `test_cases[]` (v2.0.0-alpha.13+) — duplicates break downstream cardinality (`summary.manual` = Set size vs `results.length` = array length)
-- TC `id` values must be **canonical** (v2.0.0-rc.20+): `TC` + optional UPPERCASE namespace segments + a numeric block + suffix — e.g. `TC-001h`, `TC-E2E-001h`, `TC-API-USER-010f`. Ids without a numeric block (`TC-e2eFolderScan`) or with a lowercase namespace (`TC-fe-001h`) are rejected. Rationale: `verify-run` links a parsed runner-output id to a plan id by string equality, so any id the shared parser cannot round-trip would silently drop to `skip`. The grammar is shared between the parser and this gate (`lib/tc-id.js`), so the two cannot drift.
+- TC `id` values must be **canonical** (v2.0.0-rc.16+): `TC` + optional UPPERCASE namespace segments + a numeric block + suffix — e.g. `TC-001h`, `TC-E2E-001h`, `TC-API-USER-010f`. Ids without a numeric block (`TC-e2eFolderScan`) or with a lowercase namespace (`TC-fe-001h`) are rejected. Rationale: `verify-run` links a parsed runner-output id to a plan id by string equality, so any id the shared parser cannot round-trip would silently drop to `skip`. The grammar is shared between the parser and this gate (`lib/tc-id.js`), so the two cannot drift.
 - `type` must be: `unit` | `integration` | `e2e`
 - `scenario` must be: `happy_path` | `edge_case` | `negative`
 - Each TC must have: `requirement_id`, `user_story_id`, `ac_id`
@@ -185,11 +185,19 @@ Written by Phase 4 (Developer persona). Implementation tracking and test runner 
     }
   ],
   "test_runner": "npm test",
-  "test_files": ["tests/unit.test.js"]
+  "test_files": ["tests/unit.test.js"],
+  "quality_gates": [
+    { "name": "lint",      "command": "eslint .",    "required": true },
+    { "name": "typecheck", "command": "tsc --noEmit", "required": true },
+    { "name": "audit",     "command": "npm audit --audit-level=high", "required": false }
+  ]
 }
 ```
 
+**`quality_gates`** (optional, v2.0.0-rc.21+) — code-quality checks Aitri runs and gates on, beyond test execution. Each entry: `{ name?, command, required? }`. `aitri verify-run` runs each `command` (stack-agnostic, exit-code judged: 0 = pass) and records the outcome in `04_TEST_RESULTS.json#quality_gates`. `required` defaults to `true`; a failing `required` gate (or one whose tool is missing → `error`) resets `verifyPassed` and blocks `verify-complete`. `required: false` gates are surfaced but never block (gradual adoption). Aitri never bundles analyzers — the project declares its own `eslint`/`tsc`/`ruff`/`mypy`/`go vet`/`gosec` (orchestrate-don't-bundle, ADR-037). Absent ≡ no gates (behavior unchanged).
+
 **Validation rules (enforced by `aitri complete 4`):**
+- `quality_gates`, when present, must be an array; each entry needs a non-empty `command` string; `required` (if present) must be boolean. Absent → non-blocking note nudging the agent to declare them.
 - `setup_commands` and `environment_variables` are optional. When present they must be arrays; when absent they are treated as `[]`. (v2.0.0-alpha.9+ — earlier versions required the keys to be present even when empty.)
 - At least one of `files_created` or `files_modified` must be a non-empty array — supports both greenfield (new files only) and modification/redesign work
 - `technical_debt` field is required — use `[]` if no substitutions were made
@@ -240,6 +248,10 @@ Written by `aitri verify-run`. Never written by the agent — always auto-genera
   "line_coverage": 87.5,
   "low_confidence_tcs": [
     { "tc_id": "TC-004", "file": "test/foo.test.js", "assertCount": 1 }
+  ],
+  "quality_gates": [
+    { "name": "lint", "command": "eslint .", "required": true, "status": "pass", "exit_code": 0 },
+    { "name": "typecheck", "command": "tsc --noEmit", "required": true, "status": "fail", "exit_code": 2, "output": "…last 600 chars of stdout+stderr…" }
   ]
 }
 ```
@@ -247,6 +259,8 @@ Written by `aitri verify-run`. Never written by the agent — always auto-genera
 **`line_coverage`** (optional, v2.0.0-rc.9+) — measured line-coverage percentage, present only when `verify-run` was invoked with `--coverage-threshold` AND a recognized runner emitted a parseable figure. Stack-agnostic: node built-in `--coverage`, `go test -cover`, `pytest --cov`, `jest`/`vitest --coverage`. Absent when no threshold was requested or the runner's coverage output could not be parsed.
 
 **`low_confidence_tcs`** (v2.0.0-rc.9+) — TCs whose test block contains ≤1 assertion (possible trivial test). Always present (possibly `[]`). Each entry: `{ tc_id, file, assertCount }`. Informational by default; becomes a hard gate in `verify-complete` only when the project sets `strictAssertions: true` in `.aitri` (see SCHEMA.md).
+
+**`quality_gates`** (optional, v2.0.0-rc.21+) — per-gate code-quality results, present only when the manifest declares `quality_gates`. Each entry: `{ name, command, required, status: "pass"|"fail"|"error", exit_code: number|null, output?: string }`. `status: "error"` means the gate's tool was not found (ENOENT) — it could not certify the code. A `required` gate that is not `pass` blocks `verify-complete` and resets `verifyPassed`. `output` is the last ~600 chars of the gate's stdout+stderr (present when non-empty). Tests verify behavior; these verify the code is well-built (lint/type-check/security). See ADR-037.
 
 **`summary` counts** (v2.0.0-rc.20+) — `passed`/`failed`/`skipped`/`manual` are all counted by per-result `status`, so `passed + failed + skipped + manual === total`. `skipped_e2e` + `skipped_no_marker` partition `skipped`. `manual` counts results still awaiting manual verification (status `manual`); a manual TC that a human verified via `aitri tc verify` carries its verdict (`pass`/`fail`) and is counted there, with `manual_verified` reporting how many manual TCs were verified. (Before rc.20 `manual` was a declared-manual count that overlapped `passed`/`failed`.)
 
