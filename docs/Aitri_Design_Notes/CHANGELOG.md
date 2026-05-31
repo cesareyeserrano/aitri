@@ -5,6 +5,16 @@
 
 ---
 
+## [2.0.0-rc.30] — 2026-05-31 — intake redesign Phase 2: feature regression boundary
+
+Closes the one feature-specific defect class the intake review found: a feature MODIFIES a live system, but Aitri captured "what must NOT change" NOWHERE — FEATURE_IDEA.md was entirely additive, so an agent could ship a feature that silently breaks parent behavior with no gate to catch it.
+
+- `templates/FEATURE_IDEA.md` gains **`## Touch Points`** (which existing parts the feature modifies vs adds) and **`## Must Not Break (Regression Boundary)`** (existing behaviors to protect, in testable terms).
+- The feature Phase 1 briefing (`requirements.md`, rendered only when `PARENT_REQUIREMENTS` is present — i.e. a feature) now instructs: convert each Must Not Break item into a `category: "Regression", priority: "MUST"` NFR. Because it's a MUST NFR, the rc.27 NFR-MUST-coverage gate forces Phase 3 to generate a test for it, and verify-run runs it — so the pipeline fails loudly if the feature breaks existing behavior.
+- **Mechanical backstop, no theater:** the regression NFRs ride the existing FR/NFR→TC→test machinery + the rc.27 gate; no fragile markdown-parsing gate was added (the briefing drives NFR creation; the gate enforces testing once created).
+
+Tests +2 (1298 → 1300). Phase 3 (the core — thin IDEA + Context Sources + proportional discovery) is next.
+
 ## [2.0.0-rc.29] — 2026-05-31 — intake redesign decided (ADR-039) + Phase 1 (provenance visible at approve)
 
 The intake review (3 agents, functional + UX) found the intake is optimized for INFERENCE, not elicitation: in agent mode the provenance gate reads a file the agent wrote alone, and the provenance record dies unread. The author and I redesigned the layer.

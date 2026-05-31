@@ -195,6 +195,9 @@ reuse IDs from the list below.
 ```json
 {{PARENT_REQUIREMENTS}}
 ```
+
+### Regression boundary (feature-specific — the one axis a greenfield project lacks)
+A feature MODIFIES a live system. If the seed has a **Must Not Break** section, turn EACH item into a **regression NFR**: `{ id: "NFR-…", category: "Regression", priority: "MUST", requirement: "<the existing behavior to protect>", acceptance_criteria: "<observable: how a test confirms it still works>" }`. Because it is `priority: "MUST"`, Phase 3 must generate a test for it (and verify-run runs it), so the pipeline fails loudly if the feature breaks existing behavior. Also use the **Touch Points** to scope which existing FRs you are extending vs leaving alone — do not silently re-implement what already works.
 {{/IF_PARENT_REQUIREMENTS}}
 
 ## Instructions

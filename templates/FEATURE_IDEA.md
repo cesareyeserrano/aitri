@@ -19,5 +19,21 @@
 ## Success Criteria
 <!-- How will you know this feature is done? Given/When/Then format preferred. -->
 
+## Touch Points
+<!-- A feature is a change to an existing system. Which existing parts does it
+     MODIFY vs purely ADD to? List the existing FRs / screens / modules / files
+     this feature touches. (If it's purely additive and touches nothing existing,
+     write "none — purely additive".) -->
+
+## Must Not Break (Regression Boundary)
+<!-- The existing behaviors that MUST remain unchanged after this feature ships —
+     the one thing a feature has that a greenfield project does not. Each line =
+     an existing behavior to protect, in testable terms.
+     e.g. "Existing login flow (FR-001) keeps returning 401 on a bad token."
+     Phase 1 turns each of these into a regression NFR (priority MUST) so Phase 3
+     generates a test that fails if the feature breaks it. If truly nothing can
+     break, write "none — isolated" and say why. -->
+
 ## Out of Scope
-<!-- What does this feature explicitly NOT include? -->
+<!-- What this feature explicitly does NOT build (deferrable scope — different from
+     "Must Not Break", which is about not breaking what already works). -->
