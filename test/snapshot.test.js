@@ -156,6 +156,29 @@ describe('buildProjectSnapshot()', () => {
     } finally { cleanup(dir); }
   });
 
+  it('no-op loop guard survives event-log eviction via lastVerifyRun (state-hunt #3)', () => {
+    const dir = tmpDir();
+    try {
+      saveConfig(dir, {
+        projectName: 'g', artifactsDir: 'spec',
+        approvedPhases: [1, 2, 3, 4], completedPhases: [1, 2, 3, 4],
+        verifyPassed: false,
+        // The verify-run event was evicted by the 20-event cap, but the
+        // first-class field persists the all-skip result.
+        lastVerifyRun: { passed: 0, failed: 0, skipped: 3, manual: 0, at: '2026-01-01T00:00:00.000Z' },
+        events: [],
+      });
+      writeJsonSpec(dir, '03_TEST_CASES.json', { test_cases: [] });
+      writeJsonSpec(dir, '04_IMPLEMENTATION_MANIFEST.json', { files_created: ['x'], technical_debt: [] });
+      const snap = buildProjectSnapshot(dir);
+      const cmds = snap.nextActions.map(a => a.command);
+      assert.ok(cmds.includes('aitri verify-complete'),
+        'guard must route to verify-complete from lastVerifyRun even with no verify-run event');
+      assert.ok(!cmds.includes('aitri verify-run'),
+        'must NOT re-loop to verify-run after an all-skip run');
+    } finally { cleanup(dir); }
+  });
+
   it('marks phase.drift = true when driftPhases includes the key', () => {
     const dir = tmpDir();
     try {

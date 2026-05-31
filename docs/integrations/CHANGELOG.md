@@ -18,6 +18,12 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.25 (2026-05-30) — `.aitri#lastVerifyRun` — additive
+
+New optional `.aitri` field `lastVerifyRun: { passed, failed, skipped, manual, at }`, written by `verify-run` on EVERY run regardless of pass/fail. It persists the raw last-run counts so derived signals (the no-op-loop guard) survive event-log eviction (the `events[]` log is capped at 20). Distinct from `verifySummary`, which is only written on `verify-complete` success — read `lastVerifyRun` for "what did the last run produce", `verifySummary` for "what passed the gate".
+
+**Contract impact for subproducts:** additive — old readers ignore it. Also: `aitri approve <phase>` now clears `rejections[<phase>]` (an addressed rejection no longer lingers in status/resume); a consumer that read `rejections` as permanent history sees a resolved entry disappear on re-approval (it always represented "the last *open* rejection", so this is a correctness alignment, not a new field shape).
+
 ## v2.0.0-rc.23 (2026-05-30) — opt-in `reviewGate` (.aitri) — additive
 
 New optional `.aitri` boolean `reviewGate` (default `false`/absent). When `true`, a `FAIL` verdict in `04_CODE_REVIEW.md` blocks `aitri verify-complete`. Default behavior is unchanged — the code-review verdict stays advisory (ADR-034 P1). `CONDITIONAL_PASS`/`PASS` and an absent review never block. Per ADR-038.

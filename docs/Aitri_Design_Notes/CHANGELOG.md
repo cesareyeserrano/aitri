@@ -5,6 +5,16 @@
 
 ---
 
+## [2.0.0-rc.25] — 2026-05-30 — state-core hunt: remaining findings (rejection-clear, event-eviction, lock visibility)
+
+Closes the three lower-severity findings from the state-core hunt (rc.24 was finding #1).
+
+- **#2 reject (Part B fixed; Part A rejected).** `aitri approve <phase>` now clears `rejections[<phase>]` — an addressed rejection no longer lingers as a stale advisory in status/resume. **Part A (making `reject` withdraw approval + cascade) was deliberately NOT done:** the smoke suite confirmed `reject` is advisory by design — it records feedback and points at `run-phase` (which performs the withdrawal + cascade). Changing it broke 4 smoke tests that encode this contract; reverted. Not a defect — intended.
+- **#3 event-log eviction.** The no-op-loop guard derived the last verify-run summary by scanning `events[]` (capped at 20); on a busy project the verify-run event got evicted, silently disabling the guard and re-looping `verify-run` after an all-skip run. Fix: `verify-run` now persists `lastVerifyRun: { passed, failed, skipped, manual, at }` as a first-class `.aitri` field (every run); the snapshot reads it (fallback to the event scan for old projects). Survives eviction.
+- **#4 lock visibility (low).** `acquireLock` proceeding best-effort on a non-ENOENT failure was silent; now it emits a warning (the silent unlocked write was the hazard, not the proceed). Behavior unchanged — no new friction, just visibility. Kept best-effort deliberately (failing loud could break legit edge-FS cases with no evidence of real harm).
+
+Tests +2 (rejection-clear on approve; guard survives eviction via lastVerifyRun). 1271 → 1273. SCHEMA.md (`lastVerifyRun`) + integrations CHANGELOG (additive). **State-core hunt complete** — verified-not-defective: phase-key type confusion, cascadeInvalidate, hasDrift, saveConfig.
+
 ## [2.0.0-rc.24] — 2026-05-30 — `complete` no longer launders drift on an approved phase (state-core hunt, finding #1)
 
 Defect hunt on the state + phase-lifecycle core (state.js + complete/approve/reject + snapshot drift). The critical finding:

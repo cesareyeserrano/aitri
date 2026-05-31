@@ -1,6 +1,6 @@
 # Aitri — `.aitri` Schema Contract
 
-**Aitri version:** v2.0.0-rc.24+
+**Aitri version:** v2.0.0-rc.25+
 **Maintenance rule:** Update this file in the same commit as any `.aitri` schema change.
 
 ---
@@ -52,6 +52,7 @@ Present after any `aitri init` or `aitri adopt --upgrade`.
 | `verifyPassed` | `boolean` | `false` | `true` if `aitri verify-complete` passed. Required to unlock Phase 5. Reset to `false` by `aitri verify-run` when latest results would not pass `verify-complete` — i.e. `passed === 0` with skips, OR any failures (v2.0.0-alpha.13+). Healthy results (passed > 0, failed === 0) leave the flag alone |
 | `verifySummary` | `object` | `null` | Last test run summary: `{ passed, failed, skipped, total }`. Set by `verify-complete` on success; cleared by `verify-run` when `verifyPassed` resets (v2.0.0-alpha.13+) |
 | `verifyRanAt` | `string` ISO 8601 | `null` | Timestamp of last `aitri verify-run` execution (set on every run, regardless of pass/fail). Drives test-staleness signals (v0.1.79+) |
+| `lastVerifyRun` | `object\|null` | `null` | Last `verify-run`'s counts, written on EVERY run regardless of pass/fail: `{ passed, failed, skipped, manual, at }`. Unlike `verifySummary` (only on verify-complete success), this persists the raw run result so the no-op-loop guard survives event-log eviction. Read this for "what did the last run produce" (v2.0.0-rc.25+) |
 | `auditLastAt` | `string` ISO 8601 | `null` | Timestamp of last `aitri audit` invocation. Persisted because `AUDIT_REPORT.md` mtime resets on git clone (v0.1.79+) |
 | `rejections` | `object<string, Rejection>` | `{}` | Map of phase key → last rejection. Key is phase as string (`"1"`, `"2"`, etc.) |
 | `lastSession` | `object\|null` | `null` | Session checkpoint — see schema below. Written automatically by state-mutating commands |

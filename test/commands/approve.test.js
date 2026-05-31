@@ -105,6 +105,19 @@ describe('cmdApprove() — B1/B2 human-review gate (rc.12)', () => {
         'default agent-mode approval must still proceed (autonomy preserved)');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
+
+  it('clears a prior rejection of the phase on approval (state-hunt finding #2 Part B)', () => {
+    const dir = tmpDir();
+    try {
+      // Phase 1 was rejected, then redone; approving it resolves the rejection.
+      seedPhase1(dir, { rejections: { '1': { at: '2026-01-01T00:00:00.000Z', feedback: 'redo' } } });
+      captureStdout(() => cmdApprove({ dir, args: ['requirements'], err: noopErr }));
+      const cfg = loadConfig(dir);
+      assert.ok((cfg.approvedPhases || []).map(String).includes('1'), 'phase 1 approved');
+      assert.ok(!cfg.rejections || !cfg.rejections['1'],
+        'the addressed rejection must be cleared on approval (no stale advisory)');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
 });
 
 describe('cmdApprove() — first approve of phase 1 archives IDEA.md', () => {
