@@ -5,6 +5,15 @@
 
 ---
 
+## [2.0.0-rc.29] — 2026-05-31 — intake redesign decided (ADR-039) + Phase 1 (provenance visible at approve)
+
+The intake review (3 agents, functional + UX) found the intake is optimized for INFERENCE, not elicitation: in agent mode the provenance gate reads a file the agent wrote alone, and the provenance record dies unread. The author and I redesigned the layer.
+
+- **[ADR-039](DECISIONS.md) — intake redesign decided.** Five pillars: IDEA = raw seed (a sentence or `## Context Sources` pointers); Discovery = the CANONICAL understanding engine (ingest referenced context + elicit + confirm); **proportional** depth (a landing-page MVP is a ~30s confirmation, a complex system is ingestion + interview — agile iteration is served by the feature pipeline); BLOCKING confirmation of the three irreversible inputs (problem/success/no-go, the deferred ADR-032 D3, placed where a human is present); context ingestion orchestrated, not built (agent reads files — zero-dep). Industry-terminology mapping in docs (no rename — artifact names are a public contract). Feature regression boundary. Phased plan in BACKLOG.
+- **Phase 1 (shipped here) — provenance visible at the human checkpoint.** `summarizeRequirements` (the mechanical summary `approve` prints) now surfaces `idea_provenance` as `N confirmed · M assumed` + the assumed field names + open `idea_gaps` count. The single highest-leverage intake fix per the review: it puts "5 confirmed, 0 questions asked" in front of whoever approves, instead of buried in JSON — converting the gate from agent-attests-to-itself into agent-must-show-its-seed-confidence. Additive, back-compatible (absent provenance → no line).
+
+Also: the persona ceiling (max 8) was lifted (separate constitution commit) — add personas as the product needs (e.g. a future intake/interviewer persona). Tests +2 (1296 → 1298).
+
 ## [2.0.0-rc.28] — 2026-05-31 — pipeline audit Tiers 3 + 4 (honor-system wording + discovery handoff + design truncation)
 
 Closes the audit. Tier 3 is wording-only (NO new content gates — that would be the "structural gate without defect evidence" theater CLAUDE.md prohibits); Tier 4 is the two structural decisions.

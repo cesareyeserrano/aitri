@@ -653,6 +653,26 @@ describe('summarizeRequirements()', () => {
   it('returns null on malformed JSON', () => {
     assert.equal(summarizeRequirements('{ not json'), null);
   });
+
+  // ADR-039 Phase 1 — seed provenance is surfaced at the approve checkpoint (the
+  // one place a human looks), not buried in JSON.
+  it('surfaces seed provenance (confirmed/assumed counts + assumed fields + gaps)', () => {
+    const raw = JSON.stringify({
+      functional_requirements: [{ id: 'FR-1', priority: 'MUST', type: 'core', acceptance_criteria: ['x'] }],
+      non_functional_requirements: [],
+      idea_provenance: { problem: 'confirmed', users: 'confirmed', baseline: 'assumed', success_metric: 'confirmed', no_go_zone: 'assumed' },
+      idea_gaps: ['baseline: no metric — confirm', 'no_go_zone: inferred — confirm'],
+    });
+    const lines = summarizeRequirements(raw);
+    assert.ok(lines.some(l => /Seed provenance: 3 confirmed · 2 assumed/.test(l)), 'must show confirmed/assumed counts');
+    assert.ok(lines.some(l => /baseline, no_go_zone/.test(l)), 'must name the assumed fields');
+    assert.ok(lines.some(l => /Open seed gaps.*2/.test(l)), 'must show open gap count');
+  });
+
+  it('omits the provenance line when idea_provenance is absent (legacy/back-compat)', () => {
+    const raw = JSON.stringify({ functional_requirements: [], non_functional_requirements: [] });
+    assert.ok(!summarizeRequirements(raw).some(l => /Seed provenance/.test(l)));
+  });
 });
 
 describe('summarizeTestCases()', () => {

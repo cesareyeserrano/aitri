@@ -37,6 +37,16 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 > Ecosystem items (Hub, Graph, future subproducts) live in their own repos' backlogs.
 > Core only tracks items that require changes to Aitri Core itself.
 
+### Core — Intake redesign ([ADR-039](DECISIONS.md)) — phased
+
+IDEA = raw seed; Discovery = the canonical, **proportional** understanding engine (ingest context + elicit + blocking-confirm the 3 irreversible inputs); features get a regression boundary; industry-terminology mapping. Decided 2026-05-31; shipping in phases, each tested.
+
+- [x] **Phase 1 — provenance visible at the human checkpoint (rc.29).** `summarizeRequirements` (approve) surfaces `idea_provenance` confirmed/assumed counts + assumed fields + open `idea_gaps`. Done.
+- [ ] **Phase 2 — feature regression boundary.** `templates/FEATURE_IDEA.md` gains `## Touch Points` + `## Must Not Break`; thread a `regression_guards`/`MUST_NOT_BREAK` field through feature Phase 1 so Phase 3 can test against it. Files: `templates/FEATURE_IDEA.md`, `lib/phases/phase1.js` (buildBriefing), `templates/phases/requirements.md`. Closes the one feature-specific defect class (silent breakage of parent).
+- [ ] **Phase 3 (core) — proportional Discovery + thin IDEA + Context Sources.** New thin `templates/IDEA.md` (intent + `## Context Sources` + optional success line); discovery briefing rewritten to INGEST referenced sources (orchestrated — agent reads files), ELICIT what's missing, with depth PROPORTIONAL to project size (landing-page MVP = ~30s confirm; complex = ingestion + interview); BLOCKING confirmation of problem/success/no-go placed in discovery (the ADR-032 D3, finally where a human is present). Open: how the discovery-side confirmation/provenance relates to the existing phase1 `validateSeedProvenance` (inherit when discovery ran; phase1 gate as fast-path fallback). Files: `templates/IDEA.md`, `templates/phases/phaseDiscovery.md`, `lib/phases/phaseDiscovery.js`, `lib/phases/phase1.js`/`phase1-checks.js`. Non-TTY fallback (agent conducts the confirmation) so CI never hard-stops.
+- [ ] **Phase 4 — industry-terminology mapping** in `help`/docs (IDEA≈brief, 01_REQUIREMENTS≈PRD/SRS, 02_SYSTEM_DESIGN≈TRD/SDD, …). No rename (artifact names are a public contract).
+- [ ] **Phase 5 — wizard/agent-path coherence.** Wire the canonical intake into `templates/AGENTS.md` (the wizard is currently off the agent path); unify the wizard interview and `--guided` discovery interview into one path; give `--guided` discovery the wizard's non-TTY agent-briefing fallback.
+
 ### Core — v2.0.0 promotion gate
 
 The `adopt --upgrade` reconciliation protocol (ADR-027 + addendum), the `.aitri` shared/per-machine state question (ADR-028), and the output-contract test discipline (ADR-029) all shipped across alpha.1 → rc.4 — see CHANGELOG.md for per-release detail. The technical case for v2.0.0-stable is clean: every quality finding surfaced by author-owned canaries (Hub, Ultron, Zombite, Cesar, Go-on-RPi) is closed.

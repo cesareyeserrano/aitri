@@ -1072,3 +1072,33 @@ This closes the **"Phase 3 canonical TC id regex"** item, which had been Discard
 **Scope.**
 - Decides: `reviewGate` opt-in flag; FAIL-only blocking at `verify-complete`; default stays advisory (ADR-034 P1 intact); verdict extracted from the `## Verdict` section.
 - Does not decide: forcing a code review to exist; gating on CONDITIONAL_PASS; any mechanical verification of review quality (out of reach — the reviewer is an LLM/human judgment layer).
+
+---
+
+## ADR-039 — 2026-05-31 — Intake redesign: IDEA is the raw seed, Discovery is the (proportional) understanding engine
+
+**Status:** Accepted — phased implementation pending (see plan in BACKLOG).
+
+**Context.** The intake layer — where a user's intent becomes the seed for the whole pipeline — is Aitri's highest-leverage and least-coherent surface. A full-pipeline phase audit + a focused 3-agent intake review (2026-05-31) found: (1) IDEA.md (a rich 8-section template) and the optional Discovery phase OVERLAP — both ask problem/users/success, so it is unclear which is input and which is output; (2) in agent mode (the real mode) intent is INFERRED, not elicited — the provenance gate at `complete 1` reads a file the agent wrote alone, and the provenance record dies unread; (3) there is no way to feed a complex project's real context (folders, mockups, prior docs, an existing repo); (4) the `wizard` (the one elicitation tool) is off the agent path entirely; (5) Aitri's artifact names are non-standard vs industry (no PRD/TRD vocabulary). The author confirmed the direction and answered the open product questions.
+
+**Decision.** Re-aim the intake around a clear direction with five pillars:
+
+1. **IDEA = raw input (the intent seed), not a rich template.** Either a one-liner ("an app that does X") or pointers to existing context (a `## Context Sources` section listing folders/repos/docs/URLs). For NEW projects the template becomes thin: the intent in the user's words + Context Sources + (optional) a one-line success statement. Everything structured is DERIVED, not pre-filled.
+2. **Discovery = the understanding engine, and it is CANONICAL.** It (a) INGESTS — if IDEA references Context Sources the agent reads them and synthesizes; (b) ELICITS — asks what is missing; (c) CONFIRMS — see pillar 4. Output `00_DISCOVERY.md` is the structured, confirmed understanding. Both artifacts are kept on purpose: IDEA = what the user *said* (immutable raw intent), DISCOVERY = what Aitri *understood* (derived, with provenance) — full intent→understanding traceability.
+3. **Proportionality (the author's constraint — do NOT run a giant process for a landing-page MVP, but DO support agile iteration).** Canonical ≠ heavy. Discovery's DEPTH scales to the project: a trivial MVP is a ~30-second confirmation of the three high-stakes inputs; a complex system is ingestion + a real interview. Agile iteration is served by the existing FEATURE pipeline — ship the light MVP, then add features as mini-pipelines (each also proportional). The pipeline is not a one-shot waterfall; the feature loop is the agile loop.
+4. **Blocking confirmation of the three irreversible inputs.** Discovery cannot complete without the human confirming the problem, the success metric, and the no-go zone — the inputs whose errors are unrecoverable downstream. This is the deferred ADR-032 "D3 just-in-time confirmation", finally placed where a human is actually present (discovery), not buried in the agent's solo write at `complete 1`. The provenance gate distinguishes confirmed-from-source / confirmed-by-user / assumed. Blocking is only these three (cheap to confirm even for an MVP), NOT all eight fields.
+5. **Context ingestion is orchestrated, not built (zero-dep).** Aitri does not implement a file/folder reader — the agent already reads files. Aitri defines the `## Context Sources` convention and the discovery briefing instructs: read the sources first, derive from them, confirm what is not explicit. Same orchestrate-don't-bundle pattern as tests and quality_gates (ADR-037).
+
+**Terminology.** Artifact file names are a public contract (Hub + existing projects) and are NOT renamed. Instead, map them to industry-standard vocabulary in help/docs/human output so they are recognizable: IDEA ≈ project brief/vision; 00_DISCOVERY ≈ product discovery; 01_REQUIREMENTS ≈ PRD/SRS; 01_UX_SPEC ≈ UX/design spec; 02_SYSTEM_DESIGN ≈ TRD/SDD; 03_TEST_CASES ≈ test plan; 05_PROOF_OF_COMPLIANCE ≈ compliance/traceability report. Zero breakage; a UX/docs layer.
+
+**Feature symmetry.** A feature is a mini-project: FEATURE_IDEA (raw seed + context) → feature discovery (ingests the PARENT project + the feature intent) → feature requirements. PLUS a feature-specific capture that exists nowhere today — the regression boundary (`## Touch Points` + `## Must Not Break`), threaded into the feature's Phase 1 so Phase 3 can test against it. This closes the one feature-specific defect class (silent breakage of parent behavior).
+
+**Trade-offs / what is sacrificed.** More intake design surface; discovery becomes load-bearing (a weak discovery degrades everything downstream — mitigated by the blocking confirmation + proportional depth). The blocking confirmation adds a human touch-point that, in fully-autonomous CI runs, must degrade gracefully (a non-TTY fallback: the agent conducts the confirmation and records provenance, same as the wizard's agent-briefing path — never a hard stop that breaks CI).
+
+**What this does NOT do.** It does not build a context-ingestion engine (agent reads files). It does not rename artifacts. It does not force a heavy process on trivial projects (proportionality). It does not introduce a rigid project-`profile` enum (the deferred "Stack-aware profile" study stays deferred) — depth is driven by the intent + a light "this is an MVP, keep it light" signal, not a fixed taxonomy.
+
+**Compatibility.** The thin-IDEA template applies to NEW projects only; existing projects keep their rich IDEA (the provenance gate is fresh-seed-only — no break). The discovery→requirements wiring already shipped (rc.28).
+
+**Scope.**
+- Decides: IDEA = raw seed; Discovery = canonical, proportional understanding engine that ingests + elicits + confirms; blocking confirmation of problem/success/no-go (D3 placed in discovery); context ingestion via `## Context Sources` (orchestrated); industry-terminology mapping in docs/help (no rename); feature regression boundary.
+- Does not decide: the exact thinning of the IDEA template (pillar 1 — to be finalized in implementation); whether discovery's interview and the wizard interview merge into one code path (likely yes — to be confirmed in implementation); a project-profile enum (stays deferred).
