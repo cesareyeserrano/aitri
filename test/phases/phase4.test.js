@@ -23,6 +23,16 @@ describe('Phase 4 — validate()', () => {
     assert.doesNotThrow(() => PHASE_DEFS[4].validate(JSON.stringify(d)));
   });
 
+  // GENERIC substitution now catches the near-misses agents write, not just the
+  // bare words (audit Tier-2 false-accept).
+  for (const generic of ['no debt incurred', 'nothing', 'not applicable', '—', '-', 'various', 'see above']) {
+    it(`rejects a generic technical_debt substitution: "${generic}"`, () => {
+      const d = JSON.parse(validP4());
+      d.technical_debt = [{ fr_id: 'FR-003', substitution: generic, reason: 'x', effort_to_fix: 'low' }];
+      assert.throws(() => PHASE_DEFS[4].validate(JSON.stringify(d)), /generic or empty substitution/);
+    });
+  }
+
   it('throws when files_created is missing and files_modified is absent', () => {
     const d = JSON.parse(validP4());
     delete d.files_created;

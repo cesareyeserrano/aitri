@@ -46,6 +46,13 @@ describe('Phase Discovery — validate()', () => {
     assert.throws(() => PHASE_DEFS['discovery'].validate(d), /Problem/);
   });
 
+  // Anchored heading match: a different section that merely starts with the word
+  // (## Problematic Areas) must NOT satisfy the ## Problem requirement (audit Tier-2).
+  it('does not accept ## Problematic Areas as the Problem section', () => {
+    const d = validDiscovery().replace(/^## Problem\b.*$/m, '## Problematic Areas');
+    assert.throws(() => PHASE_DEFS['discovery'].validate(d), /missing required sections[\s\S]*Problem/);
+  });
+
   it('throws when ## Users section is missing', () => {
     const d = validDiscovery().replace('## Users', '## Personas');
     assert.throws(() => PHASE_DEFS['discovery'].validate(d), /Users/);

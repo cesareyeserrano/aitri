@@ -5,6 +5,19 @@
 
 ---
 
+## [2.0.0-rc.27] — 2026-05-31 — pipeline audit Tier 2 (gate-correctness false-accept/reject fixes)
+
+The moderate verifiable defects from the phase audit. All code-grounded; the wording-only "honor-system masquerade" findings (Tier 3) and the structural decisions (Tier 4) are separate.
+
+- **Anchored heading match (discovery, ux).** `content.includes('## Problem')` was satisfied by `## Problematic Areas` / inline prose — a substring scan. Now line-start + word-boundary anchored per required section.
+- **NFR-MUST coverage (phase3 + phase5).** The MUST-coverage gaps only scanned `functional_requirements`; a `priority: "MUST"` NFR could have zero TCs (phase3) or be omitted from `requirement_compliance` (phase5). Both now include MUST NFRs — they are first-class testable targets.
+- **Provenance gap prefix (phase1).** The seed-provenance gap match was anywhere-substring + cross-field — a `baseline:` gap mentioning "power users" satisfied the `users` assumption. Now the gap must START with the field key (the briefing's documented contract).
+- **GENERIC technical_debt (phase4).** The anchored bare-word list missed `no debt incurred` / `nothing` / `not applicable` / a lone dash. Expanded (still whole-string anchored, so a real substitution containing a generic word is not caught).
+- **`Performance & Scalability` connector (phase2).** The literal `&` false-rejected `Performance and Scalability` / `/`. The connector is now tolerated.
+- **2f DEFERRED (HAS_METRIC any-digit, phase1).** A bare incidental number ("version 2") whitewashes the qualitative-metric check. Analyzed and deferred: any tightening risks false-rejecting legitimate quantitative ACs ("1000 users"), which BLOCK work — worse than the minor false-accept, and the FR still faces the broad-vague + title-vague gates. Per CLAUDE.md's regex-false-positive caution. Re-open with a concrete false-accept that slips all gates.
+
+Tests +12 (1281 → 1293). Docs: ARTIFACTS.md (NFR-MUST coverage), integrations CHANGELOG. Tier 3 (wording) + Tier 4 (discovery-consumer, design truncation) follow.
+
 ## [2.0.0-rc.26] — 2026-05-31 — full-pipeline phase audit, Tier 1 (id join-key + frs + review verdict)
 
 A phase-by-phase audit of all 8 pipeline gates (discovery/ux/1/2/3/4/review/5) on two axes — (A) gate correctness, (B) briefing↔gate↔consumer coherence — surfaced a systemic pattern: gates verify structural presence while briefings claim hard enforcement, and the FR/NFR `id` join-key is unenforced. Tier 1 fixes the three highest-value, code-verifiable defects:

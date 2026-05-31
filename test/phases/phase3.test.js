@@ -330,7 +330,32 @@ describe('Phase 3 — validate()', () => {
       // validP3 only covers FR-001 and FR-002 — FR-003 is uncovered
       assert.throws(
         () => PHASE_DEFS[3].validate(validP3(), { dir, config: {} }),
-        /FR-MUST.*no test cases/
+        /MUST requirement.*no test cases/
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // NFRs are first-class testable targets; a MUST NFR with zero TCs must also be
+  // caught (audit Tier-2 — the gap check only scanned functional_requirements).
+  it('[NFR-MUST gap] throws when a MUST NFR has no test cases', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-p3-nfr-'));
+    try {
+      const reqs = {
+        functional_requirements: [
+          { id: 'FR-001', priority: 'MUST' },
+          { id: 'FR-002', priority: 'MUST' },
+        ],
+        non_functional_requirements: [
+          { id: 'NFR-001', priority: 'MUST', category: 'Security' }, // no TCs
+        ],
+        user_stories: [],
+      };
+      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), JSON.stringify(reqs), 'utf8');
+      assert.throws(
+        () => PHASE_DEFS[3].validate(validP3(), { dir, config: {} }),
+        /MUST requirement.*NFR-001/s
       );
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });

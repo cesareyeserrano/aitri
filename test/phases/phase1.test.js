@@ -507,6 +507,16 @@ describe('Phase 1 — Tier-A provenance gate (D2)', () => {
     assert.doesNotThrow(() => PHASE_DEFS[1].validate(content, FRESH));
   });
 
+  // The gap must START with the field key, not merely MENTION it anywhere — a
+  // `baseline:` gap that says "power users" must NOT satisfy the `users`
+  // assumption (audit Tier-2, cross-field false-accept).
+  it('fresh seed: a gap that only mentions the field key elsewhere does NOT carry it', () => {
+    const content = withProv({ ...allConfirmed, users: 'assumed' },
+      { idea_gaps: ['baseline: current power users have no metric — confirm'] });
+    assert.throws(() => PHASE_DEFS[1].validate(content, FRESH),
+      /not carried in idea_gaps: users/);
+  });
+
   it('fresh seed accepts idea_gaps nested under a project_summary object', () => {
     const d = JSON.parse(validP1());
     d.idea_provenance = { ...allConfirmed, no_go_zone: 'assumed' };

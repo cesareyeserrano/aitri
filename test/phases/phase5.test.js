@@ -99,11 +99,28 @@ describe('Phase 5 — validate()', () => {
       fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), JSON.stringify(reqs), 'utf8');
       assert.throws(
         () => PHASE_DEFS[5].validate(validP5(), { dir, config: {} }),
-        /FR-MUST.*not found in requirement_compliance/
+        /MUST requirement.*not found in requirement_compliance/
       );
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // NFRs are first-class; a MUST NFR omitted from requirement_compliance must
+  // also block (audit Tier-2 — the check only scanned functional_requirements).
+  it('[cross-artifact] throws when a MUST NFR is missing from requirement_compliance', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-p5-nfr-'));
+    try {
+      const reqs = {
+        functional_requirements: [{ id: 'FR-001', priority: 'MUST' }, { id: 'FR-002', priority: 'MUST' }],
+        non_functional_requirements: [{ id: 'NFR-001', priority: 'MUST', category: 'Security' }],
+      };
+      fs.writeFileSync(path.join(dir, '01_REQUIREMENTS.json'), JSON.stringify(reqs), 'utf8');
+      assert.throws(
+        () => PHASE_DEFS[5].validate(validP5(), { dir, config: {} }),
+        /MUST requirement.*NFR-001/s
+      );
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('[cross-artifact] passes when all FR-MUSTs have compliance entries', () => {

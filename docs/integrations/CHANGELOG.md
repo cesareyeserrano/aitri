@@ -18,6 +18,13 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.27 (2026-05-31) — pipeline audit Tier 2: MUST-coverage includes NFRs + gate-correctness fixes — additive
+
+- **MUST-coverage now spans NFRs.** `complete 3` (every MUST requirement needs a TC) and `complete 5` (every MUST requirement needs a compliance entry) now include `non_functional_requirements` with `priority: "MUST"`, not only FRs. A MUST security/CI-CD NFR could previously ship untested/unattested. Fresh-validation only.
+- Gate-correctness tightenings (no schema-shape change): anchored heading matching in discovery/ux (a substring no longer satisfies a section), provenance gap must START with the field key, expanded GENERIC technical_debt rejection, and `Performance & Scalability` now also accepts the `and`/`/` connector (was a false-reject).
+
+**Contract impact for subproducts:** additive/correctness — no field shape changed. The MUST-coverage rule is stricter (catches MUST NFRs), conformant artifacts unaffected. Fresh-validation only — existing approved projects unaffected until they re-run the phase.
+
 ## v2.0.0-rc.26 (2026-05-31) — pipeline audit Tier 1: FR/NFR id enforcement + phase3 accepts `frs` — additive
 
 Two artifact-validation changes from the full phase-by-phase audit:

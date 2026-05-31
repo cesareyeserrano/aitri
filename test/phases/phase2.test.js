@@ -42,6 +42,15 @@ describe('Phase 2 — validate()', () => {
     assert.doesNotThrow(() => PHASE_DEFS[2].validate(validP2()));
   });
 
+  // The `&`/`and`/`/` connector is tolerated — `Performance and Scalability` must
+  // not be a false-reject of the `Performance & Scalability` requirement (Tier-2).
+  it('accepts "Performance and Scalability" (and / & / slash connector)', () => {
+    for (const variant of ['and', '/', '&']) {
+      const content = validP2().replace('## Performance & Scalability', `## Performance ${variant} Scalability`);
+      assert.doesNotThrow(() => PHASE_DEFS[2].validate(content), `connector "${variant}" must be accepted`);
+    }
+  });
+
   it('throws when a required section is missing', () => {
     const content = validP2().replace('## Data Model', '## Data Layer');
     assert.throws(() => PHASE_DEFS[2].validate(content), /missing required sections[\s\S]*## Data Model/);
