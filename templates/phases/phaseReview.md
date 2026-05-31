@@ -36,7 +36,13 @@
 4. For each technical_debt entry: verify the substitution matches what is actually in the code
 5. Write ## Issues Found — list each issue with FR-ID, TC-ID, file, line range, and what is wrong
 6. Write ## FR Coverage — one row per FR: status (implemented|partial|missing|substituted)
-7. Write ## Verdict — PASS | CONDITIONAL_PASS | FAIL with justification
+7. Write ## Verdict — put the chosen verdict ALONE on the first line under the heading (exactly one of: PASS, CONDITIONAL_PASS, FAIL), then the justification below it. Do NOT leave the menu of options in the file. Example:
+   ```
+   ## Verdict
+   CONDITIONAL_PASS
+   FR-003 is functionally present but its error path is untested — fix before approving.
+   ```
+   (`reviewGate`, if enabled, blocks Phase 5 on a FAIL written here.)
 8. Save to: {{ARTIFACTS_BASE}}/04_CODE_REVIEW.md
 9. Present the Delivery Summary below to the user
 10. Run: aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} review
@@ -63,7 +69,7 @@ Next: aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} review   →   aitri {{SCOPE_VER
 Required sections:
   ## Issues Found       — one entry per gap (empty section if none)
   ## FR Coverage        — table with FR-ID, implementation status, TC-ID
-  ## Verdict            — PASS | CONDITIONAL_PASS | FAIL + justification
+  ## Verdict            — the chosen verdict alone on its first line (PASS / CONDITIONAL_PASS / FAIL), justification below
 
 ## Human Review — Before approving code review
   [ ] Reviewer read every file in files_created — not just spot-checked

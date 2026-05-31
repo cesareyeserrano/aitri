@@ -5,6 +5,16 @@
 
 ---
 
+## [2.0.0-rc.26] — 2026-05-31 — full-pipeline phase audit, Tier 1 (id join-key + frs + review verdict)
+
+A phase-by-phase audit of all 8 pipeline gates (discovery/ux/1/2/3/4/review/5) on two axes — (A) gate correctness, (B) briefing↔gate↔consumer coherence — surfaced a systemic pattern: gates verify structural presence while briefings claim hard enforcement, and the FR/NFR `id` join-key is unenforced. Tier 1 fixes the three highest-value, code-verifiable defects:
+
+- **phase1 B1/B2 — FR/NFR id never enforced (HIGH).** `complete 1` now requires every FR and NFR to have a non-empty, list-unique `id` (mirrors the duplicate-TC-id gate). It's the join key phase3 (`requirement_id`/`frs`) and phase5 (per-MUST compliance) hard-depend on; a missing id → `undefined` key downstream, a duplicate → masked coverage. Closes the root of the phase4/phase5 id-cross-check gaps too.
+- **phase3 B1 — `frs` rejected though documented + consumed (HIGH).** `complete 3` now accepts a TC carrying `frs: [...]` instead of `requirement_id` and buckets it into each targeted FR; the FR-MUST gap check uses the bucketed keys. The documented multi-FR form (which verify-run prefers) was uncompletable, and phase3's coverage accounting diverged from verify-run's. They now agree.
+- **review A4/B1/A3/A1/A2 — verdict parse bugs in the rc.23 reviewGate (HIGH for gate users).** `extractReviewVerdict` is now case-insensitive (a lowercase `fail` was silently passing the gate) and strips the un-bracketed menu `PASS | CONDITIONAL_PASS | FAIL` (which the briefing taught and the extractor read as a phantom FAIL). `phaseReview.validate()` now uses the same extractor instead of a substring scan (a prose mention / placeholder menu no longer counts as a verdict). The briefing teaches a single copyable `## Verdict\n<VERDICT>` form.
+
+Tests +10 (1271 → 1281). Docs: ARTIFACTS.md (phase1 id rule, phase3 frs), integrations CHANGELOG. Tiers 2–4 (substring header matching, NFR-MUST coverage, `&` false-reject, regex breadth; wording fixes for the honor-system masquerade; discovery-has-no-consumer) follow.
+
 ## [2.0.0-rc.25] — 2026-05-30 — state-core hunt: remaining findings (rejection-clear, event-eviction, lock visibility)
 
 Closes the three lower-severity findings from the state-core hunt (rc.24 was finding #1).

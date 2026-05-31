@@ -37,7 +37,20 @@ describe('Phase review — validate()', () => {
 
   it('throws when verdict is missing', () => {
     const content = validReview().replace('PASS', 'looks good');
-    assert.throws(() => PHASE_DEFS['review'].validate(content), /missing verdict/);
+    assert.throws(() => PHASE_DEFS['review'].validate(content), /no clear verdict/);
+  });
+
+  // validate() now uses the same extractor the reviewGate consumes (audit Tier-1):
+  // a prose mention or the unfilled placeholder menu is NOT a verdict.
+  it('rejects the unfilled placeholder menu as a verdict', () => {
+    const content = validReview().replace('PASS', 'PASS | CONDITIONAL_PASS | FAIL');
+    assert.throws(() => PHASE_DEFS['review'].validate(content), /no clear verdict/);
+  });
+
+  it('accepts a lowercase verdict (extractor is case-insensitive)', () => {
+    const content = validReview().replace('PASS', 'fail');
+    assert.doesNotThrow(() => PHASE_DEFS['review'].validate(content));
+    assert.equal(PHASE_DEFS['review'].extractVerdict(content), 'FAIL');
   });
 
   it('accepts CONDITIONAL_PASS as a valid verdict', () => {

@@ -1,6 +1,6 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-rc.25+
+**Aitri version:** v2.0.0-rc.26+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
@@ -70,6 +70,7 @@ Written by Phase 1 (PM persona). Flat structure — no epics or nested feature h
 **Validation rules (enforced by `aitri complete 1`):**
 - Required fields: `project_name`, `functional_requirements`, `user_stories`, `non_functional_requirements`
 - Minimum 5 `functional_requirements`; minimum 3 `non_functional_requirements`
+- Every FR and NFR must have a non-empty string `id`, unique within each list (v2.0.0-rc.26+). The id is the join key — phase 3 ties each TC to one via `requirement_id`/`frs`, phase 5 demands a compliance entry per MUST id. A missing id collapsed to an `undefined` key downstream; a duplicate silently masked one requirement's coverage. Format (`FR-xxx`/`NFR-xxx`) stays a convention; downstream keys on membership, not the prefix.
 - All MUST FRs must have a `type` field and at least one `acceptance_criteria` entry
 - MUST FRs of type `ux`, `visual`, or `audio` must include at least one criterion with a measurable metric (e.g. pixels, ms, %, contrast ratio)
 - All MUST FRs where every AC is purely vague (e.g. "works properly", "runs smoothly") will fail validation
@@ -156,7 +157,7 @@ Written by Phase 3 (QA persona). Test cases keyed to FRs, user stories, and acce
 - Each FR must have at least one TC with id ending in `h` (happy path) and one ending in `f` (failure)
 - Minimum 2 `e2e` test cases total
 - `requirement_id` must be a single id from `01_REQUIREMENTS.json` — either a functional requirement (`FR-xxx`) or a non-functional requirement (`NFR-xxx`). NFR ids are accepted as TC targets when the NFR is declared in `non_functional_requirements[]` (v2.0.0-alpha.9+). Comma-separated ids are rejected.
-- For multi-FR TCs, use `"frs": ["FR-001","FR-002"]` (string array) instead of a comma-separated `requirement_id`. `frs` is recognized by `aitri verify-run` (v0.1.90+); when present it wins over `requirement_id`.
+- For multi-FR TCs, use `"frs": ["FR-001","FR-002"]` (string array) instead of a comma-separated `requirement_id`. `frs` is recognized by `aitri verify-run` (v0.1.90+) AND, since v2.0.0-rc.26, by `aitri complete 3` — a TC may carry `frs` instead of `requirement_id`, and `complete 3` buckets it into each targeted FR for the per-FR + FR-MUST coverage rules (it used to reject any TC without `requirement_id`, making the documented `frs` form uncompletable). When present, `frs` wins over `requirement_id` in both. Each TC must target at least one of `requirement_id` or a non-empty `frs[]`.
 - If `01_REQUIREMENTS.json` is present: TC `ac_id` values are cross-checked against AC ids in `user_stories[].acceptance_criteria`; all MUST FRs must have at least one TC
 - `verify-run` (v0.1.90+) refuses to run and refuses to write `04_TEST_RESULTS.json` if `test_cases[]` is non-empty and no entry exposes `requirement_id` or `frs` (legacy `requirement` field alone is not enough; migrate explicitly).
 

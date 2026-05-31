@@ -18,6 +18,14 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 ---
 
+## v2.0.0-rc.26 (2026-05-31) — pipeline audit Tier 1: FR/NFR id enforcement + phase3 accepts `frs` — additive
+
+Two artifact-validation changes from the full phase-by-phase audit:
+- `aitri complete 1` now requires every `functional_requirements[]` and `non_functional_requirements[]` entry to have a non-empty, list-unique `id`. The id is the cross-phase join key; a missing id collapsed to `undefined` downstream and a duplicate masked one requirement's coverage. Conformant artifacts (all real ones carry ids) are unaffected.
+- `aitri complete 3` now ACCEPTS a TC that targets requirements via `frs: [...]` instead of `requirement_id` (and buckets it per-FR for coverage). Previously it rejected any TC without `requirement_id`, making the `frs` form that `verify-run` prefers and ARTIFACTS.md documents uncompletable. The two now agree on multi-FR coverage.
+
+**Contract impact for subproducts:** additive/correctness — no field shape changed. A reader of `01_REQUIREMENTS.json` can now rely on FR/NFR ids being present and unique (they always should have been). The `frs` form is now valid end-to-end. Fresh-validation only — existing approved projects are unaffected until they re-run the phase.
+
 ## v2.0.0-rc.25 (2026-05-30) — `.aitri#lastVerifyRun` — additive
 
 New optional `.aitri` field `lastVerifyRun: { passed, failed, skipped, manual, at }`, written by `verify-run` on EVERY run regardless of pass/fail. It persists the raw last-run counts so derived signals (the no-op-loop guard) survive event-log eviction (the `events[]` log is capped at 20). Distinct from `verifySummary`, which is only written on `verify-complete` success — read `lastVerifyRun` for "what did the last run produce", `verifySummary` for "what passed the gate".

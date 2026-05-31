@@ -29,6 +29,27 @@ describe('Phase 3 — validate()', () => {
     assert.doesNotThrow(() => PHASE_DEFS[3].validate(validP3()));
   });
 
+  // frs[] (multi-FR) is the schema-sanctioned form verify-run prefers; phase3
+  // used to reject any TC without requirement_id, making it uncompletable
+  // (audit Tier-1, phase3 B1). It must now be accepted and bucketed per-FR.
+  it('accepts a TC that targets requirements via frs[] instead of requirement_id', () => {
+    const d = JSON.parse(validP3());
+    // Replace requirement_id with frs covering BOTH FRs on every TC → each FR's
+    // bucket gets all 6, satisfying min-3 + happy/negative + h/f + e2e≥2.
+    d.test_cases = d.test_cases.map(tc => {
+      const { requirement_id, ...rest } = tc;
+      return { ...rest, frs: ['FR-001', 'FR-002'] };
+    });
+    assert.doesNotThrow(() => PHASE_DEFS[3].validate(JSON.stringify(d)));
+  });
+
+  it('throws when a TC has neither requirement_id nor frs', () => {
+    const d = JSON.parse(validP3());
+    delete d.test_cases[0].requirement_id;
+    assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)),
+      /has no requirement_id and no frs/);
+  });
+
   it('throws when test_cases is empty', () => {
     const d = { test_plan: {}, test_cases: [] };
     assert.throws(() => PHASE_DEFS[3].validate(JSON.stringify(d)), /test_cases array is required/);

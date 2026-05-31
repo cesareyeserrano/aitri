@@ -61,6 +61,37 @@ describe('Phase 1 — validate()', () => {
     assert.throws(() => PHASE_DEFS[1].validate(JSON.stringify(d)), /Min 3 non_functional_requirements/);
   });
 
+  // FR/NFR id is the join key for phase3 (requirement_id) + phase5 (compliance).
+  // Presence + uniqueness must be enforced or downstream keys on undefined / a
+  // duplicate silently masks a requirement's coverage (audit Tier-1, phase1 B1/B2).
+  it('throws when an FR has no id', () => {
+    const d = JSON.parse(validP1());
+    delete d.functional_requirements[0].id;
+    assert.throws(() => PHASE_DEFS[1].validate(JSON.stringify(d)),
+      /Every functional_requirements entry must have a non-empty string "id"/);
+  });
+
+  it('throws when two FRs share an id', () => {
+    const d = JSON.parse(validP1());
+    d.functional_requirements[1].id = 'FR-001';
+    assert.throws(() => PHASE_DEFS[1].validate(JSON.stringify(d)),
+      /Duplicate functional_requirements id\(s\):.*FR-001/);
+  });
+
+  it('throws when an NFR has no id', () => {
+    const d = JSON.parse(validP1());
+    delete d.non_functional_requirements[0].id;
+    assert.throws(() => PHASE_DEFS[1].validate(JSON.stringify(d)),
+      /Every non_functional_requirements entry must have a non-empty string "id"/);
+  });
+
+  it('throws when two NFRs share an id', () => {
+    const d = JSON.parse(validP1());
+    d.non_functional_requirements[1].id = 'NFR-001';
+    assert.throws(() => PHASE_DEFS[1].validate(JSON.stringify(d)),
+      /Duplicate non_functional_requirements id\(s\):.*NFR-001/);
+  });
+
   it('throws when MUST FR is missing type', () => {
     const d = JSON.parse(validP1());
     delete d.functional_requirements[0].type;
