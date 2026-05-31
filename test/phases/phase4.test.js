@@ -175,6 +175,23 @@ describe('Phase 4 — buildBriefing() (BL-004)', () => {
     assert.ok(briefing.includes('given/when/then'), 'briefing must reference given/when/then as implementation contract');
   });
 
+  // The full design must reach the developer — head(…,200) used to drop late
+  // sections (Deployment Architecture / Risk Analysis) on a long design (Tier-4).
+  it('includes a design section that appears past line 200 (no truncation)', () => {
+    const design = [
+      '## Executive Summary', 'x',
+      ...Array(220).fill('filler design line'),
+      '## Deployment Architecture', 'Deploy as a single Go binary behind nginx.',
+    ].join('\n');
+    const b = PHASE_DEFS[4].buildBriefing({
+      dir: '/tmp/test',
+      inputs: { '01_REQUIREMENTS.json': '{}', '02_SYSTEM_DESIGN.md': design, '03_TEST_CASES.json': '{}' },
+      feedback: null,
+    });
+    assert.ok(b.includes('single Go binary behind nginx'),
+      'a design section past line 200 must reach the developer briefing');
+  });
+
   it('briefing contains Definition of Done', () => {
     assert.ok(briefing.includes('Definition of Done'), 'briefing must include Technical Definition of Done');
   });

@@ -535,3 +535,26 @@ describe('Phase 1 — Tier-A provenance gate (D2)', () => {
       /Min 5 functional_requirements/);
   });
 });
+
+describe('Phase 1 — discovery handoff (audit Tier-4)', () => {
+  it('injects 00_DISCOVERY.md into the requirements briefing on first run', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-disc-'));
+    try {
+      fs.mkdirSync(path.join(dir, 'spec'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Idea\n## Problem\nx\n## Target Users\ny\n## Business Rules\nz\n## Success Criteria\nw\n');
+      fs.writeFileSync(path.join(dir, 'spec/00_DISCOVERY.md'), '## Problem\nFreelancers lose invoices.\n## Out of Scope\nNo payroll.\n');
+      const b = PHASE_DEFS[1].buildBriefing({ dir, inputs: {}, config: { artifactsDir: 'spec' } });
+      assert.ok(b.includes('Freelancers lose invoices'), 'discovery content must reach the requirements agent');
+      assert.ok(b.includes('Phase 0 handoff'), 'discovery handoff section must be rendered');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('omits the discovery block when no 00_DISCOVERY.md exists', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-nodisc-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'IDEA.md'), '# Idea\n## Problem\nx\n## Target Users\ny\n## Business Rules\nz\n## Success Criteria\nw\n');
+      const b = PHASE_DEFS[1].buildBriefing({ dir, inputs: {}, config: { artifactsDir: 'spec' } });
+      assert.ok(!b.includes('Phase 0 handoff'), 'no discovery block when the artifact is absent');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});

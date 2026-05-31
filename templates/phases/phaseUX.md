@@ -32,6 +32,7 @@ Required sections (in order):
 4. ## Design Tokens — **always required**. Every product has a visual layer the developer will implement. Define: color roles (background, surface, primary, accent, error, text-primary, text-secondary, border), type scale (font family rationale, size scale, weights), spacing scale. Derive tokens from: (1) archetype defaults, (2) explicit visual FRs if present, (3) product context — read it from `01_REQUIREMENTS.json` (the `original_brief` field carries the absorbed seed brief; `project_summary` carries the refined description) otherwise. Every token must state its reason — no arbitrary choices.
 
 ## Rules
+> `aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} ux` mechanically checks only that the four required sections are present and the spec is ≥30 lines. The rules below are NOT auto-enforced — they are verified by the human reviewer at approve and inherited by the developer, who builds from this spec alone. Write them in good faith; a thin spec that clears the gate still ships a broken UI.
 - Every UX/visual FR must have a corresponding screen or component in the spec
 - Every component must define all 5 states — no state is optional
 - Every error state must describe what the user sees AND what action they can take

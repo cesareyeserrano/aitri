@@ -28,6 +28,14 @@
 - Skip the IDEA.md Pre-flight below — it does not apply on re-runs.
 {{/IF_CURRENT_REQUIREMENTS}}
 
+{{#IF_DISCOVERY_MD}}
+## Discovery (00_DISCOVERY.md — Phase 0 handoff)
+This is the approved discovery output: the problem definition, target users, success criteria, and explicit out-of-scope boundaries. Treat it as primary source alongside IDEA.md — derive FRs/NFRs that serve the success criteria and respect the out-of-scope boundaries. Do not re-open settled scope decisions.
+```
+{{DISCOVERY_MD}}
+```
+{{/IF_DISCOVERY_MD}}
+
 {{#IF_IDEA_MD}}
 ## IDEA.md
 ```

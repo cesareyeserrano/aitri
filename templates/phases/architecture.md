@@ -60,7 +60,7 @@ Patterns to actively check — do not skip any:
 
 If after thorough analysis zero incompatibilities exist:
   Write: `None detected — <one sentence justifying why the stack is compatible with all constraints.>`
-  An empty section or missing section is rejected by aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} 2.
+  `aitri {{SCOPE_VERB}}complete{{SCOPE_ARG}} 2` mechanically checks: all required sections present, the Technical Risk Flags body is non-empty, and the doc is ≥40 lines. Section depth and a real justification are verified by the human reviewer at approve, not auto-detected — write them in good faith, not to beat the gate.
 
 ## Architectural Decision Records (ADRs)
 For every significant tech choice, write an ADR using this format:
@@ -73,7 +73,7 @@ For every significant tech choice, write an ADR using this format:
   Consequences: <what this enables, what it constrains>
 
 Minimum ADRs required: database choice, frontend framework/approach, state management, deployment target.
-Rule: each ADR must evaluate ≥2 options. An ADR with a single option is rejected.
+Rule: each ADR must evaluate ≥2 options — a single-option ADR is not a real decision. (ADR content is human-reviewed at approve; `complete 2` does not parse ADRs, so this is a discipline the reviewer enforces, not the gate. Write them honestly.)
 
 ## Failure Blast Radius
 For each critical component (database, auth layer, external APIs, background jobs), document:

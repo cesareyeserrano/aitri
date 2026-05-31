@@ -5,6 +5,16 @@
 
 ---
 
+## [2.0.0-rc.28] — 2026-05-31 — pipeline audit Tiers 3 + 4 (honor-system wording + discovery handoff + design truncation)
+
+Closes the audit. Tier 3 is wording-only (NO new content gates — that would be the "structural gate without defect evidence" theater CLAUDE.md prohibits); Tier 4 is the two structural decisions.
+
+- **Tier 4 #9 — discovery now has a consumer (the headline).** `00_DISCOVERY.md` was produced by the optional Discovery phase but NO downstream phase read it — the agent's problem definition / users / success criteria / out-of-scope were discarded except a boolean nudge. Phase 1 `buildBriefing` now injects the approved discovery content into the requirements briefing (first-run only; on re-runs `01_REQUIREMENTS.json` is the SSoT), via a new `{{#IF_DISCOVERY_MD}}` block in `requirements.md` that frames it as primary seed context.
+- **Tier 4 #10 — design truncation.** Phase 4 fed the developer `head(02_SYSTEM_DESIGN.md, 200)`; a complete design past 200 lines silently dropped its late sections (Deployment Architecture, Risk Analysis) from the implementer. Now the full design (a bounded artifact that passed the Phase 2 gate) is passed.
+- **Tier 3 — honor-system wording.** Two briefings claimed mechanical enforcement the gate does not provide: `architecture.md` said an empty section / a single-option ADR "is rejected by aitri complete 2" (the gate parses neither). Reworded to state exactly what `complete 2` checks vs what the human reviewer verifies. `phaseUX.md` gained an honest header: the gate checks only section-presence + line-count; the "every component / 375px / archetype" rules are reviewer-verified, write them in good faith. Directive voice ("must") elsewhere is kept — it tells the agent what to produce, it does not falsely claim a gate.
+
+Tests +3 (discovery handoff ×2, no-truncation ×1). 1293 → 1296. **Full-pipeline audit complete** (Tiers 1–4 across rc.26–28; 2f HAS_METRIC deferred with rationale).
+
 ## [2.0.0-rc.27] — 2026-05-31 — pipeline audit Tier 2 (gate-correctness false-accept/reject fixes)
 
 The moderate verifiable defects from the phase audit. All code-grounded; the wording-only "honor-system masquerade" findings (Tier 3) and the structural decisions (Tier 4) are separate.
