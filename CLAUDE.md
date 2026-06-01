@@ -16,14 +16,7 @@ Evaluation criterion for any change in Aitri, in this order:
 
 A change that only satisfies (3) without touching (1) or (2) must be justified as **prevention** of a future loss at tier 1 or tier 2 (e.g. an invariant that, if broken, degrades produced software cumulatively). If there is no thread back to (1) or (2), it is noise. Say so before implementing.
 
-**Evidence base — recognize when it is narrow, but only where it actually applies.** Today the consumers validating changes in Aitri are Hub plus the author's own canary projects (Ultron, Zombite, Go-on-RPi, Cesar as of v2.0.0-alpha.14). **No third-party adopter has validated end-to-end yet** — that is the gap that gates v2.0.0 promotion to stable. The narrowness matters in one specific case: **a proposal whose value depends on a user or project that does not yet exist**. For those — speculative abstractions, "what if someone needs X", new axes added "for completeness" — acknowledge the speculation explicitly and seek external signal (another real project, another team using Aitri, a concrete defect avoided) before treating tier 1 as confirmed.
-
-The principle does **not** apply when:
-- A bug, sesgo, or limitation is verifiable from the code today (grep'able, not hypothesized).
-- A real project (even an internal one) is currently blocked or producing degraded output because of it.
-- The fix is a removal of an incorrect assumption rather than the addition of a new abstraction.
-
-In those cases the evidence is the code plus the present case, and "wait for more consumers" is the wrong reflex — it confuses caution with paralysis. Apply the principle as a filter against design-by-imagination, not as a brake on fixing what is demonstrably broken.
+**Evidence base — narrow, and it matters in exactly one case.** Today's consumers validating Aitri are Hub plus author canaries (Ultron, Zombite, Go-on-RPi, Cesar); **no third-party adopter has validated end-to-end** — the gap that gates v2.0.0 stable. The narrowness only bites for **a proposal whose value depends on a user or project that does not yet exist** (speculative abstractions, "what if someone needs X", axes added "for completeness"): acknowledge the speculation and seek external signal before treating tier 1 as confirmed. It does **not** apply to a bug verifiable from the code today, a real project currently blocked or degraded, or the removal of an incorrect assumption — there the evidence is the code plus the present case, and "wait for more consumers" confuses caution with paralysis. A filter against design-by-imagination, not a brake on fixing what is demonstrably broken.
 
 ## Project state
 
@@ -49,7 +42,7 @@ In those cases the evidence is the code plus the present case, and "wait for mor
 2. Modularity: each command and phase is independent
 3. Model-agnostic prompts (the CLI generates prompts; the user chooses the model)
 4. **Stack-agnostic outputs** — generated prompts, validators, and gates must not assume target stack (web, CLI, service, library, embedded). Examples may name tools but only as conditional ("if Playwright is declared as runner, …"); imperative "MUST use X" bound to a specific stack is a defect. Same applies to manifest schemas, e2e gate behavior, NFR examples, and CI checklists.
-5. Personas: one persona per phase (a phase's role is coherent and singular); personas live in `lib/personas/` and export `ROLE / CONSTRAINTS / REASONING`, never inline in a command. **No fixed cap** — add a persona whenever a phase or surface genuinely needs a distinct role for Aitri to fulfill its purpose (e.g. an intake/interviewer persona for the input layer). Justify it by the value it adds (tier 1/2), not against a count. The old "max 8" ceiling was lifted 2026-05-31 — an arbitrary number must not block a role the product needs. Meta-personas for transversal commands (adopter, auditor) are normal.
+5. Personas: one persona per phase; they live in `lib/personas/` exporting `ROLE / CONSTRAINTS / REASONING`, never inline in a command. **No fixed cap** (the "max 8" ceiling was lifted 2026-05-31) — add one when a phase or surface genuinely needs a distinct role, justified by value (tier 1/2), not against a count. Meta-personas for transversal commands (adopter, auditor) are normal.
 6. Artifacts as SSoT: the file chain is the handoff protocol between agents
 7. isTTY-gating on destructive operations (approve, reject)
 8. **The verification spine enforces well-built code, not only passing tests.** `verify-run`/`verify-complete` gate the pipeline on BOTH: (a) functional behavior — every MUST FR traced to a passing test (`fr_coverage`), and (b) code quality — the project-declared `quality_gates` (lint, type-check, security; coverage and assertion-density as opt-ins). All are orchestrated from project-declared commands and judged by exit code (principle 1), never bundled. A gate that is honor-system-only (the agent attests) is weaker than one Aitri executes; prefer mechanical enforcement where the tool exists (ADR-037).
@@ -101,10 +94,9 @@ Schemas are contracts read by Hub and any future consumer. Incorrect changes bre
 ## Expected behavior
 
 - Be direct and honest. If an idea has a problem, say it first — not at the end.
-- Do not validate proposals out of courtesy. If something is fragile, say so even if the user is convinced.
+- Do not validate out of courtesy — say it even if the user is convinced. Catching yourself writing "good idea"/"perfect"/"excellent" is the tell; replace it with the decision, trade-off, or risk.
 - Short responses by default. Elaborate only if the problem requires it.
-- No narration of internal steps ("now I'm going to…") nor recaps of what was just done at the end of each turn. The diff + the final status are enough.
-- If you catch yourself writing "good idea", "perfect", "excellent" — stop. That is courtesy validation. Respond with what adds information: the decision, the trade-off, the risk.
+- No narration of internal steps ("now I'm going to…") nor end-of-turn recaps. The diff + the final status are enough.
 
 ## Feedback evaluation protocol before implementing
 
@@ -112,9 +104,7 @@ All feedback — bug report, feature request, or behavior change — must pass t
 
 ### Mandatory questions
 
-0. **Does this change improve the software that projects using Aitri produce?**
-   - Aitri is the means; the software generated by consumer projects is the value deliverable.
-   - If the change does not directly impact the quality of produced software, justify why it is worth it: operator usability, ecosystem coherence, friction reduction. If the only justification is "improves Aitri internally" with no observable external effect — probably do not do it.
+0. **Does this improve the software consumer projects produce?** (Tier 1 of *Purpose over process*.) If not, justify it via tier 2 — operator usability, friction, ecosystem coherence. "Improves Aitri internally" with no observable external effect → probably don't.
 
 1. **Is it a real bug or a preference?**
    - Real bug: the system does something different from what it promises (incorrect output, crash, corrupted data).
@@ -181,5 +171,5 @@ If a proposal passes this file but leaves no trace in any of the four mechanisms
   - `docs/integrations/README.md` — if a new surface visible to subproducts is added
   - Partially enforced by `test/release-sync.test.js` (synchronized headers). Content is judged by the human.
 - **Project Design Notes and CHANGELOG:** when shipping a feature, update `docs/Aitri_Design_Notes/CHANGELOG.md` in the same commit as the bump. The backlog lists **open items only** — a shipped feature leaves the backlog and enters the changelog, it does not stay as `[x] (implemented)`.
-- **Agent-instructions freshness on version bump:** every release that adds or changes a command, a phase gate, a CLI flag, an artifact contract, or any operator-visible behavior must audit `templates/AGENTS.md` for staleness in the same commit. That template is the single source of agent guidance — it is copied verbatim into `CLAUDE.md`, `GEMINI.md`, `.codex/instructions.md`, and `AGENTS.md` in every consumer project. If the template's instructions no longer reflect current behavior, agents in consumer projects operate on stale rules and degrade the software they produce (tier-1 impact per "Purpose over process"). Before bumping, re-verify the template against `ls lib/commands/` and against the changelog of the in-flight bump. Existing consumer projects do NOT auto-refresh — operators see `aitri adopt --upgrade` prompts on version mismatch and can manually re-pull the template by deleting the local agent file and re-running `--upgrade` (file is regenerated when absent). The freshness obligation is on the producer side; the refresh path for existing projects is intentionally manual until a real consumer asks for an automated `--refresh-agents` flag.
+- **Agent-instructions freshness:** every release that changes a command, phase gate, CLI flag, artifact contract, or operator-visible behavior must audit `templates/AGENTS.md` in the same commit. It is copied verbatim into `CLAUDE.md`/`GEMINI.md`/`.codex/instructions.md`/`AGENTS.md` in every consumer project, so a stale template makes their agents operate on wrong rules and degrade the software they produce (tier 1). Re-verify against `ls lib/commands/` + the in-flight changelog before bumping. Existing projects refresh manually (`adopt --upgrade` prompts on version mismatch; deleting the local agent file + re-running regenerates it) — an automated `--refresh-agents` flag waits for a real consumer to ask.
 - **Do NOT promote v2.0.0 (or any breaking major) to stable on author-owned canaries alone.** Promotion to stable requires at least one third-party adopter validating end-to-end. Author canaries (Hub, Ultron, Zombite, Cesar, Go-on-RPi, etc.) are necessary but not sufficient — they share the author's mental model and biases. Tracked criterion: `docs/Aitri_Design_Notes/BACKLOG.md` under the active major-version section. This rule extends to any future breaking major (v3.0.0+), not just v2.
