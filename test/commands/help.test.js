@@ -35,6 +35,14 @@ describe('cmdHelp() — output content', () => {
     }
   });
 
+  // ADR-039 Phase 4 — industry-terminology mapping so the Aitri-specific artifact
+  // names are recognizable (no rename — names are a public contract).
+  it('maps artifacts to industry-standard terms (PRD/TRD/…)', () => {
+    output = captureLog(() => cmdHelp({ VERSION: '0.1.70' }));
+    assert.ok(output.includes('PRD'), 'requirements must show its PRD/SRS equivalent');
+    assert.ok(output.includes('TRD') || output.includes('SDD'), 'system design must show its TRD/SDD equivalent');
+  });
+
   it('includes verify commands', () => {
     output = captureLog(() => cmdHelp({ VERSION: '0.1.70' }));
     assert.ok(output.includes('verify-run'), 'verify-run must appear');

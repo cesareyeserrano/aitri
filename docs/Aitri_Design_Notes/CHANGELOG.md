@@ -5,6 +5,10 @@
 
 ---
 
+## [2.0.0-rc.32] — 2026-05-31 — intake redesign Phase 4: industry-terminology map
+
+`aitri help` and ARTIFACTS.md now show what each Aitri artifact maps to in standard industry vocabulary — `01_REQUIREMENTS.json ≈ PRD / SRS`, `02_SYSTEM_DESIGN.md ≈ TRD / SDD`, `00_DISCOVERY ≈ product discovery`, etc. The author's point: Aitri's file names are descriptive but non-standard, so a user from industry doesn't recognize them. Names are a public contract and are NOT renamed (would break Hub + existing projects) — this is a pure recognition/aliasing layer. Tests +1 (1302 → 1303). Remaining: Phase 3b (deferred, delicate) + Phase 5 (wizard/agent-path coherence).
+
 ## [2.0.0-rc.31] — 2026-05-31 — intake redesign Phase 3a: Discovery ingests context + proportional depth
 
 The safe, additive slice of the core redesign (Phase 3b — thin IDEA + blocking-confirmation gate migration — is deliberately deferred to a fresh-head session).

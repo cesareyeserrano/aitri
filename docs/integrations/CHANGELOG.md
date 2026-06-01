@@ -25,6 +25,10 @@ A mixed upgrade (some additive, some breaking) is always `— breaking` — the 
 
 **Contract impact for subproducts:** additive/correctness — no field shape changed. The MUST-coverage rule is stricter (catches MUST NFRs), conformant artifacts unaffected. Fresh-validation only — existing approved projects unaffected until they re-run the phase.
 
+## v2.0.0-rc.32 (2026-05-31) — industry-terminology map in ARTIFACTS.md — additive
+
+Doc-only: ARTIFACTS.md gains an industry-terminology map (IDEA ≈ brief, 01_REQUIREMENTS ≈ PRD/SRS, 02_SYSTEM_DESIGN ≈ TRD/SDD, …). Artifact file names are unchanged (public contract) — this only adds recognizable aliases for human readers. No schema/field change.
+
 ## v2.0.0-rc.26 (2026-05-31) — pipeline audit Tier 1: FR/NFR id enforcement + phase3 accepts `frs` — additive
 
 Two artifact-validation changes from the full phase-by-phase audit:

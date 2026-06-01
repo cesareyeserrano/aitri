@@ -1,11 +1,13 @@
 # Aitri — Artifact Schema Reference
 
-**Aitri version:** v2.0.0-rc.31+
+**Aitri version:** v2.0.0-rc.32+
 **Maintenance rule:** Update this file in the same commit as any artifact schema change.
 **Schema source of truth:** `lib/phases/phase1.js` – `phase5.js` `validate()` functions. This document must match what those functions enforce.
 
 All artifacts live in `<project>/<artifactsDir>/`. For new projects `artifactsDir = "spec"`.
 Check `artifactsDir` in `.aitri` before constructing paths. See [SCHEMA.md](./SCHEMA.md).
+
+**Industry-terminology map** (v2.0.0-rc.32+, [ADR-039](../Aitri_Design_Notes/DECISIONS.md)) — the Aitri file names are a public contract and are NOT renamed, but they map to standard vocabulary: `IDEA.md` ≈ project brief/vision · `00_DISCOVERY.md` ≈ product discovery / problem statement · `01_REQUIREMENTS.json` ≈ **PRD / SRS** · `01_UX_SPEC.md` ≈ UX / design spec · `02_SYSTEM_DESIGN.md` ≈ **TRD / SDD** · `03_TEST_CASES.json` ≈ test plan · `05_PROOF_OF_COMPLIANCE.json` ≈ compliance / traceability report. `aitri help` shows the same map.
 
 ---
 
