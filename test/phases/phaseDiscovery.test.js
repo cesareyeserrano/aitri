@@ -143,6 +143,18 @@ describe('Phase Discovery — buildBriefing()', () => {
     assert.ok(briefing.includes('Before finalizing'), 'REASONING auto-check must be present');
   });
 
+  // ADR-039 Phase 3a — discovery ingests provided context and scales depth.
+  it('instructs ingesting referenced context (assets/idea folder/docs) before eliciting', () => {
+    assert.ok(briefing.includes('Ingest the context FIRST'),
+      'discovery must tell the agent to read provided sources first');
+    assert.ok(/READ them before writing/.test(briefing));
+  });
+
+  it('instructs proportional depth (do not over-process an MVP)', () => {
+    assert.ok(/proportional/i.test(briefing) && /MVP/.test(briefing),
+      'discovery must scale depth to the project, not run a giant process on a landing page');
+  });
+
   it('briefing contains the idea content with word count', () => {
     assert.ok(briefing.includes(idea), 'IDEA.md content must appear in briefing');
     assert.ok(briefing.includes('words'), 'word count must be shown');

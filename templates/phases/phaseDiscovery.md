@@ -25,6 +25,17 @@ Where answers are vague, mark the gap in Evidence gaps.
 ## Source Idea ({{IDEA_WORD_COUNT}} words)
 {{IDEA_MD}}
 
+## Ingest the context FIRST, then elicit what's missing
+Discovery is not "fill in four headings." It is: **read what already exists → derive the understanding → confirm/ask only what the sources don't answer.**
+- If the idea references context — an `## Assets` section, files in the `idea/` folder (listed below the briefing), a repo, a doc, mockups, a prior PRD — **READ them before writing anything.** Open the files, look at the mockups, read the docs. Derive Problem / Users / Success / Out-of-Scope from that material; do not re-ask what a provided doc already states.
+- Mark in Evidence gaps anything the sources leave unclear, and confirm the three highest-stakes inputs with the owner (the problem, the success metric, the no-go boundaries) — those are unrecoverable if wrong.
+
+## Match the depth to the project (proportional — do not over-process an MVP)
+Scale discovery to what's being built:
+- **Trivial / MVP** (a landing page, a small script, a one-screen tool): a tight pass is enough — a clear problem sentence, the user, one measurable success criterion, the obvious out-of-scope. Don't manufacture ceremony; confirm the essentials and hand off.
+- **Standard / complex** (multi-flow app, integrations, an existing system to extend): full ingestion of the provided context plus real elicitation of the gaps.
+The goal is an *honest* understanding sized to the work, not a fixed word count. A thin-but-correct discovery for a landing page is a success; a padded one is noise.
+
 ## Output: `{{ARTIFACTS_BASE}}/00_DISCOVERY.md`
 Required sections (in order):
 1. ## Problem — what situation forces users to act? What pain do they experience today?

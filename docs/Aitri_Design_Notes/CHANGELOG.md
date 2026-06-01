@@ -5,6 +5,15 @@
 
 ---
 
+## [2.0.0-rc.31] — 2026-05-31 — intake redesign Phase 3a: Discovery ingests context + proportional depth
+
+The safe, additive slice of the core redesign (Phase 3b — thin IDEA + blocking-confirmation gate migration — is deliberately deferred to a fresh-head session).
+
+- **Discovery now INGESTS provided context.** The `idea/` folder + an `## Assets` section already let a user point at mockups/docs/repos/a prior PRD, and `run-phase.js` already lists them — but the discovery briefing never told the agent to actually READ them. It now does: "read what already exists → derive Problem/Users/Success from it → confirm/ask only what the sources don't answer." This is the orchestrate-don't-bundle context ingestion of ADR-039 (the agent reads files; Aitri just structures the discovery to use them).
+- **Proportional depth.** The briefing now scales discovery to the project: a landing-page MVP gets a tight pass (clear problem, user, one measurable success, obvious out-of-scope — no manufactured ceremony); a complex system gets full ingestion + elicitation. Directly serves the author's "don't run a giant process for an MVP, but support agile iteration" constraint. Agile remains the feature pipeline (each iteration proportional).
+
+Briefing-only change; no gate or template surgery. Tests +2 (1300 → 1302). Phase 3b (thin IDEA + blocking confirmation in discovery, with the provenance-gate migration) is queued — it is the delicate part and warrants a clear head.
+
 ## [2.0.0-rc.30] — 2026-05-31 — intake redesign Phase 2: feature regression boundary
 
 Closes the one feature-specific defect class the intake review found: a feature MODIFIES a live system, but Aitri captured "what must NOT change" NOWHERE — FEATURE_IDEA.md was entirely additive, so an agent could ship a feature that silently breaks parent behavior with no gate to catch it.
