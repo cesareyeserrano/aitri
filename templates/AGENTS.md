@@ -22,6 +22,19 @@ If `aitri resume` or `aitri status` reports a version mismatch (CLI version vs p
 
 ---
 
+## Starting a NEW project — capturing intent is the highest-leverage step
+
+If there is no `.aitri` yet, run `aitri init`. It creates `IDEA.md` (the seed) + config. **The intent you capture here is the only unrecoverable input — everything downstream is faithful execution of it.** So before generating anything:
+
+- **Read the provided context FIRST.** If the user pointed you at files, a folder (`idea/`), a repo, mockups, or a prior doc/PRD, READ them and derive the problem/users/success from that material. Do not re-ask what a provided document already states. (For greenfield projects, run `aitri wizard` for a guided interview, or write `IDEA.md` directly.)
+- **Confirm the three high-stakes inputs with the user — do NOT silently infer them:** the real problem, the success metric (measurable), and the no-go zones / out-of-scope. These are the inputs whose errors are unrecoverable. Mark anything you inferred as `[ASSUMPTION] …` so Phase 1's provenance gate tracks it.
+- **Match the effort to the project (proportional).** A landing-page MVP needs a tight, honest pass — a clear problem, the user, one measurable success, the obvious out-of-scope — not a giant process. A complex system needs full context ingestion + elicitation. Don't manufacture ceremony for something small. Iterate agile: ship the MVP, then add capabilities as **features** (`aitri feature init <name>`), each its own proportional mini-pipeline.
+- **Optional:** `aitri run-phase discovery` produces a structured, confirmed problem understanding (`00_DISCOVERY.md`) that Phase 1 reads — recommended for anything beyond trivial; it is where the context-ingest + confirm above is formalized.
+
+`aitri help` shows what each artifact maps to in industry terms (`01_REQUIREMENTS ≈ PRD/SRS`, `02_SYSTEM_DESIGN ≈ TRD/SDD`, …).
+
+---
+
 ## During the pipeline
 
 - Follow the next-action Aitri prints at the end of each command. When it is a **PIPELINE INSTRUCTION** (a single authoritative step — e.g. after `approve` or `verify`), do exactly that and nothing else. When the command offers a branch (e.g. `complete` → `approve` or `reject`; `status`/`resume` → `Next:`), take the step the situation calls for.

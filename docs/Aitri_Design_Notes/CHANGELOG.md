@@ -5,6 +5,12 @@
 
 ---
 
+## [2.0.0-rc.33] — 2026-05-31 — intake redesign Phase 5a: capturing intent is visible to agents
+
+The intake review found the `wizard` (the one elicitation tool) is never mentioned in `AGENTS.md` — so in agent mode (the real mode) the intake is dead surface and the agent fills a blank IDEA.md by inference. `templates/AGENTS.md` (copied verbatim into every consumer's CLAUDE.md/GEMINI.md/.codex/copilot files) now has a **"Starting a NEW project — capturing intent is the highest-leverage step"** section: read provided context FIRST (files/folder/repo/mockups/prior PRD — derive from them, don't re-ask), CONFIRM the three high-stakes inputs (problem/success/no-go) instead of inferring (mark inferences `[ASSUMPTION]` for the provenance gate), match effort PROPORTIONALLY (a landing-page MVP is a tight pass, not a giant process; iterate agile via features), and the discovery option + industry-terminology pointer.
+
+No code change (template only — regenerated into the five agent files). Tests unchanged (1303; the "five agent files identical" test covers the copy). Remaining: Phase 3b (deferred — thin IDEA + blocking-confirmation gate surgery) + Phase 5b (interview unification + non-TTY discovery fallback).
+
 ## [2.0.0-rc.32] — 2026-05-31 — intake redesign Phase 4: industry-terminology map
 
 `aitri help` and ARTIFACTS.md now show what each Aitri artifact maps to in standard industry vocabulary — `01_REQUIREMENTS.json ≈ PRD / SRS`, `02_SYSTEM_DESIGN.md ≈ TRD / SDD`, `00_DISCOVERY ≈ product discovery`, etc. The author's point: Aitri's file names are descriptive but non-standard, so a user from industry doesn't recognize them. Names are a public contract and are NOT renamed (would break Hub + existing projects) — this is a pure recognition/aliasing layer. Tests +1 (1302 → 1303). Remaining: Phase 3b (deferred, delicate) + Phase 5 (wizard/agent-path coherence).
