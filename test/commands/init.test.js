@@ -60,6 +60,37 @@ describe('aitri init — version tracking', () => {
   });
 });
 
+describe('aitri init — .gitignore template (npm-publish safe)', () => {
+  it('writes a project .gitignore from the dotless template', () => {
+    const dir = tmpDir();
+    cmdInit({ dir, rootDir: ROOT_DIR, VERSION: '2.0.0' });
+    const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8');
+    assert.ok(written.includes('node_modules/'), 'project .gitignore should carry the template content');
+    assert.ok(written.includes('.aitri'), 'project .gitignore should ignore .aitri');
+  });
+
+  it('ships the template as `gitignore` (no dot) — npm strips files named `.gitignore`', () => {
+    // Regression guard for the third-party install break: a dotted template name is
+    // dropped from the npm tarball, so init crashed on first run for npm-registry users.
+    assert.ok(fs.existsSync(path.join(ROOT_DIR, 'templates', 'gitignore')),
+      'templates/gitignore (dotless) must exist so it survives npm publish');
+    assert.ok(!fs.existsSync(path.join(ROOT_DIR, 'templates', '.gitignore')),
+      'templates/.gitignore (dotted) must NOT exist — npm would strip it and init would crash');
+  });
+
+  it('does not crash when the shipped template is missing (falls back to a default)', () => {
+    const dir = tmpDir();
+    const fakeRoot = tmpDir();                         // a rootDir with templates/ but no gitignore
+    fs.mkdirSync(path.join(fakeRoot, 'templates'), { recursive: true });
+    fs.writeFileSync(path.join(fakeRoot, 'templates', 'IDEA.md'), '# seed\n');
+    fs.writeFileSync(path.join(fakeRoot, 'templates', 'BACKLOG.md'), '# backlog\n');
+    fs.writeFileSync(path.join(fakeRoot, 'templates', 'AGENTS.md'), '# agents\n');
+    assert.doesNotThrow(() => cmdInit({ dir, rootDir: fakeRoot, VERSION: '2.0.0' }));
+    const written = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8');
+    assert.ok(written.includes('node_modules/'), 'fallback .gitignore should still be written');
+  });
+});
+
 describe('aitri init — Hub registration', () => {
   it('registers project in Hub projects.json when file exists and dir is not temp', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aitri-hub-target-'));

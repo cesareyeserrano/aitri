@@ -37,6 +37,31 @@ Entries without `Files` and `Behavior` are considered incomplete and must be exp
 > Ecosystem items (Hub, Graph, future subproducts) live in their own repos' backlogs.
 > Core only tracks items that require changes to Aitri Core itself.
 
+### Core — Human checkpoints vs autonomous agents ([ADR-040](DECISIONS.md)) — from first third-party adopter
+
+Surfaced 2026-06-01 by the Inchcape/DSB-AT-POC canary (Copilot CLI): an autonomous agent defeated both human checkpoints (typed `y` at approve; marked all provenance `confirmed` from a self-discovered folder). rc.40 thesis + dispositions are in ADR-040. Levers to ship vs defer:
+
+- [ ] P2 — **Instruction-hardening: distinguish user-designated vs self-discovered context.** `AGENTS.md` and the Phase 1 / discovery briefings say "read provided context" but are silent on context the agent finds on its own.
+  Problem: an agent scanned the project, found an arbitrary folder, treated it as authoritative ground truth, and marked the Tier-A fields `confirmed` — the source was never user-designated and could have been wrong.
+  Files: `templates/AGENTS.md`, `templates/phases/requirements.md`, `templates/phases/phaseDiscovery.md`, `templates/IDEA.md` (the `## Assets` / `idea/` channel note).
+  Behavior: add an explicit rule — context the **user designated** (the `idea/` folder, a path they gave) may ground `"confirmed"`; context the agent **self-discovered** is `"assumed"` → `idea_gaps`, and its source is confirmed with the user before it is trusted. Also state the irreducible limit: the checkpoints are advisory against a non-human operator; `humanApprovalGate` + a human running `approve` is the only hard stop.
+  Decisions: producer-side only (no gate — a PTY agent defeats any in-band gate). Helps agents that load their instruction file; the irreducible residual (agent ignores the file) is documented, not "fixed".
+  Acceptance: AGENTS.md regeneration test still passes (five files identical); a phase-briefing test asserts the self-discovered-vs-designated wording is present. Version bump (operator-visible instruction change). Audit `templates/AGENTS.md` freshness per the release rule.
+
+- [ ] P3 — **Louder approve-time provenance nudge when context was auto-ingested.** Cheap checkpoint-visibility lever.
+  Problem: approve shows "N confirmed · 0 assumed" but does not flag the all-confirmed-after-auto-ingest case, where a dishonest `confirmed` is most likely.
+  Files: `lib/commands/approve.js` (`summarizeRequirements`).
+  Behavior: when provenance is all-`confirmed` with 0 gaps AND the project auto-ingested context (idea/ non-empty, or discovery ran), append a one-line nudge to verify the high-stakes inputs (esp. `success_metric`) were confirmed *with the user*, not inferred from docs. Display-only, no schema change.
+  Acceptance: approve-summary test asserts the nudge appears in the all-confirmed+context case and is absent otherwise. Version bump (visible CLI output change).
+
+- [ ] P3 (DEFERRED — needs a 2nd consumer signal) — **Structured `source` on `idea_provenance`.** Each `confirmed` carries a short `source`.
+  Problem: `confirmed` is unverifiable free text; a `source` raises the cost of dishonesty and improves the reviewer's signal.
+  Files: `lib/phases/phase1-checks.js`, `lib/phases/phase1.js`, `lib/commands/approve.js`, `docs/integrations/ARTIFACTS.md` + `CHANGELOG.md`.
+  Behavior: additive optional `idea_provenance_sources` (do NOT change the existing enum's type — schema-evolution rule); surfaced at approve.
+  Decisions: HELD per ADR-040 + evidence-base discipline — one data point is not enough; it is still honor-system at root (agent can fabricate a source). Ship only if a second adopter confirms the need.
+  Acceptance: n/a until un-deferred.
+
+
 ### Core — Intake redesign ([ADR-039](DECISIONS.md)) — phased
 
 IDEA = raw seed; Discovery = the canonical, **proportional** understanding engine (ingest context + elicit + blocking-confirm the 3 irreversible inputs); features get a regression boundary; industry-terminology mapping. Decided 2026-05-31; shipping in phases, each tested.

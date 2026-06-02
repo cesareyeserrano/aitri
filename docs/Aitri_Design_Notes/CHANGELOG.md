@@ -5,6 +5,10 @@
 
 ---
 
+## [2.0.0-rc.34] — 2026-06-01 — fix: npm-publish strips `templates/.gitignore`, crashing `init` for every npm-registry user
+
+First third-party adopter (Inchcape / DSB-AT-POC, GitHub Copilot CLI) hit `Error: ENOENT … templates/.gitignore` on the very first `aitri init`. Root cause is mechanical and verified with `npm pack --dry-run`: **npm always strips files named `.gitignore` from published tarballs**, so a dotted template is absent on any `npm i -g aitri` install — and [init.js](../../lib/commands/init.js) read it with an unguarded `readFileSync`. Author canaries never saw it because they install from GitHub (git keeps the file). Fix: ship the template as `templates/gitignore` (no dot, survives publish); `init` writes it to the project as `.gitignore` and falls back to a minimal default rather than throwing if the template is ever absent. Tests +3 (1303 → 1306): functional write, a regression guard asserting the dotless name exists and the dotted one does not, and a missing-template no-crash test. No schema/artifact/contract change — no integrations CHANGELOG entry. This is the first defect surfaced by a real external adopter — exactly the v2.0.0 promotion gate at work.
+
 ## [2.0.0-rc.33] — 2026-05-31 — intake redesign Phase 5a: capturing intent is visible to agents
 
 The intake review found the `wizard` (the one elicitation tool) is never mentioned in `AGENTS.md` — so in agent mode (the real mode) the intake is dead surface and the agent fills a blank IDEA.md by inference. `templates/AGENTS.md` (copied verbatim into every consumer's CLAUDE.md/GEMINI.md/.codex/copilot files) now has a **"Starting a NEW project — capturing intent is the highest-leverage step"** section: read provided context FIRST (files/folder/repo/mockups/prior PRD — derive from them, don't re-ask), CONFIRM the three high-stakes inputs (problem/success/no-go) instead of inferring (mark inferences `[ASSUMPTION]` for the provenance gate), match effort PROPORTIONALLY (a landing-page MVP is a tight pass, not a giant process; iterate agile via features), and the discovery option + industry-terminology pointer.
